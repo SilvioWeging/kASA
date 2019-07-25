@@ -1,0 +1,3 @@
+accession	accession.version	taxid	gi
+CP023965	CP023965.1	585	1
+NZ_NBUT01000031	NZ_NBUT01000031.1	585	2
