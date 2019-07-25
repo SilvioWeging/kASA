@@ -9,7 +9,7 @@ This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
 	* [Linux](#linux)
-	* [MaxOS](#OS X)
+	* [OS X](#OS X)
 	* [Windows](#windows)
 - [TL;DR](#tl;dr)
 - [Modes and paramameters](#modes-and-parameters)
