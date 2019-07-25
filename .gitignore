@@ -17,10 +17,10 @@
 mono_crash.*
 
 # Build results
-[Dd]ebug/
+#[Dd]ebug/
 [Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
+#[Rr]elease/
+#[Rr]eleases/
 x64/
 x86/
 [Aa][Rr][Mm]/
@@ -113,11 +113,11 @@ StyleCopReport.xml
 *.tmp
 
 .deps
-.libs
+#.libs
 
 autom4te.cache
 config.cache
-config.h
+#config.h
 config.intl
 config.log
 config.status
@@ -409,9 +409,9 @@ MigrationBackup/
 
 #########################################################################
 #Stuff for kASA
-build_linux
-test/work/index/*
-test/work/results/*
+/build_linux
+/test/work/index/*
+/test/work/results/*
 *.errlog
 /example/work/index
 /example/work/results
@@ -430,4 +430,3 @@ test/work/results/*
 /zlib/zlibBuild/example
 /kASA_release.zip
 /README.html
-/stxxl/build
