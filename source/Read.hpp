@@ -1278,7 +1278,7 @@ namespace kASA {
 				//uint64_t sAAFrames[3] = { 0, 0, 0 };
 				//uint32_t aDeletekMerCounter[3] = { 0, 0, 0 };
 				AAFrames<uint64_t> sAAFrames;
-				AAFrames<uint32_t> aDeletekMerCounter;
+				//AAFrames<uint32_t> aDeletekMerCounter;
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
 					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
@@ -1288,17 +1288,17 @@ namespace kASA {
 					const auto& range = T.GetIndexRange(sAAFrames[j] >> 30, 6);
 					if (get<0>(range) != numeric_limits<uint64_t>::max()) {
 						// if a character is 'illegal' then don't save the kMer containing it
-						const auto& iPosOfU = sTempFrame.find_last_of('U');
-						if (iPosOfU == string::npos) {
+						//const auto& iPosOfU = sTempFrame.find_last_of('U');
+						//if (iPosOfU == string::npos) {
 							auto& tempEntry = resultsVec[get<0>(range)];
 							tempEntry.range = get<1>(range);
 							//cout << kMerToAminoacid(sAAFrames[j], 12) << " " << kMerToAminoacid(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), 12) << endl;
 							tempEntry.kMers.push_back(make_pair(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), static_cast<uint32_t>(iID)));
 							++iCurrentkMerCounter;
-						}
-						else {
-							aDeletekMerCounter[j] = uint32_t(iPosOfU);
-						}
+						//}
+						//else {
+							//aDeletekMerCounter[j] = uint32_t(iPosOfU);
+						//}
 					}
 				}
 
@@ -1322,21 +1322,21 @@ namespace kASA {
 							const auto& range = T.GetIndexRange(sAAFrames[k] >> 30, 6);
 							if (get<0>(range) != numeric_limits<uint64_t>::max()) {
 								//string sDEBUG = kMerToAminoacid(sAAFrames[k], 12);
-								if (sTempAA != 'U' && aDeletekMerCounter[k] == 0) {
+								//if (sTempAA != 'U' && aDeletekMerCounter[k] == 0) {
 									auto& tempEntry = resultsVec[get<0>(range)];
 									tempEntry.range = get<1>(range);
 									//cout << kMerToAminoacid(static_cast<uint32_t>(sAAFrames[k] & 1073741823ULL), 12) << endl;
 									tempEntry.kMers.push_back(make_pair(static_cast<uint32_t>(sAAFrames[k] & 1073741823ULL), static_cast<uint32_t>(iID)));
 									++iCurrentkMerCounter;
-								}
-								else {
-									if (aDeletekMerCounter[k] != 0 && sTempAA != 'U') {
-										--aDeletekMerCounter[k];
-									}
-									else {
-										aDeletekMerCounter[k] = _iHighestK - 1;
-									}
-								}
+								//}
+								//else {
+								//	if (aDeletekMerCounter[k] != 0 && sTempAA != 'U') {
+								//		--aDeletekMerCounter[k];
+								//	}
+								//	else {
+								//		aDeletekMerCounter[k] = _iHighestK - 1;
+								//	}
+								//}
 							}
 						}
 						ikMerCounter += 3;
@@ -1352,21 +1352,21 @@ namespace kASA {
 
 						const auto& range = T.GetIndexRange(sAAFrames[j] >> 30, 6);
 						if (get<0>(range) != numeric_limits<uint64_t>::max()) {
-							if (sTempAA != 'U' && aDeletekMerCounter[j] == 0) {
+							//if (sTempAA != 'U' && aDeletekMerCounter[j] == 0) {
 								auto& tempEntry = resultsVec[get<0>(range)];
 								tempEntry.range = get<1>(range);
 								//cout << kMerToAminoacid(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), 12) << endl;
 								tempEntry.kMers.push_back(make_pair(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), static_cast<uint32_t>(iID)));
 								++iCurrentkMerCounter;
-							}
-							else {
-								if (aDeletekMerCounter[j] != 0 && sTempAA != 'U') {
-									--aDeletekMerCounter[j];
-								}
-								else {
-									aDeletekMerCounter[j] = _iHighestK - 1;
-								}
-							}
+							//}
+							//else {
+							//	if (aDeletekMerCounter[j] != 0 && sTempAA != 'U') {
+							//		--aDeletekMerCounter[j];
+							//	}
+							//	else {
+							//		aDeletekMerCounter[j] = _iHighestK - 1;
+							//	}
+							//}
 						}
 					}
 				}

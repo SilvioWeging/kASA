@@ -245,7 +245,7 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 ```
 
 ###### Profile
-|#tax ID|Name|Unique counts k=12|Unique counts k=11|...|Unique rel. freq. k=12|...|Non-unique counts k=12|...|Non-unique rel. freq. k=12|...)|
+|#tax ID|Name|Unique counts k=12|Unique counts k=11|...|Unique rel. freq. k=12|...|Non-unique counts k=12|...|Non-unique rel. freq. k=12|...|
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 |9606,|Homo sapiens,|121252166,|111556464,|...|0.87,|...|2001658992,|...|0.79,|...|
 
@@ -344,4 +344,4 @@ This gives you a hint whether you should look at the unique relative frequencies
 
 ## License
 
-This project is licensed under the Boost License 1.0 - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the Boost License 1.0 - see the [LICENSE](https://github.com/SilvioWeging/kASA/LICENSE.txt) file for details
