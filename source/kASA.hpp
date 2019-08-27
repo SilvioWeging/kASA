@@ -352,8 +352,10 @@ namespace kASA {
 		// C++ version of the python script that creates the content file
 		inline void generateContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sOutput, string sTaxonomicLevel, pair<uint32_t,uint32_t> poolAndNames = make_pair(numeric_limits<uint32_t>::max() - 1,0UL)) {
 			try {
-				if (!ifstream(sTaxonomyPath + "names.dmp") || !ifstream(sTaxonomyPath + "nodes.dmp")) {
-					throw runtime_error("The taxonomy files couldn't be found");
+				if (sTaxonomicLevel != "lowest") {
+					if (!ifstream(sTaxonomyPath + "names.dmp") || !ifstream(sTaxonomyPath + "nodes.dmp")) {
+						throw runtime_error("The taxonomy files couldn't be found");
+					}
 				}
 
 				
@@ -373,6 +375,7 @@ namespace kASA {
 				////////////////////
 				unordered_map<string, bool> vAccessions;
 				unordered_map<string, uint32_t> vEntriesWithoutAccNr;
+				unordered_map<string, string> vNamesFromFasta;
 				for (const auto& file : files) {
 					ifstream fastaFile(file);
 					string sDummy = "";
@@ -390,6 +393,9 @@ namespace kASA {
 								}
 								if (acc != "") {
 									vAccessions.insert(make_pair(acc, false));
+									if (sTaxonomicLevel == "lowest") {
+										vNamesFromFasta.insert(make_pair(acc,Utilities::removeCharFromString(sDummy, ',')));
+									}
 								}
 								else {
 									vEntriesWithoutAccNr.insert(make_pair(sDummy, 0));
@@ -406,52 +412,75 @@ namespace kASA {
 				}
 
 				files.clear();
-				files = Utilities::gatherFilesFromPath(sAccToTaxFiles); // TODO: What happens, when the path is empty?
 
-				////////////////////
 				size_t iIdentifiedCounter = 0;
 				unordered_map<string, unordered_set<string>> taxWithAccNrs;
+				unordered_map<string, string> taxToNames;
 				bool bNotAllFound = true;
-				for (const auto& file : files) {
-					bool isGzipped = (file[file.length() - 3] == '.' && file[file.length() - 2] == 'g' && file[file.length() - 1] == 'z');
-					ifstream acc2Tax;
-					igzstream acc2TaxGZ;
-					if (isGzipped) {
-						acc2TaxGZ.open(file.c_str());
-					}
-					else {
-						acc2Tax.open(file);
-					}
 
-					string sDummy = "";
-					while (((isGzipped) ? getline(acc2TaxGZ, sDummy) : getline(acc2Tax, sDummy)) && bNotAllFound) {
-						const auto& columns = Utilities::split(sDummy, '\t');
-						auto res1 = vAccessions.find(columns[1]);
-						if (res1 != vAccessions.end()) {
-							auto res2 = taxWithAccNrs.find(columns[2]);
-							if (res2 != taxWithAccNrs.end()) {
-								res2->second.insert(res1->first);
-							}
-							else {
-								auto res3 = taxWithAccNrs.insert(make_pair(columns[2], unordered_set<string>()));
-								if (res3.second) {
-									res3.first->second.insert(res1->first);
+				if (sTaxonomicLevel == "lowest") {
+					for (auto& entry : vAccessions) {
+						auto elem = taxWithAccNrs.insert(make_pair(to_string(iIdentifiedCounter), unordered_set<string>()));
+						if (elem.second) {
+							elem.first->second.insert(entry.first);
+							entry.second = true;
+
+							taxToNames.insert(make_pair(to_string(iIdentifiedCounter), vNamesFromFasta.at(entry.first)));
+
+							++iIdentifiedCounter;
+						}
+						else {
+							throw runtime_error("AccTaxPair could not be added");
+						}
+					}
+					bNotAllFound = false;
+				}
+				else {
+					files = Utilities::gatherFilesFromPath(sAccToTaxFiles); // TODO: What happens, when the path is empty?
+
+					////////////////////
+					
+					for (const auto& file : files) {
+						bool isGzipped = (file[file.length() - 3] == '.' && file[file.length() - 2] == 'g' && file[file.length() - 1] == 'z');
+						ifstream acc2Tax;
+						igzstream acc2TaxGZ;
+						if (isGzipped) {
+							acc2TaxGZ.open(file.c_str());
+						}
+						else {
+							acc2Tax.open(file);
+						}
+
+						string sDummy = "";
+						while (((isGzipped) ? getline(acc2TaxGZ, sDummy) : getline(acc2Tax, sDummy)) && bNotAllFound) {
+							const auto& columns = Utilities::split(sDummy, '\t');
+							auto res1 = vAccessions.find(columns[1]);
+							if (res1 != vAccessions.end()) {
+								auto res2 = taxWithAccNrs.find(columns[2]);
+								if (res2 != taxWithAccNrs.end()) {
+									res2->second.insert(res1->first);
 								}
 								else {
-									throw runtime_error("AccTaxPair could not be added");
+									auto res3 = taxWithAccNrs.insert(make_pair(columns[2], unordered_set<string>()));
+									if (res3.second) {
+										res3.first->second.insert(res1->first);
+									}
+									else {
+										throw runtime_error("AccTaxPair could not be added");
+									}
 								}
-							}
-							res1->second = true;
-							++iIdentifiedCounter;
-							if (iIdentifiedCounter == vAccessions.size()) {
-								bNotAllFound = false;
+								res1->second = true;
+								++iIdentifiedCounter;
+								if (iIdentifiedCounter == vAccessions.size()) {
+									bNotAllFound = false;
+								}
 							}
 						}
 					}
 				}
 
 				////////////////////
-				if (_bVerbose) {
+				if (_bVerbose && bNotAllFound) {
 					cout << "OUT: The following accession numbers have no taxid:" << endl;
 				}
 
@@ -484,7 +513,8 @@ namespace kASA {
 					cout << "OUT: Fetching name(s)..." << endl;
 				}
 
-				unordered_map<string, string> taxToNames;
+				//taxToNames
+				if (taxToNames.empty())
 				{
 					ifstream names(sTaxonomyPath + "names.dmp");
 					string sDummy = "";

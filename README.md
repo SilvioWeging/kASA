@@ -9,7 +9,7 @@ This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
 	* [Linux](#linux)
-	* [OS X](#OS-X)
+	* [macOS](#macOS)
 	* [Windows](#windows)
 - [TL;DR](#tl;dr)
 - [Modes and paramameters](#modes-and-parameters)
@@ -41,9 +41,9 @@ Some scripts in the `/scripts` folder need Python 3.*, others are shell scripts.
 
 You can use the system specific pre-compiled binaries in the `/bin` folder but I cannot guarantee that they will be universal enough to run on your system as well.
 
-Note, that kASA is a console application so if you want to use these binaries, you must either use a terminal (Linux, OS X, Linux Subsystem for Windows) or PowerShell (Windows). A GUI may be implemented, depending on the amount of requests in the [poll](https://github.com/SilvioWeging/kASA/issues/1). If you're using the PowerShell, don't forget to add ".exe" at the end of each call to kASA: `.\<path to kASA>\kASA.exe`.
+Note, that kASA is a console application so if you want to use these binaries, you must either use a terminal (Linux, macOS, Linux Subsystem for Windows) or PowerShell (Windows). A GUI may be implemented, depending on the amount of requests in the [poll](https://github.com/SilvioWeging/kASA/issues/1). If you're using the PowerShell, don't forget to add ".exe" at the end of each call to kASA: `.\<path to kASA>\kASA.exe`.
 
-If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+14 or if possible C\+\+17 (for `filesystem` and `execution`). This relates to Visual Studio 2017 and at least GCC version 6.1. On Linux and OS X, cmake is needed as well.
+If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+14 or if possible C\+\+17 (for `filesystem` and `execution`). This relates to Visual Studio 2017 and at least GCC version 6.1. On Linux and macOS, cmake is needed as well.
 
 kASA depends on the [STXXL](https://stxxl.org/) and [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) but contains all necessary files so you don't need to download those.
 
@@ -52,15 +52,6 @@ Last but not least: kASA provides an error (starts with "ERROR: ") and an output
 ## Setup
 
 ### Linux
-
-If you are running Linux in a Virtual Box and your host is Windows, you must do this first:
- 
-* Open Powershell in admin mode
-* type `cd '<path to VirtualBox Installation>'`
-* type `.\VBoxManage.exe setextradata <VM_NAME> VBoxInternal2/SharedFoldersEnableSymlinksCreate/<SHARE_NAME> 1`
-* start virtual environment
-
-If you are using a Linux distribution or the Linux Subsystem on Windows, you can proceed as follows:
 
 Clone the repository.
 
@@ -76,9 +67,9 @@ Now for kASA itself, type the following commands:
 * `cmake -DCMAKE_BUILD_TYPE=Release ..`
 * `make`
 
-### OS X
+### macOS
 
-Since the native C\+\+ compiler on OS X (Clang) is not compatible with kASA(yet?), you'll need GCC (and cmake). Here are a few links, where you can get it:
+Since the native C\+\+ compiler on macOS (Clang) is not compatible with kASA(yet?), you'll need GCC (and cmake). Here are a few links, where you can get it:
 * [Command Line Tools](http://osxdaily.com/2014/02/12/install-command-line-tools-mac-os-x/)
 * [Homebrew](https://brew.sh/)
 * [GCC](https://discussions.apple.com/thread/8336714)
@@ -156,7 +147,7 @@ If the content file contains entries with "EWAN_...", this stands for "Entries W
 This mode can be coupled with [Build](#build) by calling `build` and providing the same parameters described here but leaving out `-o` and `-c`. This creates a content file next to the index named `<index name>_content.txt` which then is considered the default. This eliminates the necessity of providing the `-c` parameter in almost every call.
 
 ##### Necessary parameters
-* `-u (--level) <level>`: Taxonomic level at which you want to operate. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. 
+* `-u (--level) <level>`: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' "sequence" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.
 * `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file.
 * `-y (--taxonomy)` <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.
 * `-o (--outgoing) <file>`: Here, this parameter specifies where the content file should be written to.
@@ -168,7 +159,7 @@ e.g.: [weging@example ~] kASA/kASA generateCF -i work/example.fasta -o work/cont
 
 ### Build
 ##### Context
-This mode creates an index file, a frequency file(containing the amount of k-mers for each taxon) and a prefix trie out of the fasta file(s) you used in the previous mode.
+This mode creates an index file, a frequency file (containing the amount of k-mers for each taxon) and a prefix trie out of the fasta file(s) you used in the previous mode.
 
 This step can take much space and time, depending on the complexity and size of your database. Native support of translated sequences as a database will be added in a future update.
 
@@ -293,7 +284,7 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 Should updating your index not happen that often or you would like better performance and less space usage on your disk, shrinking it does the trick. kASA has two options:
 
 1. The first way deletes a certain percentage of k-mers from every taxon. This may be lossy but impacts the accuracy not that much if your sequencing depth is high enough.
-2. The second option is lossless as it assumes, that your content file is not larger than 65535 entries. This will reduce the size of the index by half but your index cannot be updated afterwars. Great for storing the index on an external drive to take with you.
+2. The second option is lossless but it assumes, that your content file is not larger than 65535 entries and that you don't need k's smaller than 7. This will reduce the size of the index by half but your index cannot be updated afterwards. Great for storing the index on an external drive.
 
 The parameter `-o` also decides here, where to put your new index.
 ##### Necessary paramameters
@@ -329,6 +320,10 @@ This gives you a hint whether you should look at the unique relative frequencies
 ## Useful scripts
 - generateCF.py: The python 3 version of the `generateCF` mode described [here](#generate-a-content-file).
 - jsonToFrequencies.py: Creates a profile based on the most prominent taxa per read. Useful, if your input could only be processed in many chunks (due to memory restrictions) which may influence the accuracy of the k-Mer profile negatively.
+- csvToCAMI.py: Converts a profiling output into the CAMI profile format. Needs the NCBI 'nodes.dmp' and 'names.dmp' file for upwards traversing of the taxonomic tree. 
+- camiToKrona.py: Converts the CAMI profile to a file format readable by [Krona](https://github.com/marbl/Krona/wiki)
+- jsonToCAMIBin.py: Converts the json output file into the CAMI binning format.
+
 
 ## Todos and upcoming
 - A python script that creates Kraken-like output out of kASAs identification file
@@ -338,10 +333,11 @@ This gives you a hint whether you should look at the unique relative frequencies
 - New shrink mode deleting k-mers that are overrepresented
 - Native support of the nr and other translated sequences
 - Allow gzipped files as input for `build`
+- Support of Clang (macOS)
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - small collection of adapter sequences
 
 ## License
 
-This project is licensed under the Boost License 1.0 - see the [LICENSE](https://github.com/SilvioWeging/kASA/LICENSE.txt) file for details
+This project is licensed under the Boost License 1.0 - see the [LICENSE](https://github.com/SilvioWeging/kASA/blob/master/LICENSE.txt) file for details

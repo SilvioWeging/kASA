@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
 		cout << endl;
 
 		if (argc == 1) {
-			throw runtime_error("ERROR: No Parameters given!");
+			throw runtime_error("No Parameters given!");
 		}
 		cMode = vParameters[1];
 
@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
 
 
 		if (cMode == "build") {
-			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, iCodonID);
 			}
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
 			// No content file yet created
 			if (contentFileIn == "") {
 				if (sAccToTaxFiles == "" || sTaxonomyPath == "") {
-					throw runtime_error("ERROR: No acc2Tax file or taxonomy path given...");
+					throw runtime_error("No acc2Tax file or taxonomy path given...");
 				}
 				else {
 					contentFileIn = indexFile + "_content.txt";
@@ -229,20 +229,20 @@ int main(int argc, char* argv[]) {
 			}
 
 			if (fPercentageOfThrowAway != 0.f) {
-				kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.75), fPercentageOfThrowAway);
+				kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 			}
 			else {
-				kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.75));
+				kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "generateCF") {
 			if (sDBPathOut == "") {
-				throw runtime_error("ERROR: Where should I put the content file?");
+				throw runtime_error("Where should I put the content file?");
 			}
 			if (sAccToTaxFiles == "" || sTaxonomyPath == "") {
-				throw runtime_error("ERROR: No acc2Tax file or taxonomy path given...");
+				throw runtime_error("No acc2Tax file or taxonomy path given...");
 			}
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);
 			kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sDBPathOut, sTaxLevel);
@@ -282,20 +282,20 @@ int main(int argc, char* argv[]) {
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), bSpaced, static_cast<uint64_t>(iMemorySizeAvail*0.9));
+			kASAObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), bSpaced, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "delete") {
 			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.DeleteFromLib(indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), static_cast<uint64_t>(iMemorySizeAvail*0.75));
+			kASAObj.DeleteFromLib(indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "shrink") {
 			if (indexFile == sDBPathOut) {
-				throw runtime_error("ERROR: Paths and names of input and output are the same!");
+				throw runtime_error("Paths and names of input and output are the same!");
 			}
 
 			// Default value
@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
 		}
 		else if (cMode == "half") {
 			if (indexFile == sDBPathOut) {
-				throw runtime_error("ERROR: Paths and names of input and output are the same!");
+				throw runtime_error("Paths and names of input and output are the same!");
 			}
 			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
 			//kASAObj.GetFrequencyK(contentFileIn, databaseFile, sDBPathOut + "_f.txt");

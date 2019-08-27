@@ -39,17 +39,17 @@ struct Leaf5 {
 
 	inline uint64_t GetFirst() {
 		for (uint8_t i = 0; i < TrieSnG::_iNumOfAminoAcids; ++i) {
-			if (_vRanges1[i]) {
+			if (_vRanges1[i] != numeric_limits<uint64_t>::max()) {
 				return _vRanges1[i];
 			}
 		}
 		return numeric_limits<uint64_t>::max();
 	}
 
-	inline uint32_t GetLast() {
+	inline uint64_t GetLast() {
 		for (int8_t i = static_cast<int8_t>(TrieSnG::_iNumOfAminoAcids) - 1; i >= 0; --i) {
-			if (_vRanges2[i]) {
-				return _vRanges2[i];
+			if (_vRanges1[i] != numeric_limits<uint64_t>::max()) {
+				return _vRanges1[i] + _vRanges2[i];
 			}
 		}
 		return 0;
@@ -136,7 +136,7 @@ public:
 		/// First handle the usual case
 		if (_iLevelDiff != iMaxLevel - iCurrentK) {
 			if (_iLevelDiff - 2 > 0) {
-				const uint8_t& tempVal = (uint8_t)((kMer >> (iCurrentK + _iLevelDiff - iMaxLevel - 1) * 5) & 31); // read only the relevant 5 bytes (and start with level 1)
+				const uint8_t& tempVal = (uint8_t)((kMer >> (_iLevelDiff - 1) * 5) & 31); // read only the relevant 5 bytes (and start with level 1)
 				//cout << TrieSnG::LISTOFAA[tempVal] << endl;
 				Node* edge = static_cast<Node*>(_Edges[tempVal]);
 				if (edge == nullptr) {
@@ -147,14 +147,15 @@ public:
 				}
 			}
 			else {
-				const uint8_t& tempVal = (uint8_t)((kMer >> (iCurrentK + _iLevelDiff - iMaxLevel - 1) * 5) & 31);
+				const uint8_t& tempVal = (uint8_t)((kMer >> (_iLevelDiff - 1) * 5) & 31);
 				//cout << TrieSnG::LISTOFAA[tempVal] << endl;
 				Leaf5* edge = static_cast<Leaf5*>(_Edges[tempVal]);
 				if (edge == nullptr) {
 					return std::tuple<uint64_t, uint32_t>(numeric_limits<uint64_t>::max(), 0);
 				}
 				else {
-					const uint8_t& lastVal = (uint8_t)((kMer >> (iCurrentK + _iLevelDiff - iMaxLevel - 2) * 5) & 31);
+					const uint8_t& lastVal = (uint8_t)((kMer >> (_iLevelDiff - 2) * 5) & 31);
+					//cout << TrieSnG::LISTOFAA[lastVal] << endl;
 					return make_tuple(edge->_vRanges1[lastVal], edge->_vRanges2[lastVal]);
 				}
 			}
@@ -162,7 +163,7 @@ public:
 		else {
 			std::tuple<uint64_t, uint32_t> outTuple(numeric_limits<uint64_t>::max(),0);
 			get<0>(outTuple) = GetRangeAfterMinK(iMaxLevel, true);
-			get<1>(outTuple) = static_cast<uint32_t>(GetRangeAfterMinK(iMaxLevel, false));
+			get<1>(outTuple) = static_cast<uint32_t>(GetRangeAfterMinK(iMaxLevel, false) - get<0>(outTuple));
 			return outTuple;
 		}
 	}

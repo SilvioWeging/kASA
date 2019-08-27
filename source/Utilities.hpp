@@ -33,24 +33,26 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
-	struct rangeContainerST6 {
-		typedef uint64_t kMerSize;
-		vector<pair<uint64_t,uint64_t>> kMers;
+	struct rangeContainer {
+		vector<pair<uint32_t, uint32_t>> kMers_GT6;
+		vector<pair<uint64_t, uint64_t>> kMers_ST6;
 		uint32_t range;
 	};
-
-	struct rangeContainerGT6 {
-		typedef uint32_t kMerSize;
-		vector<pair<uint32_t, uint32_t>> kMers;
-		uint32_t range;
-	};
-
 
 	///////////////////////////////////////////////////////
 	inline string removeSpaceAndEndline(const string& sIn) {
 		string sOut = sIn;
 		sOut.erase(find_if(sOut.rbegin(), sOut.rend(), [](char ch) {
 			return !(ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t');
+		}).base(), sOut.end());
+		return sOut;
+	}
+
+	///////////////////////////////////////////////////////
+	inline string removeCharFromString(const string& sIn, const char& c) {
+		string sOut = sIn;
+		sOut.erase(find_if(sOut.rbegin(), sOut.rend(), [&c](char ch) {
+			return !(ch == c);
 		}).base(), sOut.end());
 		return sOut;
 	}
@@ -70,6 +72,26 @@ namespace Utilities {
 		string sOut = sIn;
 		auto it = sOut.end() - 1;
 		while (*it == ' ' || *it == '\n' || *it == '\r' || *it == '\t') {
+			it = sOut.erase(it);
+			it--;
+		}
+		return sOut;
+	}
+	///////////////////////////////////////////////////////
+	inline string lstrip(const string& sIn, const char& c) {
+		string sOut = sIn;
+		auto it = sOut.begin();
+		while (*it == c) {
+			it = sOut.erase(it);
+		}
+		return sOut;
+	}
+
+	///////////////////////////////////////////////////////
+	inline string rstrip(const string& sIn, const char& c) {
+		string sOut = sIn;
+		auto it = sOut.end() - 1;
+		while (*it == c) {
 			it = sOut.erase(it);
 			it--;
 		}

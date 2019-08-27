@@ -45,8 +45,7 @@ namespace kASA {
 			}
 		}
 		///////////////////////
-
-		inline void compareWithDatabase(const vector<pair<uint64_t, Utilities::rangeContainerGT6>>& vIn, const unique_ptr<unique_ptr<const index_t_p>[]>& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const unique_ptr<unique_ptr<const index_t_p>[]>& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 #pragma omp parallel
 			{
@@ -72,7 +71,7 @@ namespace kASA {
 						if (static_cast<int32_t>(iParallelCounter%iNumOfThreads) == iThreadID) {
 
 
-							const uint64_t& ivInSize = mapIt->second.kMers.size();
+							const uint64_t& ivInSize = mapIt->second.kMers_GT6.size();
 
 							uint64_t iIdxIn = 0;
 
@@ -95,11 +94,11 @@ namespace kASA {
 							auto seenResultIt = libBeginIt;
 							bool bInputIterated = false;
 
-							uint64_t iBitMask = 1152921503533105152ULL;
+							//uint64_t iBitMask = 1152921503533105152ULL;
 
 							while (iIdxIn < ivInSize) {
 
-								const auto& iCurrentkMer = mapIt->second.kMers[iIdxIn];
+								const auto& iCurrentkMer = mapIt->second.kMers_GT6[iIdxIn];
 
 								//cout << kMerToAminoacid(iCurrentkMer.first, 12) << endl;
 
@@ -130,7 +129,6 @@ namespace kASA {
 								int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
 
 								auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-								const uint64_t& iPrefix = get<0>(iCurrentkMer) & iBitMask;
 
 								// If the ending is ^ it's not going to hit anyway, might as well stop here
 								if ((iCurrentkMerShifted & 31) == 30) {
@@ -139,11 +137,8 @@ namespace kASA {
 									continue;
 								}
 
+								const auto func = [&shift](const uint64_t& val) { return val >> shift; };
 								const auto rangeBeginIt = libBeginIt + mapIt->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(mapIt->first) + mapIt->second.range;
-
-
-
-								const auto func = [&shift, &iPrefix](const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(val & 1073741823ULL)) >> shift); };
 
 								//auto itResultIterator = rangeEndIt + 1;
 								if (func(rangeBeginIt->first) == iCurrentkMerShifted) {
@@ -166,7 +161,7 @@ namespace kASA {
 											continue;
 										}
 										else {
-											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, &iPrefix](const decltype(*libBeginIt)& a, const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(a.first & 1073741823ULL)) >> shift) < val; });
+											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const uint64_t& val) { return (a.first >> shift) < val; });
 										}
 									}
 								}
@@ -176,7 +171,7 @@ namespace kASA {
 								bool bBreakOut = false;
 								while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
 
-									const auto& iCurrentLib = make_tuple(iPrefix | static_cast<uint64_t>(seenResultIt->first & 1073741823ULL), seenResultIt->second);
+									const auto& iCurrentLib = make_tuple(seenResultIt->first, seenResultIt->second);
 
 									for (; ikLengthCounter >= 0; --ikLengthCounter) {
 
@@ -244,10 +239,10 @@ namespace kASA {
 											}
 											else {
 												uint64_t iTempCounter = 1;
-												const uint64_t& iCurrentSuffix = (iPrefix | static_cast<uint64_t>(iCurrentkMer.first & 1073741823ULL));
+												const uint64_t& iCurrentSuffix = seenResultIt->first;
 												while (seenResultIt + iTempCounter != rangeEndIt + 1) {
 													const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-													int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1); // TODO Do i need this part?!
+													int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
 													for (; iUntilK > ikLengthCounter; --iUntilK) {
 														if ((iCurrentSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
 															markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK]);
@@ -359,8 +354,7 @@ namespace kASA {
 		}
 
 		///////////////////////
-
-		inline void createProfile(const vector<pair<uint64_t, Utilities::rangeContainerGT6>>& vIn, const unique_ptr<unique_ptr<const index_t_p>[]>& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange) {
+		inline void createProfile(const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const unique_ptr<unique_ptr<const index_t_p>[]>& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange) {
 
 #pragma omp parallel 
 			{
@@ -376,7 +370,7 @@ namespace kASA {
 					for (auto vecIt = vIn.cbegin(); vecIt != vIn.cend(); ++vecIt, ++iParallelCounter) {
 
 						if (static_cast<int32_t>(iParallelCounter%iNumOfThreads) == iThreadID) {
-							const uint64_t& ivInSize = vecIt->second.kMers.size();
+							const uint64_t& ivInSize = vecIt->second.kMers_GT6.size();
 
 							uint64_t iIdxIn = 0;
 
@@ -393,12 +387,12 @@ namespace kASA {
 
 							bool bInputIterated = false;
 							//uint64_t iIdxLib = 0;
-							uint64_t iBitMask = 1152921503533105152ULL;
+							//uint64_t iBitMask = 1152921503533105152ULL;
 							//uint64_t iLastRangeBegin = 0;
 
 							while (iIdxIn < ivInSize) {
 
-								const auto& iCurrentkMer = vecIt->second.kMers[iIdxIn];
+								const auto& iCurrentkMer = vecIt->second.kMers_GT6[iIdxIn];
 
 								// Count duplicates too
 								if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
@@ -425,7 +419,6 @@ namespace kASA {
 								int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
 
 								auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-								const uint64_t& iPrefix = get<0>(iCurrentkMer) & iBitMask;
 
 								// If the ending is ^ it's not going to hit anyway, might as well stop here
 								if ((iCurrentkMerShifted & 31) == 30) {
@@ -434,9 +427,8 @@ namespace kASA {
 									continue;
 								}
 
+								const auto func = [&shift](const uint64_t& val) { return val >> shift; };
 								const auto rangeBeginIt = libBeginIt + vecIt->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vecIt->first) + vecIt->second.range;
-
-								const auto func = [&shift, &iPrefix](const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(val & 1073741823ULL)) >> shift); };
 
 								if (func(rangeBeginIt->first) == iCurrentkMerShifted) {
 									seenResultIt = rangeBeginIt;
@@ -457,14 +449,14 @@ namespace kASA {
 											continue;
 										}
 										else {
-											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, &iPrefix](const decltype(*libBeginIt)& a, const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(a.first & 1073741823ULL)) >> shift) < val; });
+											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const uint64_t& val) { return (a.first >> shift) < val; });
 										}
 									}
 								}
 
 								bool bBreakOut = false;
 								while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
-									const auto& iCurrentLib = make_tuple(iPrefix | static_cast<uint64_t>(seenResultIt->first & 1073741823ULL), seenResultIt->second);
+									const auto& iCurrentLib = make_tuple(seenResultIt->first, seenResultIt->second);
 									//cout << get<0>(iCurrentLib) << " " << get<1>(iCurrentLib) << endl;
 
 									for (; ikLengthCounter >= 0; --ikLengthCounter) {
@@ -642,7 +634,7 @@ namespace kASA {
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const vector<pair<uint64_t, Utilities::rangeContainerGT6>>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 #pragma omp parallel
 			{
@@ -660,7 +652,7 @@ namespace kASA {
 					for (auto mapIt = vIn.cbegin(); mapIt != vIn.cend(); ++mapIt, ++iParallelCounter) {
 						if (static_cast<int32_t>(iParallelCounter%iNumOfThreads) == iThreadID) {
 
-							const uint64_t& ivInSize = mapIt->second.kMers.size();
+							const uint64_t& ivInSize = (_iMinK <= 6) ? mapIt->second.kMers_ST6.size() : mapIt->second.kMers_GT6.size();
 
 							uint64_t iIdxIn = 0;
 
@@ -680,12 +672,13 @@ namespace kASA {
 							auto seenResultIt = libBeginIt;
 							bool bInputIterated = false;
 							//uint64_t iIdxLib = 0;
-							uint64_t iBitMask = 1152921503533105152ULL;
+							//uint64_t iBitMask = 1152921503533105152ULL;
 							//uint64_t iLastRangeBegin = 0;
 
 							while (iIdxIn < ivInSize) {
 
-								const auto& iCurrentkMer = mapIt->second.kMers[iIdxIn];
+								const pair<uint64_t,uint64_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint64_t>>(mapIt->second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint64_t>>(mapIt->second.kMers_GT6[iIdxIn]);
+								//cout << kMerToAminoacid(get<0>(iCurrentkMer), 12) << endl;
 
 								// Count duplicates too
 								if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
@@ -714,7 +707,7 @@ namespace kASA {
 								int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
 
 								auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-								const uint64_t& iPrefix = get<0>(iCurrentkMer) & iBitMask;
+								//cout << kMerToAminoacid(iPrefix, 12) << endl;
 
 								// If the ending is ^ it's not going to hit anyway, might as well stop here
 								if ((iCurrentkMerShifted & 31) == 30) {
@@ -724,31 +717,31 @@ namespace kASA {
 								}
 
 								
-								const auto func = [&shift, &iPrefix](const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(val & 1073741823ULL)) >> shift); };
+								const auto shiftVal = [&shift,this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
 								const auto rangeBeginIt = libBeginIt + mapIt->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(mapIt->first) + mapIt->second.range;
 
 
-								if (func(rangeBeginIt->first) == iCurrentkMerShifted) {
+								if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
 									seenResultIt = rangeBeginIt;
 								}
 								else {
-									if (func(rangeEndIt->first) == iCurrentkMerShifted) {
+									if (shiftVal(rangeEndIt->first) == iCurrentkMerShifted) {
 										// we need the first occurence in the database
 										uint64_t iTemp = 1;
-										while (func((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
+										while (shiftVal((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
 											++iTemp;
 										}
 										seenResultIt = rangeEndIt - (iTemp - 1);
 									}
 									else {
-										if (iCurrentkMerShifted < func(rangeBeginIt->first) || iCurrentkMerShifted > func(rangeEndIt->first)) {
-											//cout << kMerToAminoacid(iCurrentkMerShifted,12) << " " << kMerToAminoacid(func(rangeBeginIt->first), 12) << " " << kMerToAminoacid(func(rangeEndIt->first), 12) << endl;
+										if (iCurrentkMerShifted < shiftVal(rangeBeginIt->first) || iCurrentkMerShifted > shiftVal(rangeEndIt->first)) {
+											//cout << kMerToAminoacid(get<0>(iCurrentkMer),12) << " " << kMerToAminoacid(iCurrentkMerShifted,12) << " " << kMerToAminoacid(rangeBeginIt->first, 12) << " " << kMerToAminoacid(shiftVal(rangeBeginIt->first), 12) << " " << kMerToAminoacid(shiftVal(rangeEndIt->first), 12) << endl;
 											++iIdxIn;
 											bInputIterated = true;
 											continue;
 										}
 										else {
-											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, &iPrefix](const decltype(*libBeginIt)& a, const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(a.first & 1073741823ULL)) >> shift) < val; });
+											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, this](const decltype(*libBeginIt)& a, const uint64_t& val) { return (_iMinK > 6) ? ((a.first & 1073741823ULL) >> shift) < val : (a.first >> shift) < val; });
 										}
 									}
 								}
@@ -756,7 +749,7 @@ namespace kASA {
 								bool bBreakOut = false;
 								while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
 
-									const auto& iCurrentLib = make_tuple(iPrefix | static_cast<uint64_t>(seenResultIt->first & 1073741823ULL), seenResultIt->second);
+									const tuple<uint64_t,uint32_t>& iCurrentLib = (_iMinK > 6) ? static_cast<tuple<uint64_t, uint32_t>>(make_tuple(seenResultIt->first & 1073741823ULL, seenResultIt->second)) : tuple<uint64_t, uint32_t>(make_tuple(seenResultIt->first, seenResultIt->second));
 
 									for (; ikLengthCounter >= 0; --ikLengthCounter) {
 
@@ -823,18 +816,9 @@ namespace kASA {
 											}
 											else {
 												uint64_t iTempCounter = 1;
-												const uint64_t& iCurrentLibSuffix = (iPrefix | static_cast<uint64_t>(iCurrentkMer.first & 1073741823ULL));
+												const uint64_t& iCurrentLibSuffix = seenResultIt->first;
 												while (seenResultIt + iTempCounter != rangeEndIt + 1) {
 													const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-													/*if (iCurrentLibSuffix == iNextLibSuffix) {
-														for (int16_t iUntilK = _iNumOfK - 1; iUntilK > ikLengthCounter; --iUntilK) {
-															vMemoryOfTaxIDs[iUntilK].set(mTaxToIdx.find(get<1>(*(itResultIterator + iTempCounter)))->second);
-														}
-														++iTempCounter;
-													}
-													else {
-														break;
-													}*/
 													int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
 													for (; iUntilK > ikLengthCounter; --iUntilK) {
 														if ((iCurrentLibSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
@@ -926,7 +910,7 @@ namespace kASA {
 
 
 		template <typename vecType>
-		inline void createProfile(const vector<pair<uint64_t, Utilities::rangeContainerGT6>>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {
+		inline void createProfile(const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {
 
 #pragma omp parallel 
 			{
@@ -942,7 +926,7 @@ namespace kASA {
 					for (auto vecIt = vIn.cbegin(); vecIt != vIn.cend(); ++vecIt, ++iParallelCounter) {
 						if (static_cast<int32_t>(iParallelCounter%iNumOfThreads) == iThreadID) {
 
-							const uint64_t& ivInSize = vecIt->second.kMers.size();
+							const uint64_t& ivInSize = (_iMinK <= 6) ? vecIt->second.kMers_ST6.size() : vecIt->second.kMers_GT6.size();
 
 							uint64_t iIdxIn = 0;
 
@@ -959,12 +943,12 @@ namespace kASA {
 
 							bool bInputIterated = false;
 							//uint64_t iIdxLib = 0;
-							uint64_t iBitMask = 1152921503533105152ULL;
 							//uint64_t iLastRangeBegin = 0;
 
 							while (iIdxIn < ivInSize) {
 
-								const auto& iCurrentkMer = vecIt->second.kMers[iIdxIn];
+								const pair<uint64_t,uint64_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint64_t>>(vecIt->second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint64_t>>(vecIt->second.kMers_GT6[iIdxIn]);
+								
 
 								// Count duplicates too
 								if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
@@ -991,7 +975,6 @@ namespace kASA {
 								int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
 
 								auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-								const uint64_t& iPrefix = get<0>(iCurrentkMer) & iBitMask;
 
 								// If the ending is ^ it's not going to hit anyway, might as well stop here
 								if ((iCurrentkMerShifted & 31) == 30) {
@@ -1000,38 +983,36 @@ namespace kASA {
 									continue;
 								}
 
+								const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
 								const auto rangeBeginIt = libBeginIt + vecIt->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vecIt->first) + vecIt->second.range;
-								
-								const auto func = [&shift, &iPrefix](const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(val & 1073741823ULL)) >> shift); };
-									
 
-								if (func(rangeBeginIt->first) == iCurrentkMerShifted) {
+								if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
 									seenResultIt = rangeBeginIt;
 								}
 								else {
-									if (func(rangeBeginIt->first) == iCurrentkMerShifted) {
+									if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
 										// we need the first occurence in the database
 										uint64_t iTemp = 1;
-										while (func((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
+										while (shiftVal((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
 											++iTemp;
 										}
 										seenResultIt = rangeEndIt - (iTemp - 1);
 									}
 									else {
-										if (iCurrentkMerShifted < func(rangeBeginIt->first) || iCurrentkMerShifted > func(rangeEndIt->first)) {
+										if (iCurrentkMerShifted < shiftVal(rangeBeginIt->first) || iCurrentkMerShifted > shiftVal(rangeEndIt->first)) {
 											++iIdxIn;
 											bInputIterated = true;
 											continue;
 										}
 										else {
-											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, &iPrefix](const decltype(*libBeginIt)& a, const uint64_t& val) { return ((iPrefix | static_cast<uint64_t>(a.first & 1073741823ULL)) >> shift) < val; });
+											seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift,this](const decltype(*libBeginIt)& a, const uint64_t& val) { return (_iMinK > 6) ? ((a.first & 1073741823ULL) >> shift) < val : (a.first >> shift) < val; });
 										}
 									}
 								}
 
 								bool bBreakOut = false;
 								while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
-									const auto& iCurrentLib = make_tuple(iPrefix | static_cast<uint64_t>(seenResultIt->first & 1073741823ULL), seenResultIt->second);
+									const tuple<uint64_t, uint32_t>& iCurrentLib = (_iMinK > 6) ? static_cast<tuple<uint64_t, uint32_t>>(make_tuple(seenResultIt->first & 1073741823ULL, seenResultIt->second)) : tuple<uint64_t, uint32_t>(make_tuple(seenResultIt->first, seenResultIt->second));
 									//cout << get<0>(iCurrentLib) << " " << get<1>(iCurrentLib) << endl;
 
 									for (; ikLengthCounter >= 0; --ikLengthCounter) {
@@ -1307,6 +1288,14 @@ namespace kASA {
 					bPartitioned = true;
 				}
 				fLibInfo.close();
+
+				// Assert, that if the index was shrunken via trieHalf MinK can only be larger than 6
+				if (bPartitioned && _iMinK <= 6) {
+					cerr << "ERROR: k can only be larger than 6 if your index was shrunken via strategy 2. Setting it to 7..." << endl;
+					_iMinK = 7;
+					_iNumOfK = _iMaxK - _iMinK + 1;
+				}
+
 				//unique_ptr<unique_ptr<stxxlFile>[]> stxxlLibFile;
 				unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
 				unique_ptr<unique_ptr<const contentVecType_32p>[]> vLib;
@@ -1361,7 +1350,7 @@ namespace kASA {
 					iSoftMaxSizeOfInputVecs = static_cast<uint64_t>(0.9 * 1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
 				}
 
-				unordered_map<uint64_t, Utilities::rangeContainerGT6> vInputMap;
+				unordered_map<uint64_t, Utilities::rangeContainer> vInputMap;
 
 				const bool& bReadIDsAreInteresting = fOutFile != "";
 
@@ -1464,7 +1453,7 @@ namespace kASA {
 							}
 						}
 						else {
-							throw runtime_error("readwise output file could not be created!");
+							throw runtime_error("Readwise output file could not be created!");
 						}
 					}
 					
@@ -1508,14 +1497,15 @@ namespace kASA {
 						}*/
 
 						// sort suffices for each range in parallel
-						vector<pair<uint64_t, Utilities::rangeContainerGT6>> vInputVec;
+						vector<pair<uint64_t, Utilities::rangeContainer>> vInputVec;
+
 						vInputVec.reserve(vInputMap.size());
 						for (auto it = vInputMap.begin(); it != vInputMap.end();) {
 							vInputVec.push_back(*it);
 							vInputMap.erase(it++);
 						}
 						vInputMap.clear();
-						sort(vInputVec.begin(), vInputVec.end(), [](const pair<uint64_t, Utilities::rangeContainerGT6>& p1, const pair<uint64_t, Utilities::rangeContainerGT6>& p2) { return p1.first < p2.first; });
+						sort(vInputVec.begin(), vInputVec.end(), [](const pair<uint64_t, Utilities::rangeContainer>& p1, const pair<uint64_t, Utilities::rangeContainer>& p2) { return p1.first < p2.first; });
 
 #pragma omp parallel 
 						{
@@ -1526,9 +1516,15 @@ namespace kASA {
 								if (static_cast<int32_t>(iParallelCount%iNumOfThreads) != iThreadID) {
 									continue;
 								}
-								sort(it->second.kMers.begin(), it->second.kMers.end(), [](const pair<Utilities::rangeContainerGT6::kMerSize, readIDType>& a, const pair<Utilities::rangeContainerGT6::kMerSize, readIDType>& b) { return a < b; });
+								if (_iMinK <= 6) {
+									sort(it->second.kMers_ST6.begin(), it->second.kMers_ST6.end(), [](const pair<uint64_t, readIDType>& a, const pair<uint64_t, readIDType>& b) { return a < b; });
+								}
+								else {
+									sort(it->second.kMers_GT6.begin(), it->second.kMers_GT6.end(), [](const pair<uint32_t, readIDType>& a, const pair<uint32_t, readIDType>& b) { return a < b; });
+								}
 							}
 						}
+					
 						auto end = std::chrono::high_resolution_clock::now();
 						iTimeFastq += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
