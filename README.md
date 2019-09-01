@@ -29,7 +29,7 @@ This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</
 ## Things to know before you start
 
 This tool is designed to read genomic sequences (also called Reads) and identify known parts by exactly matching k-mers to a reference database.
-In order to do this, you need to set kASA up locally (no admin account needed!), create an index out of the genomic reference and then put in a file containing Reads.
+In order to do this, you need to set kASA up locally (no admin account needed!), create an index out of the genomic reference (for now, we will not provide standard indices) and then put in a file containing Reads.
 
 Words like `<this>` are meant as placeholders to be filled with your specifics e.g. name, paths, ...
 
@@ -146,6 +146,17 @@ If the content file contains entries with "EWAN_...", this stands for "Entries W
 
 This mode can be coupled with [Build](#build) by calling `build` and providing the same parameters described here but leaving out `-o` and `-c`. This creates a content file next to the index named `<index name>_content.txt` which then is considered the default. This eliminates the necessity of providing the `-c` parameter in almost every call.
 
+Note, that this step is optional if you provide your own content file or another index with the same content file shall be created (this means creating subsets of a full index is possible with the same content file). The accepted format per line is as follows:
+```
+<Name>	<taxid of specified level e.g. species>	<taxids on lowest level>	<accession numbers>
+```
+which for example could look like this:
+```
+Proteus vulgaris	585	585	CP023965.1;NZ_NBUT01000031.1
+Hyphomicrobium denitrificans	53399	582899;670307	NC_014313.1;NC_021172.1
+```
+The taxids are required to be integers and no header line is necessary. This file can be given to `build` via the `-c` parameter.
+
 ##### Necessary parameters
 * `-u (--level) <level>`: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' "sequence" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.
 * `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file.
@@ -192,6 +203,8 @@ If your read length is smaller than ![equation](http://www.sciweavers.org/tex2im
 Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
 But because too much information isn't always nice, you can specify how much taxa shall be shown for each read and if the profile should be human readable. 
 
+Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
+
 
 ##### Necessary paramameters
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
@@ -216,7 +229,7 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 [
 	{
 		"Read number": 0,
-		"Specifier from input file": ">NZ_CP013542.1+NZ_JFYQ01000033.1",
+		"Specifier from input file": "NZ_CP013542.1+NZ_JFYQ01000033.1",
 		"Matched taxa": [
 			{
 				"tax ID": "396",
@@ -244,7 +257,7 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 ###### Identification
 |#Read number|Specifier from input file|Matched taxa|Names|Scores{relative,k-mer}|
 |:---:|:---:|:---:|:---:|:---:|
-|0 | @Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 |
+|0 | Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 |
 
 ###### Profile
 |tax ID|Name|Unique r.f. k=12|Non-unique r.f. k=12|

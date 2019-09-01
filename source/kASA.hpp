@@ -90,13 +90,17 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Creates default config for stxxl, only called once
-		inline void createConfig(const string& tempFileName, const int32_t& iNumCall, const bool& bDelete = true) {
+		inline void createConfig(const string& tempFileName, const int32_t& iNumCall, const string& mode = "", const bool& bDelete = true) {
 #if _WIN32 || _WIN64
-			string IOCall = "wincall";
+			string IOCall = (mode != "") ? mode : "wincall autogrow";
 #endif
 #if __GNUC__
-			string IOCall = "syscall unlink";
+			string IOCall = (mode != "") ? mode : "syscall unlink autogrow"; 
 #endif
+			if (bDelete) {
+				IOCall += " delete";
+			}
+
 
 			int32_t localNumCall = iNumCall;
 			while (ifstream(_sTemporaryPath + tempFileName + to_string(localNumCall) + ".tmp")) {
@@ -105,12 +109,12 @@ namespace kASA {
 
 			stxxl::config* cfg = stxxl::config::get_instance();
 			if (bDelete) {
-				stxxl::disk_config disk(_sTemporaryPath + tempFileName + to_string(localNumCall) + ".tmp", 1024 * 1024, IOCall + " autogrow delete");
+				stxxl::disk_config disk(_sTemporaryPath + tempFileName + to_string(localNumCall) + ".tmp", 1024 * 1024, IOCall);
 				disk.direct = stxxl::disk_config::DIRECT_ON;
 				cfg->add_disk(disk);
 			}
 			else {
-				stxxl::disk_config disk(_sTemporaryPath + tempFileName + to_string(localNumCall) + ".tmp", 1024 * 1024, IOCall + " autogrow");
+				stxxl::disk_config disk(_sTemporaryPath + tempFileName + to_string(localNumCall) + ".tmp", 1024 * 1024, IOCall);
 				disk.direct = stxxl::disk_config::DIRECT_ON;
 				cfg->add_disk(disk);
 			}
@@ -138,7 +142,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Constructor with paths e.g. "derp/"
-		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _sMaxKBlank(12, ' '), _bVerbose(bVerbose) {
+		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "") : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _sMaxKBlank(12, ' '), _bVerbose(bVerbose) {
 #ifdef ENVIRONMENT32
 			_iMaxMemUsePerThread = (1024 / _iNumOfThreads) * 1024 * 1024;
 #else
@@ -156,7 +160,7 @@ namespace kASA {
 				_aOfK[i] = _iMaxK - i;
 			}
 
-			createConfig("stxxl_temp_", iNumOfCall);
+			createConfig("stxxl_temp_", iNumOfCall, stxxl_mode);
 		}
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -344,7 +348,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -366,7 +370,7 @@ namespace kASA {
 				derp.close();
 				
 
-				vector<string> files = Utilities::gatherFilesFromPath(sInput);
+				vector<string> files = Utilities::gatherFilesFromPath(sInput).first;
 
 				if (_bVerbose) {
 					cout << "OUT: Going through fasta(s), gathering accession number(s)..." << endl;
@@ -436,7 +440,7 @@ namespace kASA {
 					bNotAllFound = false;
 				}
 				else {
-					files = Utilities::gatherFilesFromPath(sAccToTaxFiles); // TODO: What happens, when the path is empty?
+					files = Utilities::gatherFilesFromPath(sAccToTaxFiles).first;
 
 					////////////////////
 					
@@ -640,7 +644,7 @@ namespace kASA {
 
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -688,7 +692,9 @@ namespace kASA {
 
 				pair<uint32_t, uint32_t> pool(0, 0);
 
-				ifstream fContent(contentFile);
+				ifstream fContent;
+				fContent.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+				fContent.open(contentFile);
 				//uint32_t iAmountOfSpecies = 1;
 				string sTempLine = "";
 				unordered_map<string, tuple<string, string, string>> mOrganisms;
@@ -747,7 +753,9 @@ namespace kASA {
 					cout << "OUT: merging content files..." << endl;
 				}
 
-				ifstream tempCFile(_sTemporaryPath + "tempContent.txt");
+				ifstream tempCFile;
+				tempCFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+				tempCFile.open(_sTemporaryPath + "tempContent.txt");
 				// same as above
 				while (getline(tempCFile, sTempLine)) {
 					if (sTempLine != "") {
@@ -770,7 +778,9 @@ namespace kASA {
 				}
 
 				// write content file
-				ofstream fContentOS(contentFile);
+				ofstream fContentOS;
+				fContentOS.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+				fContentOS.open(contentFile);
 				for (const auto& entry : mOrganisms) {
 					fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << endl;
 				}
@@ -778,7 +788,7 @@ namespace kASA {
 				remove((_sTemporaryPath + "tempContent.txt").c_str());
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 

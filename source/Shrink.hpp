@@ -19,7 +19,7 @@ namespace kASA {
 	class Shrink : public kASA {
 
 	public:
-		Shrink(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall) {}
+		Shrink(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "") : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode) {}
 
 		enum ShrinkingStrategy
 		{
@@ -119,7 +119,7 @@ namespace kASA {
 				vOut->resize(outIt - vOut->begin(), true);
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 
 		}
@@ -135,7 +135,7 @@ namespace kASA {
 				throw runtime_error("Not implemented yet");
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 		*/
@@ -151,7 +151,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -183,7 +183,7 @@ namespace kASA {
 				vOut->resize(iCounter, true);
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 		
@@ -238,6 +238,7 @@ namespace kASA {
 
 				// create reduced vec
 				ofstream derp;
+				derp.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 				derp.open(fOutFile);
 				derp.close();
 
@@ -350,7 +351,7 @@ namespace kASA {
 			
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 

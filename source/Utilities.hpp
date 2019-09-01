@@ -99,40 +99,66 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
-	inline vector<string> gatherFilesFromPath(const string& sPath) {
-		vector<string> files;
+	inline pair<vector<string>, size_t> gatherFilesFromPath(const string& sPath) {
+		try {
+			vector<string> files;
+			size_t overallFileSize = 0;
 #if _WIN32 || _WIN64
-		if (sPath.back() == '/') {
-			for (auto& fsPath : std::experimental::filesystem::directory_iterator(sPath)) {
-				files.push_back((fsPath.path()).string());
-			}
-		}
-#else
-#if __GNUC__
-		if (sPath.back() == '/') {
-			DIR           *dirp;
-			struct dirent *directory;
+			if (sPath.back() == '/') {
+				for (auto& fsPath : std::experimental::filesystem::directory_iterator(sPath)) {
+					const string& fileName = (fsPath.path()).string();
+					files.push_back(fileName);
 
-			dirp = opendir(sPath.c_str());
-			if (dirp) {
-				while ((directory = readdir(dirp)) != NULL)
-				{
-					const string fName(directory->d_name);
-					if (fName != "." && fName != "..") {
-						files.push_back(sPath + fName);
+					bool isGzipped = (fileName[fileName.length() - 3] == '.' && fileName[fileName.length() - 2] == 'g' && fileName[fileName.length() - 1] == 'z');
+					if (!isGzipped) {
+						ifstream fast_q_a_File;
+						fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+						fast_q_a_File.open(fileName);
+						fast_q_a_File.seekg(0, fast_q_a_File.end);
+						overallFileSize += fast_q_a_File.tellg();
 					}
 				}
-
-				closedir(dirp);
 			}
-		}
-#endif
-#endif
-		else {
-			files.push_back(sPath);
-		}
+#else
+#if __GNUC__
+			if (sPath.back() == '/') {
+				DIR           *dirp;
+				struct dirent *directory;
 
-		return files;
+				dirp = opendir(sPath.c_str());
+				if (dirp) {
+					while ((directory = readdir(dirp)) != NULL)
+					{
+						const string fName(directory->d_name);
+						if (fName != "." && fName != "..") {
+							const string& fileName = sPath + fName;
+							files.push_back(fileName);
+
+							bool isGzipped = (fileName[fileName.length() - 3] == '.' && fileName[fileName.length() - 2] == 'g' && fileName[fileName.length() - 1] == 'z');
+							if (!isGzipped) {
+								ifstream fast_q_a_File;
+								fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+								fast_q_a_File.open(fileName);
+								fast_q_a_File.seekg(0, fast_q_a_File.end);
+								overallFileSize += fast_q_a_File.tellg();
+		}
+						}
+					}
+
+					closedir(dirp);
+				}
+			}
+#endif
+#endif
+			else {
+				files.push_back(sPath);
+			}
+
+			return make_pair(files,overallFileSize);
+		}
+		catch (...) {
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+		}
 	}
 
 
@@ -241,7 +267,7 @@ namespace Utilities {
 			return res;
 		}
 		catch (...) {
-			throw;
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 		}
 	}
 

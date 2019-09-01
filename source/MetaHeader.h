@@ -157,6 +157,7 @@ struct __attribute__((packed)) packedBigPairTrie {
 
 #if _WIN32 || _WIN64
 typedef stxxl::wincall_file stxxlFile;
+#define __PRETTY_FUNCTION__ __FUNCSIG__ 
 #endif
 #if __GNUC__
 typedef stxxl::syscall_file stxxlFile;

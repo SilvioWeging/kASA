@@ -18,7 +18,7 @@ namespace kASA {
 		const bool _bInputAreAAs;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose), _bInputAreAAs(bTranslated) {}
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "") : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode), _bInputAreAAs(bTranslated) {}
 
 
 	protected:
@@ -32,13 +32,13 @@ namespace kASA {
 			list<readIDType> vReadIDs;
 			readIDType iCurrentReadID = 0;
 			unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
-			uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iNumOfNewReads = 0;
+			uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iNumOfAllCharsRead = 0, iCurrentOverallPercentage = 0, iNumOfNewReads = 0;
 		};
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fastq as input for comparison
 		template<typename T>
-		inline uint64_t readFastq_partialSort(T& input, unordered_map<uint64_t, Utilities::rangeContainer>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr) {
+		inline uint64_t readFastq_partialSort(T& input, unordered_map<uint64_t, Utilities::rangeContainer>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr) {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
@@ -76,10 +76,18 @@ namespace kASA {
 
 						if (_bVerbose && iFileLength != 0) {
 							transfer->iNumOfCharsRead += iNumOfChars;
+							transfer->iNumOfAllCharsRead += iNumOfChars;
 							double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
 							if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
 								transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-								cout << "OUT: " << transfer->iCurrentPercentage << " %" << endl;
+								cout << "OUT: Progress of current file " << transfer->iCurrentPercentage <<  "%" << endl;
+							}
+							if (iFileLength != overallFilesSize) {
+								dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
+								if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentOverallPercentage) {
+									transfer->iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+									cout << "OUT: Progress of all files " << transfer->iCurrentOverallPercentage << " %" << endl;
+								}
 							}
 						}
 
@@ -261,7 +269,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 			////////////////////////////////////////////////////////
 			return iSumOfkMers;
@@ -271,7 +279,7 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta as input for comparison, no parallelization possible due to the unknown length of a contig/genome
 		template<typename T>
-		inline uint64_t readFasta_partialSort(T& input, unordered_map<uint64_t, Utilities::rangeContainer>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr) {
+		inline uint64_t readFasta_partialSort(T& input, unordered_map<uint64_t, Utilities::rangeContainer>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr) {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
@@ -312,10 +320,18 @@ namespace kASA {
 
 						if (_bVerbose && iFileLength != 0) {
 							transfer->iNumOfCharsRead += iNumOfChars;
+							transfer->iNumOfAllCharsRead += iNumOfChars;
 							double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
 							if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
 								transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-								cout << "OUT: " << transfer->iCurrentPercentage << " %" << endl;
+								cout << "OUT: Progress of current file " << transfer->iCurrentPercentage << " %" << endl;
+							}
+							if (iFileLength != overallFilesSize) {
+								dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
+								if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentOverallPercentage) {
+									transfer->iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+									cout << "OUT: Progress of all files " << transfer->iCurrentOverallPercentage << " %" << endl;
+								}
 							}
 						}
 
@@ -493,7 +509,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 			////////////////////////////////////////////////////////
 			return iSumOfkMers;
@@ -707,7 +723,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -909,7 +925,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta and create a kMer-Vec, used in BuildAll(...)
-		inline void readFasta(ifstream& input, const unordered_map<string, uint32_t>& mAccToID, Build& vBricks, const uint64_t& iFileLength, const float& fShrinkPercentage) {
+		inline void readFasta(ifstream& input, const unordered_map<string, uint32_t>& mAccToID, Build& vBricks, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
 			try {
 				if (!input.good()) {
 					throw runtime_error("No input found!");
@@ -977,7 +993,7 @@ namespace kASA {
 				const int32_t& iConcurrentLines = 20;
 				string sOverhang = "", sDNA = "";
 
-				uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0;
+				uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iCurrentOverallPercentage = 0;
 
 				// Either the file still contains dna or there is an Overhang left from a previous loop
 				while (input.good() || sOverhang != "") {
@@ -994,11 +1010,19 @@ namespace kASA {
 						input.get(sTempCArr, 100000);
 
 						auto iNumOfChars = input.gcount();
-						iNumOfCharsRead += iNumOfChars;
-						double dPercentageOfInputRead = iNumOfCharsRead / double(iFileLength) * 100.;
-						if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentPercentage) {
-							iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-							cout << "OUT: " << iCurrentPercentage << " %" << endl;
+						if (_bVerbose && iFileLength != 0) {
+							iNumOfCharsRead += iNumOfChars;
+							overallCharsRead += iNumOfChars;
+							double dPercentageOfInputRead = iNumOfCharsRead / double(iFileLength) * 100.;
+							if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentPercentage) {
+								iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+								cout << "OUT: Progress of current file " << iCurrentPercentage << " %" << endl;
+							}
+							dPercentageOfInputRead = overallCharsRead / double(overallFilesSize) * 100.;
+							if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentOverallPercentage) {
+								iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+								cout << "OUT: Progress of all files " << iCurrentOverallPercentage << " %" << endl;
+							}
 						}
 
 						bool bLineNotFinished = true;
@@ -1165,7 +1189,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -1941,59 +1965,33 @@ namespace kASA {
 				}
 
 				Build brick(_sTemporaryPath, 0, iMem / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
-
-#if _WIN32 || _WIN64
+				size_t overallCharsRead = 0;
 				if (sDirectory.back() == '/') {
-					for (auto& fsPath : std::experimental::filesystem::directory_iterator(sDirectory)) {
-						ifstream fastaFile(fsPath.path());
+					auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
+					for (auto& fileName : filesAndSize.first) {
+						if (_bVerbose) {
+							cout << "OUT: Current file: " << fileName << endl;
+						}
+						ifstream fastaFile(fileName);
 						fastaFile.seekg(0, fastaFile.end);
 						const uint64_t& iFileLength = fastaFile.tellg();
 						fastaFile.seekg(0, fastaFile.beg);
-						readFasta(fastaFile, mAccToID, brick, iFileLength, fShrinkPercentage);
+						readFasta(fastaFile, mAccToID, brick, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage);
 					}
 				}
 				else {
-					ifstream fastaFile(sDirectory);
-					fastaFile.seekg(0, fastaFile.end);
-					const uint64_t& iFileLength = fastaFile.tellg();
-					fastaFile.seekg(0, fastaFile.beg);
-					readFasta(fastaFile, mAccToID, brick, iFileLength, fShrinkPercentage);
-				}
-#else
-#if __GNUC__
-				if (sDirectory.back() == '/') {
-					DIR           *dirp;
-					struct dirent *directory;
-
-					dirp = opendir(sDirectory.c_str());
-					if (dirp) {
-						while ((directory = readdir(dirp)) != NULL)
-						{
-							const string fName(directory->d_name);
-							if (fName != "." && fName != "..") {
-								ifstream fastaFile(sDirectory + fName);
-								fastaFile.seekg(0, fastaFile.end);
-								const uint64_t& iFileLength = fastaFile.tellg();
-								fastaFile.seekg(0, fastaFile.beg);
-								readFasta(fastaFile, mAccToID, brick, iFileLength, fShrinkPercentage);
-							}
-						}
-
-						closedir(dirp);
+					ifstream fastaFile;
+					fastaFile.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					fastaFile.open(sDirectory);
+					if (_bVerbose) {
+						cout << "OUT: Current file: " << sDirectory << endl;
 					}
-				}
-				else {
-					ifstream fastaFile(sDirectory);
 					fastaFile.seekg(0, fastaFile.end);
 					const uint64_t& iFileLength = fastaFile.tellg();
 					fastaFile.seekg(0, fastaFile.beg);
-					readFasta(fastaFile, mAccToID, brick, iFileLength, fShrinkPercentage);
+					readFasta(fastaFile, mAccToID, brick, iFileLength, overallCharsRead, iFileLength, fShrinkPercentage);
 				}
 
-#else
-				#error NO SUITABLE COMPILER FOUND
-#endif
-#endif
 				// Finalize
 				brick.IntToExt2(true);
 				const uint64_t& iSizeOfFinalIndex = brick.createDatabase(fOutFile, iIdxCounter, mIdxToName);
@@ -2004,8 +2002,12 @@ namespace kASA {
 				Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
 				T.SaveToStxxlVec(&libVec, fOutFile);
 			}
+			catch (invalid_argument&) {
+				cerr << "ERROR: content file has not the right format. Taxids in the second row are required to be integers!" << endl;
+				return;
+			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 

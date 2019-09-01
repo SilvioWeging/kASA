@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 	try {
 		vector<string> vParameters(argv, argv + argc);
 
-		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "";
+		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "";
 		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false; //bRAM = false
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iCodonID = 1, iNumOfBeasts = 3;
@@ -195,6 +195,9 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "-h" || sParameter == "--human") {
 				bHumanReadable = true;
 			}
+			else if (sParameter == "--stxxl") {
+				sStxxlMode = vParameters[++i];
+			}
 			else {
 				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 			}
@@ -208,7 +211,7 @@ int main(int argc, char* argv[]) {
 
 
 		if (cMode == "build") {
-			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated);
+			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, iCodonID);
 			}
@@ -266,7 +269,7 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "update") {
-			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, iCodonID);
 			}
@@ -287,7 +290,7 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "delete") {
-			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			auto start = std::chrono::high_resolution_clock::now();
 			kASAObj.DeleteFromLib(indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
 			auto end = std::chrono::high_resolution_clock::now();
@@ -310,7 +313,7 @@ int main(int argc, char* argv[]) {
 				bCopyContentFile = true;
 			}
 
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			kASAObj.ShrinkLib(indexFile, sDBPathOut, eShrinkingStrategy, contentFileIn, fPercentageOfThrowAway);
 
 			if (bCopyContentFile) {
@@ -321,7 +324,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		else if (cMode == "identify") {
-			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated);
+			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, iCodonID);
 			}
@@ -341,7 +344,7 @@ int main(int argc, char* argv[]) {
 #endif
 		}
 		else if (cMode == "getFrequency") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			if (contentFileIn == "") {
 				contentFileIn = indexFile + "_content.txt";
 			}
@@ -354,7 +357,7 @@ int main(int argc, char* argv[]) {
 				contentFileIn = indexFile + "_content.txt";
 			}
 
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			uint32_t iIdxCounter = 1;
 			ifstream content(contentFileIn);
 			string sDummy = "";
@@ -385,7 +388,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		else if (cMode == "trie") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 
 			ifstream fLibInfo(indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0;
@@ -409,7 +412,7 @@ int main(int argc, char* argv[]) {
 			if (indexFile == sDBPathOut) {
 				throw runtime_error("Paths and names of input and output are the same!");
 			}
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
+			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			//kASAObj.GetFrequencyK(contentFileIn, databaseFile, sDBPathOut + "_f.txt");
 			kASAObj.ShrinkLib(indexFile, sDBPathOut, kASA::Shrink::ShrinkingStrategy::TrieHalf, contentFileIn);
 		}

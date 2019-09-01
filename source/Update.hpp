@@ -15,7 +15,7 @@
 namespace kASA {
 	class Update : public Read, Build {
 	public:
-		Update(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall) : Read(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall), Build() {}
+		Update(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "") : Read(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, stxxl_mode), Build() {}
 
 	public:
 
@@ -93,7 +93,9 @@ namespace kASA {
 					infoFile.close();
 					stxxlFile libFile(sLibFile, stxxl::file::RDONLY);
 					const contentVecType_32p vLib(&libFile, iLibSize);
-					ofstream dummy(fOutfile);
+					ofstream dummy;
+					dummy.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					dummy.open(fOutfile);
 					dummy.close();
 					stxxlFile outFile(fOutfile, stxxl::file::RDWR);
 					contentVecType_32p vOut(&outFile, iLibSize);
@@ -116,7 +118,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -257,7 +259,9 @@ namespace kASA {
 					unique_ptr<const contentVecType_32p> vLibIn(new contentVecType_32p(stxxlLibFile.get(), iSizeOfLib));
 					contentVecType_32p::bufreader_type vCBuff(*vLibIn);
 
-					ofstream derp(fOutFile);
+					ofstream derp;
+					derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					derp.open(fOutFile);
 					derp.close();
 					unique_ptr<stxxlFile> stxxlOutVec(new stxxlFile(fOutFile, stxxl::file::RDWR));
 					unique_ptr<contentVecType_32p> vOutVec(new contentVecType_32p(stxxlOutVec.get(), 0));
@@ -346,7 +350,7 @@ namespace kASA {
 				remove((_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall)).c_str());
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 

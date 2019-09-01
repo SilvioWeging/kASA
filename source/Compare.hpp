@@ -17,7 +17,7 @@ namespace kASA {
 		const bool _bTranslated = false;
 
 	public:
-		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const bool& bProtein = false) : Read(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bProtein), _bTranslated(bProtein), iNumOfBeasts(iNumOfBeasts) {}
+		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const bool& bProtein = false, const string& stxxl_mode = "") : Read(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bProtein, stxxl_mode), _bTranslated(bProtein), iNumOfBeasts(iNumOfBeasts) {}
 
 		// for output
 		bool bHumanReadable = false;
@@ -41,7 +41,7 @@ namespace kASA {
 				vMemoryOfTaxIDs_k.set(codedTaxIDs);
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 		///////////////////////
@@ -591,7 +591,7 @@ namespace kASA {
 				vMemoryOfTaxIDs_k.set(Utilities::checkIfInMap(mTaxToIdx, static_cast<uint32_t>(codedTaxIDs))->second);
 			} 
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 		inline void markTaxIDs(const uint64_t& codedTaxIDs, Utilities::sBitArray& vMemoryOfTaxIDs_k, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const vector<tuple<uint64_t, uint32_t>>*) {
@@ -599,7 +599,7 @@ namespace kASA {
 				vMemoryOfTaxIDs_k.set(Utilities::checkIfInMap(mTaxToIdx, static_cast<uint32_t>(codedTaxIDs))->second);
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 		inline void markTaxIDs(const uint64_t& codedTaxIDs, Utilities::sBitArray& vMemoryOfTaxIDs_k, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const vector<tuple<uint32_t, uint32_t>>*) {
@@ -607,7 +607,7 @@ namespace kASA {
 				vMemoryOfTaxIDs_k.set(Utilities::checkIfInMap(mTaxToIdx, static_cast<uint32_t>(codedTaxIDs))->second);
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -1230,6 +1230,7 @@ namespace kASA {
 				}
 			}
 			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl;
 				throw;
 			}
 		}
@@ -1366,7 +1367,7 @@ namespace kASA {
 						return output;
 					}
 					catch (...) {
-						throw;
+						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 					}
 				};
 
@@ -1374,11 +1375,19 @@ namespace kASA {
 
 				uint64_t iNumberOfkMersInInput = 0;
 
-				vector<string> vInputFiles = Utilities::gatherFilesFromPath(fInFile);
+				auto pathAndSize = Utilities::gatherFilesFromPath(fInFile);
+				vector<string> vInputFiles = pathAndSize.first;
+				size_t overallFileSize = pathAndSize.second, allFilesProgress = 0, charsReadOverall = 0;
 
+				
 				// allow multiple input files
 				for (const auto& inFile : vInputFiles) {
 
+					if (_bVerbose) {
+						cout << "OUT: Current file: " << inFile << endl;
+					}
+
+					
 					string fileName = "";
 					if (vInputFiles.size() > 1) { // get file name without path and ending
 						const auto& vRawNameSplit = Utilities::split(inFile.substr(fInFile.size(), inFile.size()), '.');
@@ -1392,7 +1401,7 @@ namespace kASA {
 							fileName.pop_back();
 						}
 					}
-
+					
 					// see if input is gziped or not and if it's a fasta or fastq file
 					bool isGzipped = (inFile[inFile.length() - 3] == '.' && inFile[inFile.length() - 2] == 'g' && inFile[inFile.length() - 1] == 'z');
 					bool bIsGood = false, bIsFasta = false;
@@ -1400,8 +1409,12 @@ namespace kASA {
 					unique_ptr<ifstream> fast_q_a_File;
 					unique_ptr<igzstream> fast_q_a_File_gz;
 					uint64_t iFileLength = 0;
-
+					
 					if (isGzipped) {
+						if (_bVerbose) {
+							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
+						}
+
 						fast_q_a_File_gz.reset(new igzstream(inFile.c_str()));
 						bIsGood = fast_q_a_File_gz->good();
 						char cLessOrAt = static_cast<char>(fast_q_a_File_gz->peek());
@@ -1440,8 +1453,9 @@ namespace kASA {
 						iFileLength = fast_q_a_File->tellg();
 						fast_q_a_File->seekg(0, fast_q_a_File->beg);
 					}
-
+					
 					ofstream fOut;
+					fOut.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					if (bReadIDsAreInteresting) {
 						fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + ((bHumanReadable) ? ".rtt" : ".json") : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
 						if (fOut) {
@@ -1457,8 +1471,10 @@ namespace kASA {
 						}
 					}
 					
-
+					
 					unique_ptr<strTransfer> transferBetweenRuns(new strTransfer);
+					transferBetweenRuns->iCurrentOverallPercentage = allFilesProgress;
+					transferBetweenRuns->iNumOfAllCharsRead = charsReadOverall;
 					vector<tuple<readIDType, float, double>> vSavedScores;
 					readIDType iReadIDofSavedScores = 0;
 
@@ -1467,25 +1483,25 @@ namespace kASA {
 						auto start = std::chrono::high_resolution_clock::now();
 						if (bIsFasta) {
 							if (isGzipped) {
-								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
 							}
 							else {
-								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T);
 							}
 
 							iNumOfReads = transferBetweenRuns->vReadIDs.size();
 						}
 						else {
 							if (isGzipped) {
-								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
 							}
 							else {
-								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T);
 							}
 
 							iNumOfReads = transferBetweenRuns->vReadIDs.size();
 						}
-
+						
 						// remove singletons
 						/*for (auto it = vInput.begin(); it != vInput.end(); ) {
 							if (it->second.kMers.size() == 1) {
@@ -1499,14 +1515,15 @@ namespace kASA {
 						// sort suffices for each range in parallel
 						vector<pair<uint64_t, Utilities::rangeContainer>> vInputVec;
 
-						vInputVec.reserve(vInputMap.size());
+						//vInputVec.reserve(vInputMap.size());
 						for (auto it = vInputMap.begin(); it != vInputMap.end();) {
 							vInputVec.push_back(*it);
 							vInputMap.erase(it++);
 						}
 						vInputMap.clear();
+						
 						sort(vInputVec.begin(), vInputVec.end(), [](const pair<uint64_t, Utilities::rangeContainer>& p1, const pair<uint64_t, Utilities::rangeContainer>& p2) { return p1.first < p2.first; });
-
+						
 #pragma omp parallel 
 						{
 							size_t iParallelCount = 0;
@@ -1524,6 +1541,7 @@ namespace kASA {
 								}
 							}
 						}
+						
 					
 						auto end = std::chrono::high_resolution_clock::now();
 						iTimeFastq += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
@@ -1537,6 +1555,7 @@ namespace kASA {
 								}
 							}
 							else {
+								vReadIDtoTaxID.reset();
 								vReadIDtoTaxID.reset(new float[iNumOfReads*iAmountOfSpecies]);
 
 								for (uint64_t i = 0; i < iNumOfReads*iAmountOfSpecies; ++i) {
@@ -1547,7 +1566,7 @@ namespace kASA {
 						else {
 							iNumOfReadsSum += transferBetweenRuns->iNumOfNewReads;
 						}
-
+						
 						// now compare with index
 						start = std::chrono::high_resolution_clock::now();
 						if (bReadIDsAreInteresting) {
@@ -1568,12 +1587,12 @@ namespace kASA {
 						}
 						end = std::chrono::high_resolution_clock::now();
 						iTimeCompare += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-
+						
 						// save results
 						if (bReadIDsAreInteresting) {
 							if (transferBetweenRuns->addTail) {
 								// last read is not yet finished
-
+								
 								uint64_t i = 0;
 								// check if there is still some unfinished read which is now complete
 								if (vSavedScores.size()) {
@@ -1602,7 +1621,7 @@ namespace kASA {
 										vReadNameAndLength.pop_front();
 									}
 								}
-
+								
 								// save the score of the not yet finished
 								auto resultOfUnfinished = getVecOfScored(vReadIDtoTaxID, Utilities::checkIfInMap(transferBetweenRuns->mReadIDToArrayIdx, transferBetweenRuns->lastLine.second)->second);
 								if (resultOfUnfinished.size()) {
@@ -1622,7 +1641,7 @@ namespace kASA {
 									resultOfUnfinished.push_back(seen);
 									vSavedScores.swap(resultOfUnfinished);
 								}
-
+								
 								// save the finished ones
 								for (; i < iNumOfReads - 1 && vReadNameAndLength.size(); ++i) {
 									auto tempVec = getVecOfScored(vReadIDtoTaxID, Utilities::checkIfInMap(transferBetweenRuns->mReadIDToArrayIdx, transferBetweenRuns->vReadIDs.front())->second);
@@ -1648,7 +1667,7 @@ namespace kASA {
 									transferBetweenRuns->mReadIDToArrayIdx.erase(tempID);
 									vReadNameAndLength.pop_front();
 								}
-
+								
 
 								iReadIDofSavedScores = transferBetweenRuns->iCurrentReadID;
 								transferBetweenRuns->mReadIDToArrayIdx[iReadIDofSavedScores] = 0;
@@ -1658,7 +1677,7 @@ namespace kASA {
 							}
 							else {
 								// reads finished
-
+								
 								// write down the saved one
 								uint64_t i = 0;
 								if (vSavedScores.size()) {
@@ -1686,7 +1705,7 @@ namespace kASA {
 									vReadNameAndLength.pop_front();
 									vSavedScores.clear();
 								}
-
+								
 								// and now the regular ones
 								for (; i < iNumOfReads; ++i) {
 									auto tempVec = getVecOfScored(vReadIDtoTaxID, i);
@@ -1712,13 +1731,14 @@ namespace kASA {
 									transferBetweenRuns->mReadIDToArrayIdx.erase(tempID);
 									vReadNameAndLength.pop_front();
 								}
+								
 								iNumOfReadsSum += iNumOfReads;
 								iNumOfReadsOld = iNumOfReads;
 								vReadNameAndLength.clear();
 							}
 						}
 
-
+						
 						vInputVec.clear();
 
 						if (isGzipped) {
@@ -1727,10 +1747,11 @@ namespace kASA {
 						else {
 							bIsGood = fast_q_a_File->good();
 						}
+						charsReadOverall = transferBetweenRuns->iNumOfAllCharsRead;
 
 						//iterate until no dna is left
 					}
-
+					
 					// if json is the output format for readToTaxa, end it with a ]
 					if (bReadIDsAreInteresting && !bHumanReadable) {
 						fOut << endl << "]";
@@ -1763,7 +1784,9 @@ namespace kASA {
 					});
 
 					// save to file(s)
-					ofstream tableFileStream((vInputFiles.size() > 1) ? fTableFile + fileName + ".csv" : fTableFile);
+					ofstream tableFileStream;
+					tableFileStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+					tableFileStream.open((vInputFiles.size() > 1) ? fTableFile + fileName + ".csv" : fTableFile);
 					//auto orgBuf = cout.rdbuf();
 					if (fTableFile != "") {
 						//cout.rdbuf(tableFileStream.rdbuf());
@@ -1863,10 +1886,12 @@ namespace kASA {
 						vCount_all[i] = 0.;
 						vCount_unique[i] = 0;
 					}
+
+					allFilesProgress = transferBetweenRuns->iCurrentOverallPercentage;
 				}
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 		/*

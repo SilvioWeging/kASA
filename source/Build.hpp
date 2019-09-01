@@ -30,10 +30,11 @@ namespace kASA {
 
 		Build(const string& path, const int32_t& iThreadID, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
 			_sTempPath = path + "_temp_" + to_string(iThreadID);
-			ofstream derp(_sTempPath + to_string(_iFlagOfContainerIdx));
+			ofstream derp;
+			derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+			derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
 			derp.close();
 			derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
-			derp.close();
 
 			vInternal.reset(new vector<packedBigPair>(iSoftLimit + 1));
 			vInternalIt = vInternal->begin();
@@ -195,7 +196,7 @@ namespace kASA {
 				return iElemCounter;
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 			return 0;
 		}
@@ -205,13 +206,15 @@ namespace kASA {
 		inline void IntToExt2(const bool& bLastCall = false) {
 			try {
 				if (!ifstream(_sTempPath + to_string(_iFlagOfContainerIdx))) {
-					ofstream derp(_sTempPath + to_string(_iFlagOfContainerIdx));
+					ofstream derp;
+					derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
 				}
 				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iFlagOfContainerIdx), stxxl::file::RDWR));
 				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), _iConstSize + (vInternalIt - vInternal->cbegin())));
 				//auto vNCIt = vNC->begin();
 				contentVecType_32p::bufwriter_type vNCIt(*vNC);
-#if _HAS_CXX17
+#if __has_include(<execution>)
 				sort(std::execution::par_unseq, vInternal->begin(), vInternalIt);
 #else
 				sort(vInternal->begin(), vInternalIt);
@@ -251,8 +254,9 @@ namespace kASA {
 				}
 				else {
 					if (!ifstream(_sTempPath + to_string(!_iFlagOfContainerIdx))) {
-						ofstream derp(_sTempPath + to_string(!_iFlagOfContainerIdx));
-						derp.close();
+						ofstream derp;
+						derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+						derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
 					}
 					unique_ptr<stxxlFile> fCFile(new stxxlFile(_sTempPath + to_string(!_iFlagOfContainerIdx), stxxl::file::RDONLY));
 					unique_ptr<const contentVecType_32p> vC(new const contentVecType_32p(fCFile.get(), _iConstSize));
@@ -277,7 +281,7 @@ namespace kASA {
 				vInternalIt = vInternal->begin();
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 
@@ -305,7 +309,7 @@ namespace kASA {
 				return _iConstSize;
 			}
 			catch (...) {
-				throw;
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
 	};

@@ -327,7 +327,7 @@ public:
 			//cout << itmpCount << " " << itmpCount + iCount << endl;
 		}
 		catch (...) {
-			throw;
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 		}
 	}
 	////////////////
@@ -359,7 +359,7 @@ public:
 			trieVec.export_files("_");
 		}
 		catch (...) {
-			throw;
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 		}
 	}
 
@@ -405,7 +405,7 @@ public:
 			//cout << "Nodes per Level: 1:" << iNumOfNodes[0] << " 2:" << iNumOfNodes[1] << " 3:" << iNumOfNodes[2] << " 4:" << iNumOfNodes[3] << " 5:" << iNumOfNodes[4] << endl;
 		}
 		catch (...) {
-			throw;
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 		}
 	}
 
