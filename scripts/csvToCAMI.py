@@ -105,7 +105,7 @@ def csvToCAMI(argv):
 				taxRanks = taxRankPath.split("|")
 
 				# sum frequencies
-				for i in xrange(len(taxIDs)-1, -1, -1):
+				for i in range(len(taxIDs)-1, -1, -1):
 					tID = taxIDs[i]
 					if tID != "":
 						if tID in taxPaths:
@@ -115,7 +115,7 @@ def csvToCAMI(argv):
 						else:
 							shortenedIDPath = taxIDs[0]
 							shortenedNamePath = taxNames[0]
-							for j in xrange(1,i+1,1):
+							for j in range(1,i+1,1):
 								shortenedIDPath += "|" + taxIDs[j]
 								shortenedNamePath += "|" + taxNames[j]
 							taxPaths[tID] = tID + "\t" + taxRanks[i] + "\t" + shortenedIDPath + "\t" + shortenedNamePath + "\t" + str(quantity)
