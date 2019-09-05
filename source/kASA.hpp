@@ -779,7 +779,7 @@ namespace kASA {
 
 				// write content file
 				ofstream fContentOS;
-				fContentOS.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+				//fContentOS.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 				fContentOS.open(contentFile);
 				for (const auto& entry : mOrganisms) {
 					fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << endl;

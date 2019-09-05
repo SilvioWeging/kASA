@@ -1455,7 +1455,7 @@ namespace kASA {
 					}
 					
 					ofstream fOut;
-					fOut.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+					//fOut.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					if (bReadIDsAreInteresting) {
 						fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + ((bHumanReadable) ? ".rtt" : ".json") : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
 						if (fOut) {
@@ -1785,7 +1785,7 @@ namespace kASA {
 
 					// save to file(s)
 					ofstream tableFileStream;
-					tableFileStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+					//tableFileStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					tableFileStream.open((vInputFiles.size() > 1) ? fTableFile + fileName + ".csv" : fTableFile);
 					//auto orgBuf = cout.rdbuf();
 					if (fTableFile != "") {

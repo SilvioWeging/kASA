@@ -31,7 +31,7 @@ namespace kASA {
 		Build(const string& path, const int32_t& iNumOfCall, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
 			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
 			ofstream derp;
-			derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 			derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
 			derp.close();
 			derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
@@ -207,7 +207,7 @@ namespace kASA {
 			try {
 				if (!ifstream(_sTempPath + to_string(_iFlagOfContainerIdx))) {
 					ofstream derp;
-					derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 					derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
 				}
 				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iFlagOfContainerIdx), stxxl::file::RDWR));
@@ -255,7 +255,7 @@ namespace kASA {
 				else {
 					if (!ifstream(_sTempPath + to_string(!_iFlagOfContainerIdx))) {
 						ofstream derp;
-						derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+						//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 						derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
 					}
 					unique_ptr<stxxlFile> fCFile(new stxxlFile(_sTempPath + to_string(!_iFlagOfContainerIdx), stxxl::file::RDONLY));

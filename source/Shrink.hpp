@@ -238,7 +238,7 @@ namespace kASA {
 
 				// create reduced vec
 				ofstream derp;
-				derp.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+				//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 				derp.open(fOutFile);
 				derp.close();
 

@@ -94,7 +94,7 @@ namespace kASA {
 					stxxlFile libFile(sLibFile, stxxl::file::RDONLY);
 					const contentVecType_32p vLib(&libFile, iLibSize);
 					ofstream dummy;
-					dummy.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					//dummy.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 					dummy.open(fOutfile);
 					dummy.close();
 					stxxlFile outFile(fOutfile, stxxl::file::RDWR);
@@ -260,7 +260,7 @@ namespace kASA {
 					contentVecType_32p::bufreader_type vCBuff(*vLibIn);
 
 					ofstream derp;
-					derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 					derp.open(fOutFile);
 					derp.close();
 					unique_ptr<stxxlFile> stxxlOutVec(new stxxlFile(fOutFile, stxxl::file::RDWR));
