@@ -1964,7 +1964,7 @@ namespace kASA {
 					}
 				}
 
-				Build brick(_sTemporaryPath, 0, iMem / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
+				Build brick(_sTemporaryPath, _iNumOfCall, iMem / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
 				size_t overallCharsRead = 0;
 				if (sDirectory.back() == '/') {
 					auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
@@ -1981,7 +1981,7 @@ namespace kASA {
 				}
 				else {
 					ifstream fastaFile;
-					fastaFile.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+					//fastaFile.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 					fastaFile.open(sDirectory);
 					if (_bVerbose) {
 						cout << "OUT: Current file: " << sDirectory << endl;

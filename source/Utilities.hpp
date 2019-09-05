@@ -112,7 +112,7 @@ namespace Utilities {
 					bool isGzipped = (fileName[fileName.length() - 3] == '.' && fileName[fileName.length() - 2] == 'g' && fileName[fileName.length() - 1] == 'z');
 					if (!isGzipped) {
 						ifstream fast_q_a_File;
-						fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+						//fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 						fast_q_a_File.open(fileName);
 						fast_q_a_File.seekg(0, fast_q_a_File.end);
 						overallFileSize += fast_q_a_File.tellg();
@@ -137,7 +137,7 @@ namespace Utilities {
 							bool isGzipped = (fileName[fileName.length() - 3] == '.' && fileName[fileName.length() - 2] == 'g' && fileName[fileName.length() - 1] == 'z');
 							if (!isGzipped) {
 								ifstream fast_q_a_File;
-								fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+								//fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 								fast_q_a_File.open(fileName);
 								fast_q_a_File.seekg(0, fast_q_a_File.end);
 								overallFileSize += fast_q_a_File.tellg();

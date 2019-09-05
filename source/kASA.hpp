@@ -693,7 +693,7 @@ namespace kASA {
 				pair<uint32_t, uint32_t> pool(0, 0);
 
 				ifstream fContent;
-				fContent.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+				//fContent.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 				fContent.open(contentFile);
 				//uint32_t iAmountOfSpecies = 1;
 				string sTempLine = "";
@@ -754,7 +754,7 @@ namespace kASA {
 				}
 
 				ifstream tempCFile;
-				tempCFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+				//tempCFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 				tempCFile.open(_sTemporaryPath + "tempContent.txt");
 				// same as above
 				while (getline(tempCFile, sTempLine)) {

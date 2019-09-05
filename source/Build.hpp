@@ -28,8 +28,8 @@ namespace kASA {
 
 	public:
 
-		Build(const string& path, const int32_t& iThreadID, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
-			_sTempPath = path + "_temp_" + to_string(iThreadID);
+		Build(const string& path, const int32_t& iNumOfCall, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
+			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
 			ofstream derp;
 			derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 			derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
