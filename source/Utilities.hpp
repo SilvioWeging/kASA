@@ -151,6 +151,14 @@ namespace Utilities {
 #endif
 #endif
 			else {
+				bool isGzipped = (sPath[sPath.length() - 3] == '.' && sPath[sPath.length() - 2] == 'g' && sPath[sPath.length() - 1] == 'z');
+				if (!isGzipped) {
+					ifstream fast_q_a_File;
+					//fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+					fast_q_a_File.open(sPath);
+					fast_q_a_File.seekg(0, fast_q_a_File.end);
+					overallFileSize += fast_q_a_File.tellg();
+				}
 				files.push_back(sPath);
 			}
 

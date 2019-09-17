@@ -239,6 +239,7 @@ namespace kASA {
 											}
 											else {
 												uint64_t iTempCounter = 1;
+												bool bNothingToAdd = true;
 												const uint64_t& iCurrentSuffix = seenResultIt->first;
 												while (seenResultIt + iTempCounter != rangeEndIt + 1) {
 													const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
@@ -246,6 +247,7 @@ namespace kASA {
 													for (; iUntilK > ikLengthCounter; --iUntilK) {
 														if ((iCurrentSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
 															markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK]);
+															bNothingToAdd = false;
 														}
 														else {
 															break;
@@ -255,6 +257,9 @@ namespace kASA {
 														++iTempCounter;
 													}
 													else {
+														if (bNothingToAdd) {
+															bBreakOut = true;
+														}
 														break;
 													}
 												}
@@ -1650,7 +1655,7 @@ namespace kASA {
 									}
 									else {
 										if (bHumanReadable) {
-											fOut << iNumOfReadsSum + i << "\t" << vReadNameAndLength.front().first << "\t-\t-" << endl;
+											fOut << iNumOfReadsSum + i << "\t" << vReadNameAndLength.front().first << "\t-\t-\t-" << endl;
 										}
 										else {
 											if (iNumOfReadsSum + i == 0) {

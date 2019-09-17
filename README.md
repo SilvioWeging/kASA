@@ -102,13 +102,13 @@ Run without debugging.
 ## TL;DR
 ```
 <path to kASA>/kASA build -d <path and name of index file to be build> -i <fasta or folder with fastas> -m <amount of available GB> -n <number of parallel threads> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> <verbose>
-e.g.: [weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fasta -m 8 -n 4 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+e.g.: [weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fasta -m 8 -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 
 <path to kASA>/kASA shrink -d <path and name of index file> -s <1 or 2> (-g <percentage>)
 e.g.: [weging@example ~] kASA/kASA shrink -d work/exampleIndex -s 2
 
 <path to kASA>/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -n <number of parallel threads>
-e.g.: [weging@example ~] kASA/kASA identify -d work/exampleIndex_s -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.json -m 8 -n 4
+e.g.: [weging@example ~] kASA/kASA identify -d work/exampleIndex_s -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.json -m 8 -n 2
 ```
 
 ## Modes and parameters
@@ -126,7 +126,7 @@ Some parameters which are used by most modes:
 
 ##### Optional
 * `-t (--temp) <path>`: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS, [here](https://stxxl.org/tags/1.4.1/install_config.html) are some details.
-* `-n (--threads) <number>`: Number of parallel threads. Note, that when compiling with C\+\+17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.
+* `-n (--threads) <number>`: Number of parallel threads. Recommendation for different settings (due to I/O bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C\+\+17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.
 * `-m (--memory) <number>`: Amount of Gigabytes available to kASA. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write "inf" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.
 * `-x (--callidx) <number>`: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.
 * `-v (--verbose)`: Prints out a little more information e.g. how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.
@@ -182,10 +182,10 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 ##### Example call
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
-e.g.: [weging@example ~] kASA/kASA build -c work/content.txt -d work/exampleIndex -i work/example.fasta -m 8 -t work/tmp/ -n 4
+e.g.: [weging@example ~] kASA/kASA build -c work/content.txt -d work/exampleIndex -i work/example.fasta -m 8 -t work/tmp/ -n 2
 
 Create content file and index:
-[weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fasta -m 8 -t work/tmp/ -n 4 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+[weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fasta -m 8 -t work/tmp/ -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 ```
 
 ### Identify
@@ -200,11 +200,14 @@ Since kASA uses k-mers, a `k` can be given to influence accuracy. You can set th
 Smaller `k`'s than 6 only make sense if your data is very noisy or you're working on amino acid level.
 If your read length is smaller than ![equation](http://www.sciweavers.org/tex2img.php?eq=%24k_%7Blower%7D%20%5Ccdot%203%24&bc=White&fc=Black&im=png&fs=12&ff=arev&edit=0) on DNA/RNA level, it will be padded. 
 
+If you want to optimise precision over sensitivity, you could use `k 12 12` and/or filter out low scoring reads (e.g. by ignoring everything below 0.5 (Relative Score)).
+
 Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
 But because too much information isn't always nice, you can specify how much taxa shall be shown for each read and if the profile should be human readable. 
 
 Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
 
+If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
 
 ##### Necessary paramameters
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
@@ -220,7 +223,7 @@ Note, that if you input a folder, file names are appended to your string given v
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
-e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleIndex -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.json -m 8 -t work/tmp/ -k 12 9 -n 4
+e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleIndex -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.json -m 8 -t work/tmp/ -k 12 9 -n 2
 ```
 #### Output
 ##### Normal:
