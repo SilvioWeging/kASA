@@ -1,6 +1,6 @@
 # kASA
 
-[![Current Version](https://img.shields.io/badge/version-1.0.7-green.svg)](https://github.com/SilvioWeging/kASA) [![GitHub issues](https://img.shields.io/github/issues/SilvioWeging/kASA.svg)](https://github.com/SilvioWeging/kASA/issues) ![GitHub All Releases](https://img.shields.io/github/downloads/SilvioWeging/kASA/total.svg)
+![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/SilvioWeging/kASA) [![GitHub issues](https://img.shields.io/github/issues/SilvioWeging/kASA.svg)](https://github.com/SilvioWeging/kASA/issues) ![GitHub All Releases](https://img.shields.io/github/downloads/SilvioWeging/kASA/total.svg)
 
 This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</u>equences based on <u>A</u>mino acids, the preprint can be found [here](https://doi.org/10.1101/713966).
 
