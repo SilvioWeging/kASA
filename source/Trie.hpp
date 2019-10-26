@@ -269,10 +269,13 @@ private:
 	uint64_t iSizeOfTrie = 0;
 
 	unique_ptr<Node> _root;
+
+	vector<packedBigPair> _vAllPrefixes;
+
 public:
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
+	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const bool& bShitLoadOfRAM = false) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
 		for (uint8_t i = 1; i < iMaxLevel; ++i) {
 			_Bitmask |= 31ULL << (5 * i);
 		}
@@ -281,6 +284,11 @@ public:
 		_tempTuple.reset(new std::tuple<uint64_t, uint32_t>[iThreads]);
 		for (int32_t i = 0; i < iThreads; ++i) {
 			_iTempKMer[i] = 0;
+		}
+
+		if (bShitLoadOfRAM) {
+			_vAllPrefixes.resize(kASA::kASA::aminoacidTokMer("]^^^^^"), packedBigPair(0,0));
+			iSizeOfTrie = _vAllPrefixes.size() * sizeof(packedBigPair);
 		}
 	}
 
@@ -332,7 +340,7 @@ public:
 	}
 	////////////////
 	template<typename T>
-	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath) {
+	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath, unique_ptr<uint64_t[]>* arrOfFreqs = nullptr, const unordered_map<uint32_t, uint32_t>& mContent = unordered_map<uint32_t, uint32_t>()) { //passing a non-const reference with default value is a hassle
 		try {
 			ofstream dummyFile(savePath + "_trie");
 			dummyFile.close();
@@ -340,10 +348,18 @@ public:
 			trieVector trieVec(&trieFile, 0);
 			uint64_t iCount = 1;
 			uint64_t iKnownShortMer = vKMerVec->at(0).first & _Bitmask;
-			stxxl::vector_bufreader<typename T::const_iterator> bufferedReader(vKMerVec->cbegin() + 1, vKMerVec->cend(), 1);
+			stxxl::vector_bufreader<typename T::const_iterator> bufferedReader(vKMerVec->cbegin() + 1, vKMerVec->cend(), 0);
 			for (; !bufferedReader.empty(); ++bufferedReader) {
-				const auto& entry = bufferedReader->first;
-				const uint64_t& iTemp = entry & _Bitmask;
+				const auto& entry = *bufferedReader;
+				if (!mContent.empty()) {
+					const auto& idx = Utilities::checkIfInMap(mContent, entry.second)->second * 12;
+					for (uint8_t k = 0; k < 12; ++k) {
+						if (((entry.first >> 5 * k) & 31) != 30) {
+							(*arrOfFreqs)[idx + k]++;
+						}
+					}
+				}
+				const uint64_t& iTemp = entry.first & _Bitmask;
 				if (iTemp != iKnownShortMer) {
 					trieVec.push_back(packedBigPairTrie(uint32_t(iKnownShortMer >> (_iMaxK - _iMaxLevel) * 5), iCount));
 					iKnownShortMer = iTemp;
@@ -395,7 +411,12 @@ public:
 				if (static_cast<uint32_t>(iDiff) > _iMaxRange) {
 					_iMaxRange = iDiff;
 				}
-				_root->IncreaseIndex(iReducedkMer, iStart, static_cast<uint32_t>(iDiff), iSizeOfTrie);
+				if (_vAllPrefixes.size() > 0) {
+					_vAllPrefixes[iReducedkMer] = make_tuple(iStart, iDiff);
+				}
+				else {
+					_root->IncreaseIndex(iReducedkMer, iStart, static_cast<uint32_t>(iDiff), iSizeOfTrie);
+				}
 				iStart = iSum;
 				iEnd += iCount;
 			}
@@ -466,8 +487,12 @@ public:
 	}
 
 	inline std::tuple<uint64_t, uint32_t> GetIndexRange(const uint64_t& kMer, const int8_t& iCurrentK) const {
-		return _root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel);
-
+		if (_vAllPrefixes.size() > 0) {
+			return make_tuple(_vAllPrefixes[kMer].first, _vAllPrefixes[kMer].second);
+		}
+		else {
+			return _root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel);
+		}
 	}
 	
 	///////////////////////////

@@ -25,7 +25,8 @@ namespace kASA {
 		{
 			EveryNth,
 			TrieHalf,
-			Overrepresented
+			Overrepresented,
+			Entropy
 		};
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,23 +85,35 @@ namespace kASA {
 				uint64_t iLower6LettersBitMask = 1073741823ULL, currentShortMer = (vLib->cbegin())->first & iHigher6LettersBitmask;
 				auto outIt = vOut->begin();
 
+				uint64_t iCurrentPercentage = 0;
 				for (auto libIt = vLib->cbegin(); libIt != vLib->cend(); ++libIt) {
 					// no need for if (outIt != vOut->end) since the output should at most be of the same size as the original one
 
+					if (_bVerbose) {
+						double dPercentageOfInputRead = (libIt - vLib->cbegin()) / (vLib->size()) * 100.;
+						if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentPercentage) {
+							iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+							cout << "OUT: Progress " << iCurrentPercentage << " %" << endl;
+						}
+					}
+
 					const auto& entry = *libIt;
 
-					outIt->second = static_cast<uint16_t>(Utilities::checkIfInMap(mIDsAsIdx, entry.second)->second);
-					outIt->first = static_cast<uint32_t>(entry.first & iLower6LettersBitMask);
-					++outIt;
-					++iCount;
+					if ((entry.first & iLower6LettersBitMask) != 1039104990ULL) { // remove entries that would only consist of "^^^^^^"
+						outIt->second = static_cast<uint16_t>(Utilities::checkIfInMap(mIDsAsIdx, entry.second)->second);
+						outIt->first = static_cast<uint32_t>(entry.first & iLower6LettersBitMask);
+						++outIt;
+						++iCount;
 
-					//cout << kMerToAminoacid(get<0>(entry), 12) << " " << iCount << endl;
 
-					const uint64_t& tempMer = entry.first & iHigher6LettersBitmask;
-					if (tempMer != currentShortMer && bTrieIsNotThere) {
-						trieVec->push_back(packedBigPairTrie(static_cast<uint32_t>(currentShortMer >> 30), iCount - 1));
-						currentShortMer = tempMer;
-						iCount = 1;
+						//cout << kMerToAminoacid(get<0>(entry), 12) << " " << iCount << endl;
+
+						const uint64_t& tempMer = entry.first & iHigher6LettersBitmask;
+						if (tempMer != currentShortMer && bTrieIsNotThere) {
+							trieVec->push_back(packedBigPairTrie(static_cast<uint32_t>(currentShortMer >> 30), iCount - 1));
+							currentShortMer = tempMer;
+							iCount = 1;
+						}
 					}
 				}
 
@@ -123,6 +136,96 @@ namespace kASA {
 			}
 
 		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Delete via Entropy
+		inline void deleteViaEntropy(const unique_ptr<const contentVecType_32p>& vLib, unique_ptr<contentVecType_32p>& vOut, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
+			try {
+				int64_t iCount = 1;
+				uint64_t iHigher6LettersBitmask = 31;
+				for (uint8_t i = 1; i < 6; ++i) {
+					iHigher6LettersBitmask |= 31ULL << (5 * i);
+				}
+				iHigher6LettersBitmask <<= 30;
+
+				auto outIt = vOut->begin();
+
+				float summands[12];
+				uint8_t arrayIdx = 0;
+
+				uint64_t iCurrentPercentage = 0;
+				for (auto libIt = vLib->cbegin(); libIt != vLib->cend(); ++libIt) {
+					// no need for if (outIt != vOut->end) since the output should at most be of the same size as the original one
+
+					if (_bVerbose) {
+						double dPercentageOfInputRead = double(libIt - vLib->cbegin()) / (vLib->size()) * 100.;
+						if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentPercentage) {
+							iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+							cout << "OUT: Progress " << iCurrentPercentage << " %" << endl;
+						}
+					}
+
+					const auto& entry = *libIt;
+					string kMerAsAAString = kMerToAminoacid(entry.first, 12);
+
+					// Entropy calculation
+					sort(kMerAsAAString.begin(), kMerAsAAString.end());
+					char letter = kMerAsAAString[0];
+					uint16_t letterCount = 0;
+					
+					for (const auto& l : kMerAsAAString) {
+						if (l == letter) {
+							letterCount++;
+						}
+						else {
+							summands[arrayIdx++] = (float(letterCount) / kMerAsAAString.size());
+							letterCount = 1;
+							letter = l;
+						}
+					}
+					summands[arrayIdx] = (float(letterCount) / kMerAsAAString.size());
+					double H_2 = 0.0;
+					for (uint8_t i = 0; i <= arrayIdx; ++i) {
+						H_2 += summands[arrayIdx] * log2(summands[arrayIdx]);
+					}
+
+					arrayIdx = 0;
+
+					H_2 = H_2 * (-1);
+					double entropy = (H_2*log(2)) / log(22); // H_n
+
+					if (entropy > 0.5) {
+						outIt->second = entry.second;
+						outIt->first = entry.first;
+						countFreqs(mContent, freqArray, entry);
+						++outIt;
+						for (auto nextIt = libIt + 1; nextIt != vLib->cend(); ++nextIt) {
+							if (nextIt->first == libIt->first) {
+								outIt->second = nextIt->second;
+								outIt->first = nextIt->first;
+								countFreqs(mContent, freqArray, *nextIt);
+								++outIt;
+								++iCount;
+								++libIt;
+							}
+							else {
+								if (nextIt != libIt + 1) {
+									libIt--;
+								}
+								break;
+							}
+						}
+					}
+				}
+
+				vOut->resize(outIt - vOut->begin(), true);
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
+
+		}
+
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Do the same as in "putHalfInTrie" but delete overrepresented kMers first
@@ -165,8 +268,18 @@ namespace kASA {
 
 
 				auto itOut = vOut->begin();
-				uint64_t iCounter = 0;
-				for (const auto& entry : *vLib) {
+				uint64_t iCounter = 0, iCurrentPercentage = 0;
+				for (auto libIt = vLib->cbegin(); libIt != vLib->cend(); ++libIt) {
+					const auto& entry = *libIt;
+
+					if (_bVerbose) {
+						double dPercentageOfInputRead = (libIt - vLib->cbegin()) / (vLib->size()) * 100.;
+						if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentPercentage) {
+							iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+							cout << "OUT: Progress " << iCurrentPercentage << " %" << endl;
+						}
+					}
+
 					const auto& idx = Utilities::checkIfInMap(mContent, entry.second)->second;
 					if (vSteps[idx] != static_cast<uint64_t>(vNextThrowOutIdx[idx])) {
 						*itOut = entry;
@@ -289,7 +402,7 @@ namespace kASA {
 				}
 				case TrieHalf:
 				{
-					assert(iIdxCounter <= 65535);
+					assert(iIdxCounter <= 65535); // TODO: throw Error
 
 					bool bTrieIsNotThere = false;
 					if (!ifstream(sLibFile + "_trie.txt")) {
@@ -346,6 +459,26 @@ namespace kASA {
 
 					break;
 				}
+				case Entropy:
+					deleteViaEntropy(vLibIn[0], vOutVec, mIDsAsIdx, arrFrequencies);
+
+					newFreqFile.open(fOutFile + "_f.txt");
+					for (uint32_t j = 0; j < iIdxCounter; ++j) {
+						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
+						newFreqFile << arrFrequencies[j * 12];
+						for (int32_t k = 1; k < 12; ++k) {
+							newFreqFile << "\t" << arrFrequencies[j * 12 + k];
+						}
+						newFreqFile << endl;
+					}
+
+					Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
+					T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+
+					fLibInfo.open(fOutFile + "_info.txt", ios::out);
+					fLibInfo << vOutVec->size();
+					vOutVec->export_files("_");
+					break;
 				};
 
 			

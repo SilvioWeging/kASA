@@ -125,7 +125,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Update an existing library with a fasta file
-		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const bool& bOverwrite, const bool& bSpaced, const uint64_t& iMemory) {
+		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, const string& fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway) {
 			try {
 				// test if files exists
 				if (!ifstream(contentFile) || !ifstream(sLibFile)) {
@@ -181,46 +181,34 @@ namespace kASA {
 					unique_ptr<contentVecType_32p> vLibIn(new contentVecType_32p(stxxlLibFile.get(), iSizeOfLib));
 
 					// add kMers from fasta
-#if _WIN32 || _WIN64
-					if (fInFile.back() == '/') {
-						for (auto& fsPath : std::experimental::filesystem::directory_iterator(fInFile)) {
-							ifstream fastaFile(fsPath.path());
-							readFasta(fastaFile, vLibIn, 0.f, bSpaced, mAccToID);
-						}
-					}
-					else {
-						ifstream fastaFile(fInFile);
-						readFasta(fastaFile, vLibIn, 0.f, bSpaced, mAccToID);
-					}
-#else
-#if __GNUC__
-					if (fInFile.back() == '/') {
-						DIR           *dirp;
-						struct dirent *directory;
-
-						dirp = opendir(fInFile.c_str());
-						if (dirp) {
-							while ((directory = readdir(dirp)) != NULL)
-							{
-								const string fName(directory->d_name);
-								if (fName != "." && fName != "..") {
-									ifstream fastaFile(fInFile + fName);
-									readFasta(fastaFile, vLibIn, 0.f, bSpaced, mAccToID);
-								}
+					size_t overallCharsRead = 0;
+					Build dummy;
+					if (sDirectory.back() == '/') {
+						auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
+						for (auto& fileName : filesAndSize.first) {
+							if (_bVerbose) {
+								cout << "OUT: Current file: " << fileName << endl;
 							}
-
-							closedir(dirp);
+							ifstream fastaFile(fileName);
+							fastaFile.seekg(0, fastaFile.end);
+							const uint64_t& iFileLength = fastaFile.tellg();
+							fastaFile.seekg(0, fastaFile.beg);
+							readFasta(fastaFile, mAccToID, dummy, vLibIn, iFileLength, overallCharsRead, filesAndSize.second, fPercentageOfThrowAway);
 						}
 					}
 					else {
-						ifstream fastaFile(fInFile);
-						readFasta(fastaFile, vLibIn, 0.f, bSpaced, mAccToID);
+						ifstream fastaFile;
+						//fastaFile.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+						fastaFile.open(sDirectory);
+						if (_bVerbose) {
+							cout << "OUT: Current file: " << sDirectory << endl;
+						}
+						fastaFile.seekg(0, fastaFile.end);
+						const uint64_t& iFileLength = fastaFile.tellg();
+						fastaFile.seekg(0, fastaFile.beg);
+						readFasta(fastaFile, mAccToID, dummy, vLibIn, iFileLength, overallCharsRead, iFileLength, fPercentageOfThrowAway);
 					}
 
-#else
-					#error NO SUITABLE COMPILER FOUND
-#endif
-#endif
 
 					stxxl::sort(vLibIn->begin(), vLibIn->end(), SCompareStructForSTXXLSort(), iMemory);
 
@@ -273,46 +261,33 @@ namespace kASA {
 					unique_ptr<stxxlFile> stxxlTempVec(new stxxlFile(_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall), stxxl::file::RDWR));
 					unique_ptr<contentVecType_32p> vTempVec(new contentVecType_32p(stxxlTempVec.get(), 0));
 					
-					#if _WIN32 || _WIN64
-					if (fInFile.back() == '/') {
-						for (auto& fsPath : std::experimental::filesystem::directory_iterator(fInFile)) {
-							ifstream fastaFile(fsPath.path());
-							readFasta(fastaFile, vTempVec, 0.f, bSpaced, mAccToID);
-						}
-					}
-					else {
-						ifstream fastaFile(fInFile);
-						readFasta(fastaFile, vTempVec, 0.f, bSpaced, mAccToID);
-					}
-#else
-#if __GNUC__
-					if (fInFile.back() == '/') {
-						DIR           *dirp;
-						struct dirent *directory;
-
-						dirp = opendir(fInFile.c_str());
-						if (dirp) {
-							while ((directory = readdir(dirp)) != NULL)
-							{
-								const string fName(directory->d_name);
-								if (fName != "." && fName != "..") {
-									ifstream fastaFile(fInFile + fName);
-									readFasta(fastaFile, vTempVec, 0.f, bSpaced, mAccToID);
-								}
+					size_t overallCharsRead = 0;
+					Build dummy;
+					if (sDirectory.back() == '/') {
+						auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
+						for (auto& fileName : filesAndSize.first) {
+							if (_bVerbose) {
+								cout << "OUT: Current file: " << fileName << endl;
 							}
-
-							closedir(dirp);
+							ifstream fastaFile(fileName);
+							fastaFile.seekg(0, fastaFile.end);
+							const uint64_t& iFileLength = fastaFile.tellg();
+							fastaFile.seekg(0, fastaFile.beg);
+							readFasta(fastaFile, mAccToID, dummy, vTempVec, iFileLength, overallCharsRead, filesAndSize.second, fPercentageOfThrowAway);
 						}
 					}
 					else {
-						ifstream fastaFile(fInFile);
-						readFasta(fastaFile, vTempVec, 0.f, bSpaced, mAccToID);
+						ifstream fastaFile;
+						//fastaFile.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+						fastaFile.open(sDirectory);
+						if (_bVerbose) {
+							cout << "OUT: Current file: " << sDirectory << endl;
+						}
+						fastaFile.seekg(0, fastaFile.end);
+						const uint64_t& iFileLength = fastaFile.tellg();
+						fastaFile.seekg(0, fastaFile.beg);
+						readFasta(fastaFile, mAccToID, dummy, vTempVec, iFileLength, overallCharsRead, iFileLength, fPercentageOfThrowAway);
 					}
-
-#else
-					#error NO SUITABLE COMPILER FOUND
-#endif
-#endif
 
 
 					stxxl::sort(vTempVec->begin(), vTempVec->end(), SCompareStructForSTXXLSort(), iMemory);

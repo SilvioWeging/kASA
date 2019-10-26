@@ -224,17 +224,30 @@ namespace kASA {
 
 		template<typename T> inline static void showVec(const T& in, const uint64_t& iStartIdx = 0) {
 			uint32_t iCounter = 0;
-			string sDummy = "";
+			string sDummy = "", lookup = "";
 			for (auto elem = in.begin() + iStartIdx; elem != in.end(); ++elem) {
 				if (iCounter == 20) {
 					iCounter = 0;
-					cin >> sDummy;
+					if (lookup == "") {
+						cin >> sDummy;
+					}
 					if (sDummy == "q" || sDummy == "Q") {
 						return;
 					}
+					if (sDummy == "l") {
+						cin >> lookup;
+					}
 				}
-				cout << elem->first << " " << kMerToAminoacid(elem->first, 12) << " " << elem->second << endl;
-				++iCounter;
+				if (lookup != "") {
+					if (kMerToAminoacid(elem->first, 12) == lookup) {
+						cout << elem->first << " " << kMerToAminoacid(elem->first, 12) << " " << elem->second << endl;
+						lookup = "";
+					}
+				}
+				else {
+					cout << elem->first << " " << kMerToAminoacid(elem->first, 12) << " " << elem->second << endl;
+					++iCounter;
+				}
 			}
 		}
 
@@ -314,7 +327,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Use a different codon table
-		inline void setCodonTable(const string& codonFile, const uint32_t& iID) {
+		inline void setCodonTable(const string& codonFile, const string& iID) {
 			try {
 				ifstream ncbiFile(codonFile);
 
@@ -322,7 +335,7 @@ namespace kASA {
 
 				bool bFound = false;
 				while (getline(ncbiFile, line)) {
-					if (line.find("  id " + to_string(iID) + " ,") != string::npos) {
+					if (line.find("  id " + iID + " ,") != string::npos) {
 						bFound = true;
 						break;
 					}

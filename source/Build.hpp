@@ -16,10 +16,11 @@ namespace kASA {
 	private:
 		unique_ptr<vector<packedBigPair>> vInternal;
 		vector<packedBigPair>::iterator vInternalIt;
+		vector<uint64_t> vVectorSizes;
 
 		string _sTempPath = "";
 		uint64_t _iConstSize = 0;
-		int8_t _iFlagOfContainerIdx = 0;
+		int16_t _iCounterOfContainers = 0;
 
 		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
 
@@ -30,11 +31,11 @@ namespace kASA {
 
 		Build(const string& path, const int32_t& iNumOfCall, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
 			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
-			ofstream derp;
+			//ofstream derp;
 			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-			derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
-			derp.close();
-			derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
+			//derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
+			//derp.close();
+			//derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
 
 			vInternal.reset(new vector<packedBigPair>(iSoftLimit + 1));
 			vInternalIt = vInternal->begin();
@@ -46,7 +47,7 @@ namespace kASA {
 				arrFrequencies[i] = 0;
 			}
 		}
-	protected:
+
 		Build() {}
 
 		/////////////////////////////////////////////////////////////////////////////////////////
@@ -203,81 +204,54 @@ namespace kASA {
 
 	public:
 
-		inline void IntToExt2(const bool& bLastCall = false) {
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// if the internal vector is full enough, save it to an external one
+		inline void IntToExtPart() {
 			try {
-				if (!ifstream(_sTempPath + to_string(_iFlagOfContainerIdx))) {
-					ofstream derp;
-					//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-					derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
-				}
-				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iFlagOfContainerIdx), stxxl::file::RDWR));
-				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), _iConstSize + (vInternalIt - vInternal->cbegin())));
-				//auto vNCIt = vNC->begin();
-				contentVecType_32p::bufwriter_type vNCIt(*vNC);
+
 #if __has_include(<execution>)
 				sort(std::execution::par_unseq, vInternal->begin(), vInternalIt);
 #else
+# if __GNUC__
+				__gnu_parallel::sort(vInternal->begin(), vInternalIt, __gnu_parallel::balanced_quicksort_tag()); 
+#else
 				sort(vInternal->begin(), vInternalIt);
 #endif
+#endif
+				
 
-				packedBigPair tSeenInt; //eliminate duplicates
-
-				if (_iConstSize == 0) {
-					auto vIntEndItC = static_cast<vector<packedBigPair>::const_iterator>(vInternalIt);
-					//uint32_t iDebugCounter = 0;
-					for (auto it = vInternal->cbegin(); it != vIntEndItC;) {
-						/*if (get<0>(*it) == 37191153727705383 ) {
-							cout << "derp" << endl;
-						}*/
-						if (*it == tSeenInt) {
-							++it;
-							continue;
-						}
-						else {
-							tSeenInt = *it;
-						}
-
-						//*(vNCIt++) = *(it++);
-						vNCIt << *(it);
-						if (bLastCall) {
-							const auto& idx = Utilities::checkIfInMap(_mContent, it->second)->second * 12;
-							for (uint8_t k = 0; k < 12; ++k) {
-								if (((it->first >> 5 * k) & 31) != 30) {
-									arrFrequencies[idx + k]++;
-								}
-							}
-						}
-						++it;
-						//++iDebugCounter;
-						++_iConstSize;
+				// squeeze it a little
+				auto newEnd = std::unique(vInternal->begin(), vInternalIt, [](packedBigPair& a, packedBigPair& b) {
+					if (a == b) {
+						return true;
 					}
+					return false;
+				});
+				vInternalIt = newEnd;
+				// if sorting would be faster, this would make sense since you'd want to maximize the amount of data inside each temporary file but alas, this takes too long
+				//if (float(newEnd - vInternal->begin())/_iSoftSize < 0.95 && !bLastCall) {
+				//	return;
+				//}
+				// else:
+
+				// save to external vector
+				ofstream derp(_sTempPath + to_string(_iCounterOfContainers));
+				derp.close();
+				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
+				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), vInternalIt - vInternal->cbegin()));
+				vVectorSizes.push_back(vInternalIt - vInternal->cbegin());
+				contentVecType_32p::bufwriter_type vNCIt(*vNC);
+
+				auto vIntEndItC = static_cast<vector<packedBigPair>::const_iterator>(vInternalIt);
+				for (auto it = vInternal->cbegin(); it != vIntEndItC; ++it) {
+					vNCIt << *(it);
 				}
-				else {
-					if (!ifstream(_sTempPath + to_string(!_iFlagOfContainerIdx))) {
-						ofstream derp;
-						//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-						derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
-					}
-					unique_ptr<stxxlFile> fCFile(new stxxlFile(_sTempPath + to_string(!_iFlagOfContainerIdx), stxxl::file::RDONLY));
-					unique_ptr<const contentVecType_32p> vC(new const contentVecType_32p(fCFile.get(), _iConstSize));
-
-					contentVecType_32p::bufreader_type it(*vC);
-
-					_iConstSize = merge(vNCIt, it, vC->size(), vInternal->cbegin(), static_cast<vector<packedBigPair>::const_iterator>(vInternalIt), arrFrequencies, _mContent, bLastCall);
-				}
-
 
 				vNCIt.finish();
-				//_iConstSize = vNCIt - vNC->begin();
 
-				vNC->resize(_iConstSize + 1, true);
 				vNC->export_files("_");
-				_iFlagOfContainerIdx = !_iFlagOfContainerIdx;
+				_iCounterOfContainers++;
 
-				//cout << stxxl::is_sorted(vNC->cbegin(), vNC->cend()) << endl;
-
-				vInternal->clear();
-				vInternal->resize(_iAmountOfSpace);
 				vInternalIt = vInternal->begin();
 			}
 			catch (...) {
@@ -286,31 +260,90 @@ namespace kASA {
 		}
 
 		/////////////////////////////////////////////////////////////////////////////////////////
-	public:
-		
-		inline uint64_t createDatabase(const string& sOutPath, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, string>& mIdxToName) {
+		// Merge as many external vectors as possible in one call until only one remains
+		inline uint64_t mergeTemporaries(const string& sOutPath) {
 			try {
-				remove(sOutPath.c_str()); // "Override"
-				remove((_sTempPath + to_string(_iFlagOfContainerIdx)).c_str()); // delete the other temporary
-				rename((_sTempPath + to_string(!_iFlagOfContainerIdx)).c_str(), sOutPath.c_str()); // just move the file
-				ofstream fLibInfo(sOutPath + "_info.txt");
-				fLibInfo << _iConstSize;
+				vInternal.reset(); //not needed anymore
 
-				ofstream outFile(sOutPath + "_f.txt");
-				for (uint32_t j = 0; j < iNumOfTaxa; ++j) {
-					outFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-					outFile << arrFrequencies[j * 12];
-					for (int32_t k = 1; k < 12; ++k) {
-						outFile << "\t" << arrFrequencies[j * 12 + k];
-					}
-					outFile << endl;
-				}
+				auto remainingFiles = _iCounterOfContainers;
+				int16_t iCurrentIdx = 0;
+				vector<contentVecType_32p::const_iterator> vCurrentIterators;
 				
-				return _iConstSize;
+
+				while (remainingFiles != 1) {
+					// first gather as many files as permitted
+					vector<unique_ptr<stxxlFile>> currentFiles(FOPEN_MAX - 1);
+					vector<unique_ptr<contentVecType_32p>> currentVecs(FOPEN_MAX - 1);
+					auto maxNrOfFiles = remainingFiles;
+					uint64_t iSumSize = 0;
+					for (int16_t i=0; i < (FOPEN_MAX - 1) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
+						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDONLY));
+						currentVecs[i].reset(new contentVecType_32p(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
+						vCurrentIterators.push_back(currentVecs[i]->cbegin());
+						iSumSize += vVectorSizes[iCurrentIdx];
+						remainingFiles--;
+					}
+
+					// create merge-file
+					ofstream derp(_sTempPath + to_string(_iCounterOfContainers));
+					derp.close();
+
+					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
+					unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), iSumSize));
+					contentVecType_32p::bufwriter_type vNCIt(*vNC);
+
+					packedBigPair pSeen;
+					uint64_t iSizeOfNewVec = 0;
+					while (!vCurrentIterators.empty()) {
+						// take smallest value and check if that has been seen before
+						auto it = std::min_element(vCurrentIterators.begin(), vCurrentIterators.end(), [](const contentVecType_32p::const_iterator& it1, const contentVecType_32p::const_iterator& it2) { return *it1 < *it2; });
+						auto& it2 = *it; 
+						
+						if (!(*it2 == pSeen)) {
+							// if not: write it to the output
+							pSeen = *it2;
+							vNCIt << pSeen;
+							++iSizeOfNewVec;
+						}
+						it2++;
+						
+						// The end of that vector has been reached: take this iterator (and temporary vector) out of consideration
+						if (it2 == currentVecs[distance(vCurrentIterators.begin(), it)]->cend()) {
+							const auto& whichOne = distance(vCurrentIterators.begin(), it);
+							currentVecs[whichOne].reset();
+							currentVecs.erase(currentVecs.begin() + whichOne);
+							currentFiles[whichOne]->close_remove();
+							currentFiles[whichOne].reset();
+							currentFiles.erase(currentFiles.begin() + whichOne);
+							vCurrentIterators.erase(it); 
+							cout << whichOne;
+							//for (size_t i = 0; i < vCurrentIterators.size(); ++i) {
+							//	cout << " " << currentVecs[i]->size() << endl;
+							//}
+						}
+					}
+					vNCIt.finish();
+					vVectorSizes.push_back(iSizeOfNewVec);
+					vNC->resize(iSizeOfNewVec, true);
+
+					vNC->export_files("_");
+					++_iCounterOfContainers;
+					remainingFiles++;
+				}
+
+				// move the last temporary file to the given path
+				remove(sOutPath.c_str());
+				rename((_sTempPath + to_string(_iCounterOfContainers - 1)).c_str(), sOutPath.c_str());
+				ofstream fLibInfo(sOutPath + "_info.txt");
+				fLibInfo << vVectorSizes[_iCounterOfContainers - 1];
+
+				return vVectorSizes[_iCounterOfContainers - 1];
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 		}
+
+
 	};
 }

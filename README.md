@@ -131,6 +131,7 @@ Some parameters which are used by most modes:
 * `-x (--callidx) <number>`: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.
 * `-v (--verbose)`: Prints out a little more information e.g. how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
+* `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
 
 ### Generate a content file
 ##### Context
@@ -159,7 +160,7 @@ The taxids are required to be integers and no header line is necessary. This fil
 
 ##### Necessary parameters
 * `-u (--level) <level>`: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' "sequence" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.
-* `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file.
+* `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.
 * `-y (--taxonomy)` <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.
 * `-o (--outgoing) <file>`: Here, this parameter specifies where the content file should be written to.
 ##### Example call 
@@ -179,6 +180,7 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 ##### Optional paramameters
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
+* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Currently in BETA.
 ##### Example call
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
@@ -205,16 +207,19 @@ If you want to optimise precision over sensitivity, you could use `k 12 12` and/
 Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
 But because too much information isn't always nice, you can specify how much taxa shall be shown for each read and if the profile should be human readable. 
 
+The per read error score ranges from -1 to 1. A 1 means that the best score deviates as far as possible from the optimal score, 0 means a perfect match and -1 means that the reverse complement also fits perfectly. In human readable format, only the error of the best score is printed.
+
 Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
 
 If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
 
 ##### Necessary paramameters
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
-* `-q (--rtt <file>)`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
+* `-q (--rtt) <file>`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
 ##### Optional paramameters
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
 * `-k <upper> <lower>`: Bounds for `k`, all `k`'s in between will be evaluated as well. If your intuition is more like `<lower> <upper>` then that's okay too. Default: 12 7.
 * `--kH <upper>`: Set only the upper bound
 * `--kL <lower>`: Set only the lower bound
@@ -238,13 +243,15 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 				"tax ID": "396",
 				"Name": "Rhizobium phaseoli",
 				"k-mer Score": 33.32,
-				"Relative Score": 1.03767e+00
+				"Relative Score": 1.03767e+00,
+				"Error": 0.67
 			},
 			{
 				"tax ID": "1270",
 				"Name": "Micrococcus luteus",
 				"k-mer Score": 30.467,
 				"Relative Score": 9.71243e-01
+				"Error": 0.69
 			}
 		]
 	}
@@ -258,9 +265,9 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 
 ##### Human readable:
 ###### Identification
-|#Read number|Specifier from input file|Matched taxa|Names|Scores{relative,k-mer}|
+|#Read number|Specifier from input file|Matched taxa|Names|Scores{relative,k-mer}|Error|
 |:---:|:---:|:---:|:---:|:---:|
-|0 | Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 |
+|0 | Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 | -0.001 |
 
 ###### Profile
 |tax ID|Name|Unique r.f. k=12|Non-unique r.f. k=12|
@@ -278,7 +285,6 @@ First, you need a fasta file or a folder with fasta files and a call to `update`
 Next, since the content file is updated as well, you'll need the same parameters as in [generateCF](#generate-a-content-file) (meaning `-u <...> -f <...> -y <...>`). If you've updated your content file manually then just add it via the `-c <...>` parameter.
 
 If you want to delete entries from the index because they are not desired or deprecated in the NCBI taxonomy, add the `delnodes.dmp` file via the `-l` parameter.
-
 It's not necessary to change the content file in this case although you should at some point to not clutter it too much...
 
 If you've created the content file together with the index, this default content file will be used.
@@ -286,9 +292,13 @@ If you've created the content file together with the index, this default content
 ##### Necessary paramameters
 * `-o (--outgoing) <file>`: Either the existing index or a new file name, depending on whether you want to keep the old file or not. Default: overwrite.
 * `-l (--deleted) <file>`: delete taxa via the NCBI taxonomy file.
+##### Optional paramameters
+* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
+ converted via the same alphabet to amino acids. Currently in BETA.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
 ##### Example calls
 ```
-<path to kASA>/kASA update -c <content file> -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>
+<path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>
 e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleIndex -o work/updatedIndex -i work/newStuff.fasta -t work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
 
 <path to kASA>/kASA delete -c <content file> -d <path and name of the index file> -o <path and name of the new index> -l <delnodes.dmp> -t <temporary directory> -m <amount of RAM>
@@ -297,21 +307,23 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 
 ### Shrink
 ##### Context 
-Should updating your index not happen that often or you would like better performance and less space usage on your disk, shrinking it does the trick. kASA has two options:
+Should updating your index not happen that often or you would like better performance and less space usage on your disk, shrinking it does the trick. kASA has multiple options:
 
 1. The first way deletes a certain percentage of k-mers from every taxon. This may be lossy but impacts the accuracy not that much if your sequencing depth is high enough.
 2. The second option is lossless but it assumes, that your content file is not larger than 65535 entries and that you don't need k's smaller than 7. This will reduce the size of the index by half but your index cannot be updated afterwards. Great for storing the index on an external drive.
+3. This lossy option determines the (normalized binary) entropy of every k-mer and throws away anything not containing enough information. For example: AAABBBAAABBB would be thrown away but ABCDEFGAAABC wouldn't.
 
 The parameter `-o` also decides here, where to put your new index.
 ##### Necessary paramameters
-* `-s (--strategy) <1 or 2>`: Shrink the index in the first or second way. This parameter may also be applied when building the index. Default is 2.
-* `-g (--percentage) <integer>`: Deletes the given percentage of k-mers from every taxon. Default is 50.
+* `-s (--strategy) <1, 2 or 3>`: Shrink the index in the first or second way. Default is 2.
+* `-g (--percentage) <integer>`: Deletes the given percentage of k-mers from every taxon. This parameter may also be applied when building the index (for example: -g 50 skips every second k-mer).
 * `-o (--outgoing) <file>`: Output path and name of your shrunken index file. Your other index cannot be overwritten with this. Default: takes your index file and appends a "_s".
 ##### Example call
 ```
 <path to kASA>/kASA shrink -c <content file> -d <path and name of the index file> -o <path and name of the new index> -s <1 or 2> -g <percentage> -t <temporary directory>
 e.g.: [weging@example ~] kASA/kASA shrink -c work/content.txt -d work/exampleIndex -o work/exampleIndex_s -s 2 -t work/tmp/
 e.g.: [weging@example ~] kASA/kASA shrink -c work/content.txt -d work/exampleIndex -s 1 -g 25 -t work/tmp/
+e.g.: [weging@example ~] kASA/kASA build -c work/content.txt -d work/exampleIndex -g 50 -i work/example.fasta -m 8 -t work/tmp/ -n 2
 ``` 
 
 ### Miscellaneous
@@ -323,9 +335,10 @@ e.g.: [weging@example ~] kASA/kASA shrink -c work/content.txt -d work/exampleInd
 ```
 <path to kASA>/kASA trie -d <path and name of the index file> -t <temporary directory>
 ``` 
-If you've lost any of the other `.txt` files associated with your index: Bad luck! These contain the size of the data structure and cannot be restored, so you really need to re-create the corresponding file.
+If you've lost the `_info.txt` file associated with your index: Get the size in bytes, divide by 12 (not shrunken) or 6 (shrunken via method 2) and create a `<index name>_info.txt` file with the result as first line in it.
+For the shrunken index, add a 3 as second line in the file (which indicates, that it has been shrunken).
 
-3. You can measure the redundancy of your index via:
+3. You can measure the redundancy of your (non-halved) index via:
 ```
 <path to kASA>/kASA redundancy -c <content file> -d <path and name of the index file> -t <temporary directory>
 ```
@@ -343,16 +356,20 @@ This gives you a hint whether you should look at the unique relative frequencies
 
 ## Todos and upcoming
 - A python script that creates Kraken-like output out of kASAs identification file
-- Reworked building algorithm
+- ~~Reworked building algorithm~~
 - Join two built indices
 - Profiles normalized to genome length, for now you could hack that with the frequency file
-- New shrink mode deleting k-mers that are overrepresented
-- Native support of the nr and other translated sequences
-- Allow gzipped files as input for `build`
+- ~~New shrink mode deleting k-mers that are overrepresented~~
+- ~~Native support of the nr and other translated sequences~~
+- ~~Allow gzipped files as input for `build`~~
+- ~~RAM mode~~
+- ~~Omission of the prefix trie if enough RAM (ca 11GB) is available~~
 - Support of Clang (macOS)
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - small collection of adapter sequences
+- consideration of paired-end information
+- bzip2 support
 
 ## License
 

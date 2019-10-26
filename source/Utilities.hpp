@@ -35,7 +35,7 @@ namespace Utilities {
 	///////////////////////////////////////////////////////
 	struct rangeContainer {
 		vector<pair<uint32_t, uint32_t>> kMers_GT6;
-		vector<pair<uint64_t, uint64_t>> kMers_ST6;
+		vector<pair<uint64_t, uint32_t>> kMers_ST6;
 		uint32_t range;
 	};
 
@@ -273,6 +273,23 @@ namespace Utilities {
 				throw runtime_error("ID not found! Maybe you got the wrong database or contentfile?");
 			}
 			return res;
+		}
+		catch (...) {
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+		}
+	}
+
+	///////////////////////////////////////////////////////
+	template<typename T1, typename T2>
+	inline void mapSetValue(unordered_map<T1, T2>& map, const T1& search, const T2& element) {
+		try {
+			auto res = map.find(search);
+			if (res != map.end()) {
+				res->second += element;
+			}
+			else {
+				res->second = element;
+			}
 		}
 		catch (...) {
 			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
@@ -617,6 +634,12 @@ namespace Utilities {
 					}
 				}
 			}
+		}
+
+		void insert_pair_first(const pair<uint64_t, float>& elem) {
+			iSeenElem.first = elem.first;
+			itSeenDistance = 0;
+			_v.insert(_v.begin(), elem);
 		}
 
 		void insert(const_iterator it, const T& elem) {

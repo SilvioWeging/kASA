@@ -28,10 +28,10 @@ int main(int argc, char* argv[]) {
 	try {
 		vector<string> vParameters(argv, argv + argc);
 
-		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false; //bRAM = false
+		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
-		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iCodonID = 1, iNumOfBeasts = 3;
+		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
 		float fPercentageOfThrowAway = 0.f;
 		uint8_t iTrieDepth = 6;
@@ -43,9 +43,9 @@ int main(int argc, char* argv[]) {
 #elif __linux__
 			"Linux "
 #elif __APPLE__
-			"OSX "
+			"macOS "
 #else
-			"Something other than Win/Linux/OSX "
+			"Something other than Win/Linux/macOS "
 #endif
 			<< "at " << ctime(&timeRightNow) << "OUT: ";
 		for (int32_t i = 0; i < argc; ++i) {
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "-a" || sParameter == "--alphabet") {
 				codonTable = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				iCodonID = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				sCodonID = Utilities::removeSpaceAndEndline(vParameters[++i]);
 			}
 			else if (sParameter == "-b" || sParameter == "--beasts") {
 				iNumOfBeasts = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
 				}
 			}
 			else if (sParameter == "-r" || sParameter == "--ram") {
-				//bRAM = true;
+				bRAM = true;
 			}
 			else if (sParameter == "-g" || sParameter == "--percentage") {
 				fPercentageOfThrowAway = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
@@ -173,6 +173,9 @@ int main(int argc, char* argv[]) {
 					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 					break;
 				case 3:
+					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Entropy;
+					break;
+				case 4:
 					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Overrepresented;
 					break;
 				default:
@@ -213,7 +216,7 @@ int main(int argc, char* argv[]) {
 		if (cMode == "build") {
 			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			if (codonTable != "") {
-				kASAObj.setCodonTable(codonTable, iCodonID);
+				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -230,13 +233,11 @@ int main(int argc, char* argv[]) {
 					kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel);
 				}
 			}
+			if (iMemorySizeAvail*0.9 < 1024ull * 1024ull * 1024ull) {
+				throw runtime_error("Not enough memory given!");
+			}
+			kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 
-			if (fPercentageOfThrowAway != 0.f) {
-				kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
-			}
-			else {
-				kASAObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
-			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
@@ -250,28 +251,10 @@ int main(int argc, char* argv[]) {
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);
 			kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sDBPathOut, sTaxLevel);
 		}
-		else if (cMode == "create") {
-			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall);
-			if (codonTable != "") {
-				kASAObj.setCodonTable(codonTable, iCodonID);
-			}
-
-			auto start = std::chrono::high_resolution_clock::now();
-
-
-			if (fPercentageOfThrowAway != 0.f) {
-				kASAObj.CreateAll(contentFileIn, sInput, indexFile, bSpaced, static_cast<uint64_t>(iMemorySizeAvail*0.75), fPercentageOfThrowAway);
-			}
-			else {
-				kASAObj.CreateAll(contentFileIn, sInput, indexFile, bSpaced, static_cast<uint64_t>(iMemorySizeAvail*0.75));
-			}
-			auto end = std::chrono::high_resolution_clock::now();
-			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
-		}
 		else if (cMode == "update") {
 			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			if (codonTable != "") {
-				kASAObj.setCodonTable(codonTable, iCodonID);
+				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
 
 			// Content file was created together with the index
@@ -285,7 +268,7 @@ int main(int argc, char* argv[]) {
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), bSpaced, static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
+			kASAObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
@@ -326,7 +309,7 @@ int main(int argc, char* argv[]) {
 		else if (cMode == "identify") {
 			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode);
 			if (codonTable != "") {
-				kASAObj.setCodonTable(codonTable, iCodonID);
+				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
 
 			// Content file was created together with the index
@@ -336,7 +319,7 @@ int main(int argc, char* argv[]) {
 
 			kASAObj.bHumanReadable = bHumanReadable;
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced);
+			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM);
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 #if _WIN32 || _WIN64
@@ -504,33 +487,63 @@ int main(int argc, char* argv[]) {
 			ifstream sizeFile(indexFile + "_info.txt");
 			uint64_t iSize = 0;
 			sizeFile >> iSize;
-			kASA::kASA::showVec(contentVecType_32p(&temp, iSize));
+			bool index_t = false;
+			sizeFile >> index_t;
+			if (index_t) {
+				kASA::kASA::showVec(index_t_p(&temp, iSize));
+			}
+			else {
+				kASA::kASA::showVec(contentVecType_32p(&temp, iSize));
+			}
 		}
 		else if (cMode == "transform") {
 			stxxlFile temp(indexFile, stxxl::file::RDONLY);
 
-			ifstream sizeFile(indexFile + ".txt"); // "_info.txt"
+			ifstream sizeFile(indexFile + "_info.txt"); // "_info.txt"
 			uint64_t iSize = 0;
 			sizeFile >> iSize;
 
-			const trieVector_old tempV(&temp, iSize);
+			const contentVecType_32p tempV(&temp, iSize);
 
 			ofstream derpFile(sDBPathOut);
 			derpFile.close();
+			derpFile.open(sDBPathOut+"_2");
+			derpFile.close();
 
 			stxxlFile tempOut(sDBPathOut, stxxl::file::RDWR);
-			trieVector tempPV(&tempOut, iSize);
+			stxxl::VECTOR_GENERATOR<uint64_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV(&tempOut, iSize);
+
+			stxxlFile tempOut2(sDBPathOut+"_2", stxxl::file::RDWR);
+			stxxl::VECTOR_GENERATOR<uint32_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV2(&tempOut2, iSize);
+			
+			derpFile.open(sDBPathOut+"_counts.txt");
 
 			auto t1It = tempV.cbegin();
 			auto tOIt = tempPV.begin();
-			for (; t1It != tempV.cend(); ++t1It, ++tOIt) {
-				tOIt->first = t1It->first;
-				tOIt->second = t1It->second;
+			auto tO2It = tempPV2.begin();
+			uint64_t iCount = 0;
+			uint64_t iSeen = 0;
+			for (; t1It != tempV.cend();) {
+				if (t1It->first == iSeen) {
+					*tO2It = t1It->second;
+					++t1It;
+				}
+				else {
+					*tOIt = iSeen = t1It->first;
+					derpFile << iCount << endl;
+					*tO2It = t1It->second;
+					++t1It; ++tOIt;
+				}
+				++tO2It;
+				++iCount;
 			}
 
+			tempPV.resize(tOIt - tempPV.begin(), true);
+
 			ofstream outSizeFile(sDBPathOut + "_info.txt");
-			outSizeFile << iSize;
+			outSizeFile << tempPV.size() << endl << iSize;
 			tempPV.export_files("_");
+			tempPV2.export_files("_");
 		}
 	} catch (const exception& e) {
 		cerr << "ERROR: " << e.what() << endl;

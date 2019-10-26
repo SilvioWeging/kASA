@@ -9,7 +9,7 @@
 **************************************************************************/
 #pragma once
 
-#define kASA_VERSION 1.0
+#define kASA_VERSION 1.1
 
 #include <iostream>
 #include <cstdint>
@@ -68,6 +68,10 @@ struct packedPair { uint32_t first = 0; uint16_t second = 0; };
 #pragma pack(push, 1)
 struct packedBigPair { 
 	uint64_t first = 0; uint32_t second = 0; 
+
+	packedBigPair() {}
+	packedBigPair(const uint64_t a, const uint32_t& b) : first(a), second(b) {}
+
 	packedBigPair& operator=(const tuple<uint64_t, uint32_t>& a) { 
 		first = get<0>(a); 
 		second = get<1>(a); 
@@ -117,10 +121,15 @@ struct packedBigPairTrie {
 #include <stxxl/bits/io/syscall_file.h>
 #include <dirent.h>
 #include <gzstream.hpp>
+#include <parallel/algorithm>
 struct __attribute__((packed)) packedPair { uint32_t first = 0; uint16_t second = 0; };
 
 struct __attribute__((packed)) packedBigPair {
 	uint64_t first = 0; uint32_t second = 0;
+
+	packedBigPair() {}
+	packedBigPair(const uint64_t a, const uint32_t& b) : first(a), second(b) {}
+
 	packedBigPair& operator=(const tuple<uint64_t, uint32_t>& a) {
 		first = get<0>(a);
 		second = get<1>(a);
