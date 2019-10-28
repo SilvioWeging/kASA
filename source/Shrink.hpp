@@ -65,16 +65,13 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Put first six letters in Trie, the others in index and restrict number of taxa to 2^16 - 1
-		inline void putHalfInTrie(const unique_ptr<const contentVecType_32p>& vLib, unique_ptr<index_t_p>& vOut, const unordered_map<uint32_t, uint32_t>& mIDsAsIdx, const string& sOutfile, const bool& bTrieIsNotThere) {
+		inline void putHalfInTrie(const unique_ptr<const contentVecType_32p>& vLib, unique_ptr<index_t_p>& vOut, const unordered_map<uint32_t, uint32_t>& mIDsAsIdx, const string& sOutfile) {
 			try {
-				unique_ptr<stxxlFile> trieFile;
-				unique_ptr<trieVector> trieVec;
-				if (bTrieIsNotThere) {
-					ofstream dummyFile(sOutfile + "_trie");
-					dummyFile.close();
-					trieFile.reset(new stxxlFile(sOutfile + "_trie", stxxl::file::RDWR));
-					trieVec.reset(new trieVector(trieFile.get(), 0));
-				}
+				unique_ptr<stxxlFile> trieFile(new stxxlFile(sOutfile + "_trie", stxxl::file::RDWR));
+				unique_ptr<trieVector> trieVec(new trieVector(trieFile.get(), 0));
+				ofstream dummyFile(sOutfile + "_trie");
+				dummyFile.close();
+
 				int64_t iCount = 0;
 				uint64_t iHigher6LettersBitmask = 31;
 				for (uint8_t i = 1; i < 6; ++i) {
@@ -109,7 +106,7 @@ namespace kASA {
 						//cout << kMerToAminoacid(get<0>(entry), 12) << " " << iCount << endl;
 
 						const uint64_t& tempMer = entry.first & iHigher6LettersBitmask;
-						if (tempMer != currentShortMer && bTrieIsNotThere) {
+						if (tempMer != currentShortMer) {
 							trieVec->push_back(packedBigPairTrie(static_cast<uint32_t>(currentShortMer >> 30), iCount - 1));
 							currentShortMer = tempMer;
 							iCount = 1;
@@ -117,17 +114,16 @@ namespace kASA {
 					}
 				}
 
-				if (bTrieIsNotThere) {
-					if (iCount != 1) {
-						trieVec->push_back(packedBigPairTrie(uint32_t(currentShortMer >> 30), iCount - 1));
-					}
-					else {
-						trieVec->push_back(packedBigPairTrie(uint32_t(currentShortMer >> 30), 1));
-					}
-					ofstream sizeFile(sOutfile + "_trie.txt");
-					sizeFile << trieVec->size();
-					trieVec->export_files("_");
+				if (iCount != 1) {
+					trieVec->push_back(packedBigPairTrie(uint32_t(currentShortMer >> 30), iCount - 1));
 				}
+				else {
+					trieVec->push_back(packedBigPairTrie(uint32_t(currentShortMer >> 30), 1));
+				}
+				ofstream sizeFile(sOutfile + "_trie.txt");
+				sizeFile << trieVec->size();
+				trieVec->export_files("_");
+
 
 				vOut->resize(outIt - vOut->begin(), true);
 			}
@@ -404,31 +400,13 @@ namespace kASA {
 				{
 					assert(iIdxCounter <= 65535); // TODO: throw Error
 
-					bool bTrieIsNotThere = false;
-					if (!ifstream(sLibFile + "_trie.txt")) {
-						bTrieIsNotThere = true;
-					}
 
-					putHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, fOutFile, bTrieIsNotThere);
+					putHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, fOutFile);
 
 					fLibInfo.open(fOutFile + "_info.txt", ios::out);
 					fLibInfo << vOutPVec->size() << endl << 3;
 					vOutPVec->export_files("_");
 					fLibInfo.close();
-
-					if (!bTrieIsNotThere) { // Trie is already there so copy it
-						oldFreqFile.open(sLibFile + "_trie.txt", std::ios::binary);
-						newFreqFile.open(fOutFile + "_trie.txt", std::ios::binary);
-						newFreqFile << oldFreqFile.rdbuf();
-						oldFreqFile.close();
-						newFreqFile.close();
-
-						oldFreqFile.open(sLibFile + "_trie", std::ios::binary);
-						newFreqFile.open(fOutFile + "_trie", std::ios::binary);
-						newFreqFile << oldFreqFile.rdbuf();
-						oldFreqFile.close();
-						newFreqFile.close();
-					}
 
 
 					oldFreqFile.open(sLibFile + "_f.txt", std::ios::binary);

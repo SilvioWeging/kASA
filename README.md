@@ -108,7 +108,7 @@ e.g.: [weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fa
 e.g.: [weging@example ~] kASA/kASA shrink -d work/exampleIndex -s 2
 
 <path to kASA>/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -n <number of parallel threads>
-e.g.: [weging@example ~] kASA/kASA identify -d work/exampleIndex_s -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.json -m 8 -n 2
+e.g.: [weging@example ~] kASA/kASA identify -d work/exampleIndex_s -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.rtt -h -m 8 -n 2
 ```
 
 ## Modes and parameters
@@ -205,7 +205,7 @@ If your read length is smaller than ![equation](http://www.sciweavers.org/tex2im
 If you want to optimise precision over sensitivity, you could use `k 12 12` and/or filter out low scoring reads (e.g. by ignoring everything below 0.5 (Relative Score)).
 
 Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
-But because too much information isn't always nice, you can specify how much taxa shall be shown for each read and if the profile should be human readable. 
+But because too much information isn't always nice, you can specify how much taxa shall be shown for each read (e.g. `-b 5` shows best 5 hits) or if the outputs should be human readable (see below). 
 
 The per read error score ranges from -1 to 1. A 1 means that the best score deviates as far as possible from the optimal score, 0 means a perfect match and -1 means that the reverse complement also fits perfectly. In human readable format, only the error of the best score is printed.
 
@@ -264,7 +264,7 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 |9606,|Homo sapiens,|121252166,|111556464,|...|0.87,|...|2001658992,|...|0.79,|...|
 
 ##### Human readable:
-###### Identification
+###### Identification (tab-separated)
 |#Read number|Specifier from input file|Matched taxa|Names|Scores{relative,k-mer}|Error|
 |:---:|:---:|:---:|:---:|:---:|
 |0 | Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 | -0.001 |
