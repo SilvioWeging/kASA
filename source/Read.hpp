@@ -1280,11 +1280,8 @@ namespace kASA {
 
 
 
-				ofstream derp(fOutFile);
-				if (derp.fail()) {
-					throw runtime_error("File couldn't be created, maybe a wrong path was used?");
-				}
-				derp.close();
+				Utilities::createFile(fOutFile);
+				
 				//stxxlFile* stxxlOutFile = new stxxlFile(fOutFile, stxxl::file::RDWR);
 				//contentVecType_32p* vOutVec = new contentVecType_32p(stxxlOutFile, 0);
 

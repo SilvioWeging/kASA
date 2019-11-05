@@ -235,8 +235,8 @@ namespace kASA {
 				// else:
 
 				// save to external vector
-				ofstream derp(_sTempPath + to_string(_iCounterOfContainers));
-				derp.close();
+				Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
+
 				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
 				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), vInternalIt - vInternal->cbegin()));
 				vVectorSizes.push_back(vInternalIt - vInternal->cbegin());
@@ -285,8 +285,7 @@ namespace kASA {
 					}
 
 					// create merge-file
-					ofstream derp(_sTempPath + to_string(_iCounterOfContainers));
-					derp.close();
+					Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
 
 					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
 					unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), iSumSize));

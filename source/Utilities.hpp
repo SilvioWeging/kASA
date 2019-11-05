@@ -222,6 +222,15 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+
+	inline void createFile(const string& s) {
+		ofstream derp(s);
+		if (derp.fail()) {
+			throw runtime_error("File couldn't be created, maybe a wrong path was used?");
+		}
+	}
+
+	///////////////////////////////////////////////////////
 	inline uint64_t countBits(uint64_t val) {
 		// http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
 		if (val == 0) {

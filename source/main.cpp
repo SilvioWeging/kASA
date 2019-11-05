@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
 		}
 		cMode = vParameters[1];
 
-		// still available parameters: ejw
+		// still available parameters: jw
 
 		for (int32_t i = 2; i < argc; ++i) {
 			string sParameter = vParameters[i];
@@ -70,6 +70,9 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "-u" || sParameter == "--level") {
 				sTaxLevel = Utilities::removeSpaceAndEndline(vParameters[++i]);
+			}
+			else if (sParameter == "-e" || sParameter == "--unique") {
+				bUnique = true;
 			}
 			else if (sParameter == "-f" || sParameter == "--acc2tax") {
 				sAccToTaxFiles = Utilities::removeSpaceAndEndline(vParameters[++i]);
@@ -319,7 +322,7 @@ int main(int argc, char* argv[]) {
 
 			kASAObj.bHumanReadable = bHumanReadable;
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM);
+			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique);
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 #if _WIN32 || _WIN64
@@ -505,10 +508,8 @@ int main(int argc, char* argv[]) {
 
 			const contentVecType_32p tempV(&temp, iSize);
 
-			ofstream derpFile(sDBPathOut);
-			derpFile.close();
-			derpFile.open(sDBPathOut+"_2");
-			derpFile.close();
+			Utilities::createFile(sDBPathOut);
+			Utilities::createFile(sDBPathOut + "_2");
 
 			stxxlFile tempOut(sDBPathOut, stxxl::file::RDWR);
 			stxxl::VECTOR_GENERATOR<uint64_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV(&tempOut, iSize);
@@ -516,7 +517,7 @@ int main(int argc, char* argv[]) {
 			stxxlFile tempOut2(sDBPathOut+"_2", stxxl::file::RDWR);
 			stxxl::VECTOR_GENERATOR<uint32_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV2(&tempOut2, iSize);
 			
-			derpFile.open(sDBPathOut+"_counts.txt");
+			ofstream countsFile(sDBPathOut+"_counts.txt");
 
 			auto t1It = tempV.cbegin();
 			auto tOIt = tempPV.begin();
@@ -530,7 +531,7 @@ int main(int argc, char* argv[]) {
 				}
 				else {
 					*tOIt = iSeen = t1It->first;
-					derpFile << iCount << endl;
+					countsFile << iCount << endl;
 					*tO2It = t1It->second;
 					++t1It; ++tOIt;
 				}

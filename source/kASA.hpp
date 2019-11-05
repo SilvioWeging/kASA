@@ -376,11 +376,7 @@ namespace kASA {
 				}
 
 				
-				ofstream derp(sOutput);
-				if (derp.fail()) {
-					throw runtime_error("File couldn't be created, maybe a wrong path was used?");
-				}
-				derp.close();
+				Utilities::createFile(sOutput);
 				
 
 				vector<string> files = Utilities::gatherFilesFromPath(sInput).first;

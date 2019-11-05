@@ -247,17 +247,13 @@ namespace kASA {
 					unique_ptr<const contentVecType_32p> vLibIn(new contentVecType_32p(stxxlLibFile.get(), iSizeOfLib));
 					contentVecType_32p::bufreader_type vCBuff(*vLibIn);
 
-					ofstream derp;
-					//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-					derp.open(fOutFile);
-					derp.close();
+					Utilities::createFile(fOutFile);
 					unique_ptr<stxxlFile> stxxlOutVec(new stxxlFile(fOutFile, stxxl::file::RDWR));
 					unique_ptr<contentVecType_32p> vOutVec(new contentVecType_32p(stxxlOutVec.get(), 0));
 					contentVecType_32p::bufwriter_type vNCBuff(*vOutVec);
 
 					// add kMers from fasta
-					derp.open(_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall));
-					derp.close();
+					Utilities::createFile(_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall));
 					unique_ptr<stxxlFile> stxxlTempVec(new stxxlFile(_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall), stxxl::file::RDWR));
 					unique_ptr<contentVecType_32p> vTempVec(new contentVecType_32p(stxxlTempVec.get(), 0));
 					

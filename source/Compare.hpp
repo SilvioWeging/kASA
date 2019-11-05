@@ -712,7 +712,7 @@ namespace kASA {
 
 	public:
 		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, const bool& bRAM) {
+		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, const bool& bRAM, const bool& bUnique) {
 			try {
 				// test if files exists
 				if (!ifstream(contentFile) || !ifstream(sLibFile) || !ifstream(sLibFile + "_f.txt") || !ifstream(sLibFile + "_trie.txt")) {
@@ -1043,9 +1043,17 @@ namespace kASA {
 								}
 								if (_iMinK <= 6) {
 									sort(it->second.kMers_ST6.begin(), it->second.kMers_ST6.end(), [](const pair<uint64_t, readIDType>& a, const pair<uint64_t, readIDType>& b) { return a < b; });
+									if (bUnique) {
+										const auto& newIt = unique(it->second.kMers_ST6.begin(), it->second.kMers_ST6.end(), [](const pair<uint64_t, readIDType>& a, const pair<uint64_t, readIDType>& b) { return a == b; });
+										it->second.kMers_ST6.resize(newIt - it->second.kMers_ST6.begin());
+									}
 								}
 								else {
 									sort(it->second.kMers_GT6.begin(), it->second.kMers_GT6.end(), [](const pair<uint32_t, readIDType>& a, const pair<uint32_t, readIDType>& b) { return a < b; });
+									if (bUnique) {
+										const auto& newIt = unique(it->second.kMers_GT6.begin(), it->second.kMers_GT6.end(), [](const pair<uint32_t, readIDType>& a, const pair<uint32_t, readIDType>& b) { return a == b; });
+										it->second.kMers_GT6.resize(newIt - it->second.kMers_GT6.begin());
+									}
 								}
 							}
 						}
