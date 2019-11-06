@@ -99,7 +99,7 @@ namespace kASA {
 				int32_t iNumOfThreads = omp_get_num_threads();
 				try {
 
-					vector<vector<uint64_t>> vReadIDs(_iNumOfK);
+					unique_ptr<vector<uint64_t>[]> vReadIDs(new vector<uint64_t>[_iNumOfK]);
 					//unique_ptr<uint32_t[]> vReadIDs_(new uint32_t[_iNumOfK * (mReadIDToArrayIdx.size() + 1)]);
 					vector<uint64_t> vMemoryOfSeenkMers(_iNumOfK);
 					//vector<uint32_t> vMemoryCounterOnly(_iNumOfK, 0);
@@ -712,7 +712,7 @@ namespace kASA {
 
 	public:
 		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, const bool& bRAM, const bool& bUnique) {
+		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique) {
 			try {
 				// test if files exists
 				if (!ifstream(contentFile) || !ifstream(sLibFile) || !ifstream(sLibFile + "_f.txt") || !ifstream(sLibFile + "_trie.txt")) {
@@ -802,6 +802,7 @@ namespace kASA {
 				if (bRAM) {
 					if ((iSizeOfLib * sizeof(packedPair) + 2048ULL * 1024 * 1024) >= iMemory) {
 						cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
+						bRAM = false;
 					}
 					else {
 						if (bPartitioned) {
