@@ -213,6 +213,8 @@ Note, that if you input a folder, file names are appended to your string given v
 
 If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
 
+Should you provide more than 12 GB of RAM and a lower `k` of at least 7, a much faster hash table instead of a prefix trie is used.
+
 ##### Necessary paramameters
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
 * `-q (--rtt) <file>`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
@@ -225,6 +227,7 @@ If a read cannot be identified, the array "Matched taxa" in json format is empty
 * `--kL <lower>`: Set only the lower bound
 * `-b (--beasts) <number>`: Number of hit taxa shown for each read. Default: 3.
 * `-h (--human)`: Changes the output of the profile so that only necessary information is provided, see below.
+* `-e (--unique)`: Ignores duplicates of `k`-mers in every read. This helps removing bias from repeats but messes with error scores, so consider it BETA.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>

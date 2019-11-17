@@ -411,7 +411,7 @@ public:
 					_iMaxRange = iDiff;
 				}
 				if (_vAllPrefixes.size() > 0) {
-					_vAllPrefixes[iReducedkMer] = make_tuple(iStart, iDiff);
+					_vAllPrefixes[iReducedkMer] = packedBigPair(iStart, iDiff);
 				}
 				else {
 					_root->IncreaseIndex(iReducedkMer, iStart, static_cast<uint32_t>(iDiff), iSizeOfTrie);

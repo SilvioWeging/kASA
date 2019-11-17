@@ -689,12 +689,14 @@ namespace kASA {
 						else {
 							fOut << "," << endl << "\t{" << endl;
 						}
-						fOut << "\t\t\"tax ID\": \"" << get<0>(*it) << "\"," << endl;
-						fOut << "\t\t\"Name\": \"" << Utilities::checkIfInMap(mOrganisms, get<0>(*it))->second << "\"," << endl;
-						fOut << "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << "," << endl;
-						fOut << "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << "," << endl;
-						fOut << "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it))/bestScore << endl;
-						fOut << "\t}";
+						 
+						ostringstream sOutStr; sOutStr << "\t\t\"tax ID\": \"" << get<0>(*it) << "\"," << endl
+							 << "\t\t\"Name\": \"" << Utilities::checkIfInMap(mOrganisms, get<0>(*it))->second << "\"," << endl
+							 << "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << "," << endl
+							 << "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << "," << endl
+							 << "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it))/bestScore << endl
+							 << "\t}";
+						fOut << sOutStr.str();
 						if (iValueBefore != get<1>(*it)) {
 							iValueBefore = get<1>(*it);
 							++j;
@@ -834,14 +836,14 @@ namespace kASA {
 					}
 				}
 
-
 				// load Trie
 				const uint8_t& iTD = iTrieDepth;
-				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK > 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > 13140348520);
+				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK > 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > kASA::kASA::aminoacidTokMer("]^^^^^")*sizeof(packedBigPair));
 				T.LoadFromStxxlVec(sLibFile);
 				T.SetForIsInTrie( (_iMinK < 6) ? static_cast<uint8_t>(_iMinK) : static_cast<uint8_t>(6));
 
 				// This holds the hits for each organism
+
 				const uint64_t& iMult = _iNumOfK * uint64_t(iAmountOfSpecies);
 				unique_ptr<double[]> vCount_all(new double[iMult]);
 				unique_ptr<uint64_t[]> vCount_unique(new uint64_t[iMult]);

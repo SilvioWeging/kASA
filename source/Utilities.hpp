@@ -420,7 +420,7 @@ namespace Utilities {
 		}
 
 		////////////////////////////////
-		inline uint64_t getUnique() {
+		/*inline uint64_t getUnique() {
 			for (uint64_t i = 0; i < _iNumOfBlocks; ++i) {
 				//cout << _arr[i] << endl;
 				const auto& bitPos = Utilities::log2OfMSB(_arr[i]);
@@ -429,22 +429,22 @@ namespace Utilities {
 				}
 			}
 			return 0;
-		}
+		}*/
 
 		////////////////////////////////
-		inline void setArr(const sBitArray& ba) {
+		/*inline void setArr(const sBitArray& ba) {
 			if (ba._pPosOfFirstElem < _pPosOfFirstElem) {
 				_pPosOfFirstElem.first = ba._pPosOfFirstElem.first;
 				_pPosOfFirstElem.second = ba._pPosOfFirstElem.second;
 			}
-			_iNumOfElements = 0;
+			_iNumOfElements = ba._iNumOfElements;
 			assert(ba._iNumOfBlocks == _iNumOfBlocks);
 			for (uint64_t i = 0; i < _iNumOfBlocks; ++i) {
 				if (_arr[i] != 0 || ba._arr[i]) {
 					_arr[i] |= ba._arr[i];
 				}
 			}
-		}
+		}*/
 
 		////////////////////////////////
 		inline void set(const uint64_t& idx) {
@@ -463,13 +463,13 @@ namespace Utilities {
 
 		////////////////////////////////
 		inline uint64_t numOfEntries() {
-			if (_iNumOfElements == 0) {
+			/*if (_iNumOfElements == 0) {
 				uint64_t iSum = 0;
 				for (uint64_t i = 0; i < _iNumOfBlocks; ++i) {
 					iSum += countBits(_arr[i]);
 				}
 				return iSum;
-			}
+			}*/
 			return _iNumOfElements;
 		}
 
