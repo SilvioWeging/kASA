@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
 
 			// No content file yet created
 			if (contentFileIn == "") {
-				if (sAccToTaxFiles == "" || sTaxonomyPath == "") {
+				if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
 					throw runtime_error("No acc2Tax file or taxonomy path given...");
 				}
 				else {
@@ -248,7 +248,7 @@ int main(int argc, char* argv[]) {
 			if (sDBPathOut == "") {
 				throw runtime_error("Where should I put the content file?");
 			}
-			if (sAccToTaxFiles == "" || sTaxonomyPath == "") {
+			if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
 				throw runtime_error("No acc2Tax file or taxonomy path given...");
 			}
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);

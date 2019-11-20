@@ -304,6 +304,15 @@ public:
 		return _iMaxRange;
 	}
 
+	inline void GetIfVecIsUsed() {
+		if (_vAllPrefixes.size()) {
+			cout << "OUT: Hash table (faster) will be used for prefix matching..." << endl;
+		}
+		else {
+			cout << "OUT: Trie will be used for prefix matching..." << endl;
+		}
+	}
+
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Save to file

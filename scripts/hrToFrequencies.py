@@ -1,6 +1,6 @@
-import sys, getopt, os, json
+import sys, getopt, os
 
-def jsonReadQuantity(argv):
+def humanReadableReadQuantity(argv):
 	threshold = 0.0
 	
 	try:
@@ -10,7 +10,7 @@ def jsonReadQuantity(argv):
 	
 	for opt, arg in opts:
 		if opt in ("-i",):
-			kASAOutput = json.load(open(arg))
+			kASAOutput = open(arg)
 		elif opt in ("-o",):
 			outFile = open(arg, 'w')
 		elif opt in ("-t",):
@@ -19,36 +19,35 @@ def jsonReadQuantity(argv):
 	resultDict = {}
 	readCount = 0
 	
-	
+	next(kASAOutput)
 	for read in kASAOutput:
+		read = (read.rstrip("\r\n")).split("\t")
 		readCount += 1
-		taxa = read["Matched taxa"]
-		#print(),read["Read number"],read["Specifier from input file"])
-		#return
-		if len(taxa) == 0:
+
+		if read[2] == "-":
 			continue
-		#taxIDs = (line[2]).split(";")
-		#namesAndScores = (line[3]).split(";")
-		#scores = (line[4]).split(";")
+		taxIDs = (read[2]).split(";")
+		names = (read[3]).split(";")
+		scores = (read[4]).split(";")
 		
 		until = 0
-		startingScore = taxa[0]["Relative Score"]
+		startingScore = float((scores[0]).split(",")[0])
 		if startingScore < threshold:
 		 continue
 		
-		for elem in taxa:
-			if elem["Relative Score"] >= startingScore:
+		for i in range(len(taxIDs)):
+			if float((scores[i]).split(",")[0]) >= startingScore:
 				until += 1
 			else:
 				break
 		
 		for i in range(until):
-			taxID = taxa[i]["tax ID"]
+			taxID = taxIDs[i]
 			if taxID in resultDict:
 				res = resultDict[taxID]
 				resultDict[taxID] = (res[0], res[1] + 1.0/until)
 			else:
-				resultDict[taxID] = ( taxa[i]["Name"], 1.0/until )
+				resultDict[taxID] = ( names[i], 1.0/until )
 	
 	resultList = []
 	
@@ -61,4 +60,4 @@ def jsonReadQuantity(argv):
 		outFile.write(entry[0] + "\t" + entry[1] + "\t" + str(entry[2]) + "\t" + str(entry[3]) + "\n")
 	
 
-jsonReadQuantity(sys.argv[1:])
+humanReadableReadQuantity(sys.argv[1:])

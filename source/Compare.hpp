@@ -679,22 +679,22 @@ namespace kASA {
 						fOut << "," << endl << "{" << endl;
 					}
 
-					fOut << "\t\"Read number\": " << iReadNum << "," << endl << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << endl << "\t\"Matched taxa\": [" << endl;
+					fOut << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Matched taxa\": [\n";
 					auto it = vTempResultVec.begin();
 					float iValueBefore = 0;
 					for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
 						if (j == 0) {
-							fOut << "\t{" << endl;
+							fOut << "\t{\n";
 						}
 						else {
-							fOut << "," << endl << "\t{" << endl;
+							fOut << ",\n\t{\n";
 						}
 						 
-						ostringstream sOutStr; sOutStr << "\t\t\"tax ID\": \"" << get<0>(*it) << "\"," << endl
-							 << "\t\t\"Name\": \"" << Utilities::checkIfInMap(mOrganisms, get<0>(*it))->second << "\"," << endl
-							 << "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << "," << endl
-							 << "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << "," << endl
-							 << "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it))/bestScore << endl
+						ostringstream sOutStr; sOutStr << "\t\t\"tax ID\": \"" << get<0>(*it) << "\",\n"
+							 << "\t\t\"Name\": \"" << Utilities::checkIfInMap(mOrganisms, get<0>(*it))->second << "\",\n"
+							 << "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n" 
+							 << "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
+							 << "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it))/bestScore << "\n"
 							 << "\t}";
 						fOut << sOutStr.str();
 						if (iValueBefore != get<1>(*it)) {
@@ -703,7 +703,7 @@ namespace kASA {
 						}
 					}
 
-					fOut << endl << "\t]" << endl << "}";
+					fOut << "\n\t]\n}";
 				}
 			}
 			catch (...) {
@@ -838,9 +838,13 @@ namespace kASA {
 
 				// load Trie
 				const uint8_t& iTD = iTrieDepth;
-				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK > 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > kASA::kASA::aminoacidTokMer("]^^^^^")*sizeof(packedBigPair));
+				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK > 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > (kASA::kASA::aminoacidTokMer("]^^^^^")*sizeof(packedBigPair)+1024ULL*1024ULL*1024ULL));
 				T.LoadFromStxxlVec(sLibFile);
 				T.SetForIsInTrie( (_iMinK < 6) ? static_cast<uint8_t>(_iMinK) : static_cast<uint8_t>(6));
+
+				if (_bVerbose) {
+					T.GetIfVecIsUsed();
+				}
 
 				// This holds the hits for each organism
 
@@ -1333,23 +1337,24 @@ namespace kASA {
 						if (bHumanReadable) {
 							// short version: taxID,Name,Unique Percentage of highest k,Non-unique Percentage of highest k\n
 							bool bBreakOut = false;
-							tableFileStream << "#tax ID,Name,Unique rel. freq.,Non-unique rel. freq.\n";
+							tableFileStream << "#tax ID,Name,Unique rel. freq. im %,Non-unique rel. freq. in %,Overall rel. freq. in %\n";
 							for (const auto& entry : vOut) {
 								if (get<1>(entry)[_iNumOfK - 1].first > 0 && !bBreakOut) {
 									tableFileStream << get<2>(entry) << "," << get<0>(entry);
 									if (get<1>(entry)[0].second == 0) {
-										tableFileStream << "," << 0.0 << "%";
+										tableFileStream << "," << 0.0;
 										bBreakOut = true;
 									}
 									else {
-										tableFileStream << "," << static_cast<double>(get<1>(entry)[0].second) / vSumOfUniquekMers[0] * 100.0 << "%";
+										tableFileStream << "," << static_cast<double>(get<1>(entry)[0].second) / vSumOfUniquekMers[0] * 100.0;
 									}
 									if (get<1>(entry)[0].first == 0) {
-										tableFileStream << "," << 0.0 << "%";
+										tableFileStream << "," << 0.0;
 									}
 									else {
-										tableFileStream << "," << static_cast<double>(get<1>(entry)[0].first) / vSumOfNonUniques[0] * 100.0 << "%";
+										tableFileStream << "," << static_cast<double>(get<1>(entry)[0].first) / vSumOfNonUniques[0] * 100.0;
 									}
+									tableFileStream << "," << static_cast<double>(get<1>(entry)[0].first) / iNumberOfkMersInInput * 100.;
 									tableFileStream << endl;
 								}
 							}
@@ -1369,13 +1374,18 @@ namespace kASA {
 							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
 								tableFileStream << "," << "Non-unique rel. freq. k=" << 12 - ikMerlength;
 							}
+							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								tableFileStream << "," << "Overall rel. freq. k=" << 12 - ikMerlength;
+							}
 							tableFileStream << endl;
 							for (const auto& entry : vOut) {
 								if (get<1>(entry)[_iNumOfK - 1].first > 0) {
+									// unique count
 									tableFileStream << get<2>(entry) << "," << get<0>(entry);
 									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
 										tableFileStream << "," << get<1>(entry)[ikMerlength].second;
 									}
+									// unique rel freq
 									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
 										if (get<1>(entry)[ikMerlength].second == 0) {
 											tableFileStream << "," << 0.0;
@@ -1384,9 +1394,11 @@ namespace kASA {
 											tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / vSumOfUniquekMers[ikMerlength];
 										}
 									}
+									// non-unique count
 									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
 										tableFileStream << "," << get<1>(entry)[ikMerlength].first;
 									}
+									// non-unique rel freq
 									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
 										if (bSpaced) {
 											tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
@@ -1395,6 +1407,10 @@ namespace kASA {
 											//tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (_iMaxK - _iMinK - ikMerlength) * 6 * iNumOfReadsSum);
 											tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
 										}
+									}
+									// Overall rel freq
+									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+										tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput*(ikMerlength + 1));
 									}
 									tableFileStream << endl;
 								}
@@ -1405,7 +1421,7 @@ namespace kASA {
 						cout.rdbuf(orgBuf);
 					}*/
 					if (_bVerbose) {
-						cout << "OUT: Number of kMers in Input: " << iNumberOfkMersInInput << endl;
+						cout << "OUT: Number of k-mers in input: " << iNumberOfkMersInInput << " of which " << vSumOfNonUniques[0]/iNumberOfkMersInInput * 100. << " % were identified." << endl;
 						cout << "OUT: Number of uniques:";
 						for (int32_t j = 0; j < _iNumOfK; ++j) {
 							cout << " " << vSumOfUniquekMers[j];

@@ -213,7 +213,7 @@ Note, that if you input a folder, file names are appended to your string given v
 
 If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
 
-Should you provide more than 12 GB of RAM and a lower `k` of at least 7, a much faster hash table instead of a prefix trie is used.
+Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster hash table instead of a prefix trie is used.
 
 ##### Necessary paramameters
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
@@ -262,23 +262,26 @@ e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleI
 ```
 
 ###### Profile
-|#tax ID|Name|Unique counts k=12|Unique counts k=11|...|Unique rel. freq. k=12|...|Non-unique counts k=12|...|Non-unique rel. freq. k=12|...|
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|9606,|Homo sapiens,|121252166,|111556464,|...|0.87,|...|2001658992,|...|0.79,|...|
+|#tax ID|Name|Unique counts k=12|Unique counts k=11|...|Unique rel. freq. k=12|...|Non-unique counts k=12|...|Non-unique rel. freq. k=12|...|Overall rel. freq. k=12| ... |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|9606,|Homo sapiens,|121252166,|111556464,|...|0.87,|...|2001658992,|...|0.79,|...|0.65,|...|
 
 ##### Human readable:
 ###### Identification (tab-separated)
 |#Read number|Specifier from input file|Matched taxa|Names|Scores{relative,k-mer}|Error|
-|:---:|:---:|:---:|:---:|:---:|
+|:---:|:---:|:---:|:---:|:---:|:---:|
 |0 | Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 | -0.001 |
 
 ###### Profile
-|tax ID|Name|Unique r.f. k=12|Non-unique r.f. k=12|
-|:---:|:---:|:---:|:---:|
-|9606,|Homo sapiens,|87%,|79%|
+|#tax ID|Name|Unique rel. freq. in %|Non-unique rel. freq. in %|Overall rel. freq. in %|
+|:---:|:---:|:---:|:---:|:---:|
+|9606,|Homo sapiens,|87,|79,|65|
 
 There are two relative frequencies because your index may be very ambigious (e.g. it only consists of E. Coli species) and thus has only few unique hits. 
 To get a hint which one would be more relevant to you, check your index with a call to `redundancy` in the [Miscellaneous](#miscellaneous) section.
+
+Relative frequencies in the human readable profile are given for the largest k. The "Overall relative frequency" is calculated by dividing the non-unique counts by the total number of k-mers from the input.
+This is also printed in the verbose mode like: "OUT: Number of k-mers in input: ... of which ... % were identified." for the largest k.
 
 ### Update
 ##### Context
@@ -351,7 +354,8 @@ This gives you a hint whether you should look at the unique relative frequencies
 
 ## Useful scripts
 - generateCF.py: The python 3 version of the `generateCF` mode described [here](#generate-a-content-file).
-- jsonToFrequencies.py: Creates a profile based on the most prominent taxa per read. Useful, if your input could only be processed in many chunks (due to memory restrictions) which may influence the accuracy of the k-Mer profile negatively.
+- jsonToFrequencies.py: Creates a profile based on the most prominent taxa per read. Usage: `-i <kASA output> -o <result> (-t threshold for rel. score)`. Consumes a lot of memory because the json file is loaded into memory.
+- hrToFrequencies.py: Same as above but for human readable output.
 - csvToCAMI.py: Converts a profiling output into the CAMI profile format. Needs the NCBI 'nodes.dmp' and 'names.dmp' file for upwards traversing of the taxonomic tree. 
 - camiToKrona.py: Converts the CAMI profile to a file format readable by [Krona](https://github.com/marbl/Krona/wiki)
 - jsonToCAMIBin.py: Converts the json output file into the CAMI binning format.
@@ -366,7 +370,7 @@ This gives you a hint whether you should look at the unique relative frequencies
 - ~~Native support of the nr and other translated sequences~~
 - ~~Allow gzipped files as input for `build`~~
 - ~~RAM mode~~
-- ~~Omission of the prefix trie if enough RAM (ca 11GB) is available~~
+- ~~Omission of the prefix trie if enough RAM (ca 12GB) is available~~
 - Support of Clang (macOS)
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
