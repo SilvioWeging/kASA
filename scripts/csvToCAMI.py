@@ -28,6 +28,8 @@ def csvToCAMI(argv):
 		elif opt in ("-u",):
 			if arg == 'u':
 				uniqueOrNonUnique = arg
+			elif arg == 'o':
+				uniqueOrNonUnique = arg
 			else:
 				uniqueOrNonUnique = 'n'
 		elif opt in ("-t",):
@@ -56,6 +58,10 @@ def csvToCAMI(argv):
 		entry = firstLine[i]
 		if uniqueOrNonUnique == 'u':
 			if "Unique" in entry and kValue in entry and "rel. freq." in entry:
+				rowIdx = i
+				break
+		elif uniqueOrNonUnique == 'o':
+			if "Overall" in entry and kValue in entry and "rel. freq." in entry:
 				rowIdx = i
 				break
 		else:

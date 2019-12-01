@@ -892,6 +892,7 @@ namespace kASA {
 				list<pair<string, uint32_t>> vReadNameAndLength;
 
 				uint64_t iNumberOfkMersInInput = 0;
+				vector<uint64_t> vNumberOfGarbagekMersPerK(_iNumOfK, 0);
 
 				auto pathAndSize = Utilities::gatherFilesFromPath(fInFile);
 				vector<string> vInputFiles = pathAndSize.first;
@@ -1001,20 +1002,20 @@ namespace kASA {
 						auto start = std::chrono::high_resolution_clock::now();
 						if (bIsFasta) {
 							if (isGzipped) {
-								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T, vNumberOfGarbagekMersPerK);
 							}
 							else {
-								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T, vNumberOfGarbagekMersPerK);
 							}
 
 							iNumOfReads = transferBetweenRuns->vReadIDs.size();
 						}
 						else {
 							if (isGzipped) {
-								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File_gz, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, iFileLength, bReadIDsAreInteresting, transferBetweenRuns, T, vNumberOfGarbagekMersPerK);
 							}
 							else {
-								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T);
+								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File, vInputMap, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T, vNumberOfGarbagekMersPerK);
 							}
 
 							iNumOfReads = transferBetweenRuns->vReadIDs.size();
@@ -1337,6 +1338,8 @@ namespace kASA {
 						if (bHumanReadable) {
 							// short version: taxID,Name,Unique Percentage of highest k,Non-unique Percentage of highest k\n
 							bool bBreakOut = false;
+							double iSumOfIdentified = 0;
+
 							tableFileStream << "#tax ID,Name,Unique rel. freq. im %,Non-unique rel. freq. in %,Overall rel. freq. in %\n";
 							for (const auto& entry : vOut) {
 								if (get<1>(entry)[_iNumOfK - 1].first > 0 && !bBreakOut) {
@@ -1354,10 +1357,18 @@ namespace kASA {
 									else {
 										tableFileStream << "," << static_cast<double>(get<1>(entry)[0].first) / vSumOfNonUniques[0] * 100.0;
 									}
-									tableFileStream << "," << static_cast<double>(get<1>(entry)[0].first) / iNumberOfkMersInInput * 100.;
+									iSumOfIdentified += get<1>(entry)[0].first;
+									tableFileStream << "," << static_cast<double>(get<1>(entry)[0].first) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[0]) * 100.;
 									tableFileStream << endl;
 								}
 							}
+
+							// last entry
+							tableFileStream << "0,not identified,"
+											<< "0.0,0.0,"
+											<< ((iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[0] - iSumOfIdentified) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[0])) * 100.;
+
+							tableFileStream << endl;
 						}
 						else {
 							// long version: taxID,Name,Unique Counts,Unique rel. freq. x in 0.x,Non-unique Counts,Non-unique rel. freq. x in 0.x\n
@@ -1378,6 +1389,8 @@ namespace kASA {
 								tableFileStream << "," << "Overall rel. freq. k=" << 12 - ikMerlength;
 							}
 							tableFileStream << endl;
+
+							vector<double> iSumOfIdentified(_iNumOfK, 0);
 							for (const auto& entry : vOut) {
 								if (get<1>(entry)[_iNumOfK - 1].first > 0) {
 									// unique count
@@ -1410,11 +1423,23 @@ namespace kASA {
 									}
 									// Overall rel freq
 									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput*(ikMerlength + 1));
+										iSumOfIdentified[ikMerlength] += get<1>(entry)[ikMerlength].first;
+										tableFileStream << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput*(ikMerlength + 1) - vNumberOfGarbagekMersPerK[ikMerlength]);
 									}
 									tableFileStream << endl;
 								}
 							}
+							// last entry
+							tableFileStream << "0,not identified";
+							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK * 4; ++ikMerlength) {
+								// all counts for unique and non-unique relate to the identified number of counts so no value other than 0 can be written here
+								tableFileStream << "," << 0.0;
+							}
+							
+							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								tableFileStream << "," << (iNumberOfkMersInInput*(ikMerlength + 1) - vNumberOfGarbagekMersPerK[ikMerlength] - iSumOfIdentified[ikMerlength]) / (iNumberOfkMersInInput*(ikMerlength + 1) - vNumberOfGarbagekMersPerK[ikMerlength]);
+							}
+							tableFileStream << endl;
 						}
 					}
 					/*if (fTableFile != "") {

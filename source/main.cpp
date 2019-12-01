@@ -276,9 +276,14 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "delete") {
+
+			if (sDBPathOut == "") {
+				throw runtime_error("No output file given!");
+			}
+
 			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.DeleteFromLib(indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
+			kASAObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
@@ -354,9 +359,14 @@ int main(int argc, char* argv[]) {
 			}
 
 			ifstream fLibInfo(indexFile + "_info.txt");
-			uint64_t iSizeOfLib = 0;
+			uint64_t iSizeOfLib = 0, shrunken = 0;
 			fLibInfo >> iSizeOfLib;
+			fLibInfo >> shrunken;
 			fLibInfo.close();
+			
+			if (shrunken) {
+				throw runtime_error("redundancy cannot be called on shrunken indices!");
+			}
 
 			stxxlFile libFile(indexFile, stxxlFile::RDONLY);
 			unique_ptr<const contentVecType_32p> libVec(new const contentVecType_32p(&libFile, iSizeOfLib));

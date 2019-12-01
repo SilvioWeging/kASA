@@ -215,6 +215,8 @@ If a read cannot be identified, the array "Matched taxa" in json format is empty
 
 Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster hash table instead of a prefix trie is used.
 
+The last line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
+
 ##### Necessary paramameters
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
 * `-q (--rtt) <file>`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
@@ -305,10 +307,10 @@ If you've created the content file together with the index, this default content
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>
-e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleIndex -o work/updatedIndex -i work/newStuff.fasta -t work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
+e.g.: [weging@example ~] kASA/kASA update -c work/content.txt -d work/exampleIndex -o work/updatedIndex -i work/newStuff.fasta -t work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
 
 <path to kASA>/kASA delete -c <content file> -d <path and name of the index file> -o <path and name of the new index> -l <delnodes.dmp> -t <temporary directory> -m <amount of RAM>
-e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleIndex -o work/updatedIndex -l taxonomy/delnodes.dmp -t work/tmp/ -m 8
+e.g.: [weging@example ~] kASA/kASA delete -c work/content.txt -d work/exampleIndex -o work/updatedIndex -l taxonomy/delnodes.dmp -t work/tmp/ -m 8
 ``` 
 
 ### Shrink
