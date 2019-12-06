@@ -55,7 +55,9 @@ Last but not least: kASA provides an error (starts with "ERROR: ") and an output
 
 Clone the repository.
 
-Open a terminal and go to the path with `cd <installPath>/zlib/zlibBuild`.
+Open a terminal and go to the path with `cd <installPath>/zlib`.
+
+Create the folder `zlibBuild` and `cd` into it.
 
 Type `../configure` and after that `make`.
 
