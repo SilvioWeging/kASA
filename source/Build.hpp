@@ -208,12 +208,11 @@ namespace kASA {
 		// if the internal vector is full enough, save it to an external one
 		inline void IntToExtPart() {
 			try {
-
+# if __GNUC__
+				__gnu_parallel::sort(vInternal->begin(), vInternalIt, __gnu_parallel::balanced_quicksort_tag());
+#else
 #if __has_include(<execution>)
 				sort(std::execution::par_unseq, vInternal->begin(), vInternalIt);
-#else
-# if __GNUC__
-				__gnu_parallel::sort(vInternal->begin(), vInternalIt, __gnu_parallel::balanced_quicksort_tag()); 
 #else
 				sort(vInternal->begin(), vInternalIt);
 #endif
