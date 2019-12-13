@@ -287,7 +287,7 @@ public:
 		}
 
 		if (bShitLoadOfRAM) {
-			_vAllPrefixes.resize(kASA::kASA::aminoacidTokMer("]^^^^^"), packedBigPair(0,0));
+			_vAllPrefixes.resize(kASA::kASA::aminoacidTokMer("]^^^^^"), packedBigPair(numeric_limits<uint64_t>::max(),0));
 			iSizeOfTrie = _vAllPrefixes.size() * sizeof(packedBigPair);
 		}
 	}
