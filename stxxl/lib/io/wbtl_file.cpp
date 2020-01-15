@@ -7,6 +7,7 @@
  *
  *  Copyright (C) 2008-2009 Andreas Beckmann <beckmann@cs.uni-frankfurt.de>
  *  Copyright (C) 2009 Johannes Singler <singler@ira.uka.de>
+ *  Modified      2019 Silvio Weging <silvio.weging@gmail.com>
  *
  *  Distributed under the Boost Software License, Version 1.0.
  *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -19,6 +20,7 @@
 #if STXXL_HAVE_WBTL_FILE
 
 #include <algorithm>
+#include <functional>
 #include <iomanip>
 #include <stxxl/bits/io/io.h>
 #include <stxxl/bits/parallel.h>
@@ -304,7 +306,7 @@ wbtl_file::offset_type wbtl_file::get_next_write_block()
     // mapping_lock has to be aquired by caller
     sortseq::iterator space =
         std::find_if(free_space.begin(), free_space.end(),
-                     bind2nd(FirstFit(), write_block_size) _STXXL_FORCE_SEQUENTIAL);
+                     std::bind(FirstFit(), std::placeholders::_1, write_block_size) _STXXL_FORCE_SEQUENTIAL);
 
     if (space != free_space.end())
     {

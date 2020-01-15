@@ -19,7 +19,7 @@ namespace kASA {
 		vector<uint64_t> vVectorSizes;
 
 		string _sTempPath = "";
-		uint64_t _iConstSize = 0;
+		//uint64_t _iConstSize = 0;
 		int16_t _iCounterOfContainers = 0;
 
 		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
@@ -208,7 +208,8 @@ namespace kASA {
 		// if the internal vector is full enough, save it to an external one
 		inline void IntToExtPart() {
 			try {
-# if __GNUC__
+
+# if __GNUC__ && !defined(__llvm__)  && defined(_OPENMP)
 				__gnu_parallel::sort(vInternal->begin(), vInternalIt, __gnu_parallel::balanced_quicksort_tag());
 #else
 #if __has_include(<execution>)

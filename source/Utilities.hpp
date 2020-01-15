@@ -103,9 +103,9 @@ namespace Utilities {
 		try {
 			vector<string> files;
 			size_t overallFileSize = 0;
-#if _WIN32 || _WIN64
+#if _WIN32 || _WIN64 
 			if (sPath.back() == '/') {
-				for (auto& fsPath : std::experimental::filesystem::directory_iterator(sPath)) {
+				for (auto& fsPath : filesystem::directory_iterator(sPath)) {
 					const string& fileName = (fsPath.path()).string();
 					files.push_back(fileName);
 
@@ -120,7 +120,7 @@ namespace Utilities {
 				}
 			}
 #else
-#if __GNUC__
+#if __GNUC__ || defined(__llvm__)
 			if (sPath.back() == '/') {
 				DIR           *dirp;
 				struct dirent *directory;

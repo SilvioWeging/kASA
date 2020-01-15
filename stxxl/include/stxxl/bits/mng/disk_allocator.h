@@ -183,7 +183,7 @@ void disk_allocator::new_blocks(BID<BlockSize>* begin, BID<BlockSize>* end)
 
     sortseq::iterator space;
     space = std::find_if(free_space.begin(), free_space.end(),
-                         bind(first_fit(), std::placeholders::_1, requested_size) _STXXL_FORCE_SEQUENTIAL);
+                         std::bind(first_fit(), std::placeholders::_1, requested_size) _STXXL_FORCE_SEQUENTIAL);
 
     if (space == free_space.end() && requested_size == BlockSize)
     {
@@ -201,7 +201,7 @@ void disk_allocator::new_blocks(BID<BlockSize>* begin, BID<BlockSize>* end)
         grow_file(BlockSize);
 
         space = std::find_if(free_space.begin(), free_space.end(),
-                             bind(first_fit(), std::placeholders::_1, requested_size) _STXXL_FORCE_SEQUENTIAL);
+                             std::bind(first_fit(), std::placeholders::_1, requested_size) _STXXL_FORCE_SEQUENTIAL);
     }
 
     if (space != free_space.end())

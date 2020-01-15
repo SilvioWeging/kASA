@@ -16,10 +16,10 @@
 namespace kASA {
 	class Read : public kASA {
 		const bool _bInputAreAAs;
+		const bool bUnfunny;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "") : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode), _bInputAreAAs(bTranslated) {}
-
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode), _bInputAreAAs(bTranslated), bUnfunny(bUnfunny) {}
 
 	protected:
 
@@ -50,16 +50,28 @@ namespace kASA {
 					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
 					sAAFrames[j] = aminoacidTokMer(sTempFrame);
 
+					auto kmerForSearchInTrie = sAAFrames[j];
+					if (bUnfunny) {
+						/*uint64_t tVal = 0;
+						for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
+							tVal |= (sAAFrames[j] & (31ULL << iLeftStart)) << iShifted;
+						}
+						sAAFrames[j] = tVal;*/
+						kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
+					}
+
+
 					//cout << kMerToAminoacid(sAAFrames[j], 12) << endl;
-					const auto& range = T.GetIndexRange(sAAFrames[j] >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
+					const auto& range = T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
 					if (get<0>(range) != numeric_limits<uint64_t>::max()) {
 						// if a character is 'illegal' then don't save the kMer containing it
 						//const auto& iPosOfU = sTempFrame.find_last_of('U');
 						//if (iPosOfU == string::npos) {
 
-						for (int8_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
-							vCountGarbagekMerPerK[kVal] += (sAAFrames[j] & _tails[kVal]) == _tails[kVal];
+						for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
+							vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 						}
+						
 
 						auto& tempEntry = resultsVec[get<0>(range)];
 						tempEntry.range = get<1>(range);
@@ -95,13 +107,23 @@ namespace kASA {
 
 							//cout << kMerToAminoacid(sAAFrames[k], 12) << endl;
 
-							const auto& range = T.GetIndexRange(sAAFrames[k] >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
+							auto kmerForSearchInTrie = sAAFrames[k];
+							if (bUnfunny) {
+								/*uint64_t tVal = 0;
+								for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
+									tVal |= (sAAFrames[k] & (31ULL << iLeftStart)) << iShifted;
+								}
+								sAAFrames[k] = tVal;*/
+								kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
+							}
+
+							const auto& range = T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
 							if (get<0>(range) != numeric_limits<uint64_t>::max()) {
 								//string sDEBUG = kMerToAminoacid(sAAFrames[k], 12);
 								//if (sTempAA != 'U' && aDeletekMerCounter[k] == 0) {
 
-								for (int8_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
-									vCountGarbagekMerPerK[kVal] += (sAAFrames[k] & _tails[kVal]) == _tails[kVal];
+								for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
+									vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 								}
 
 								auto& tempEntry = resultsVec[get<0>(range)];
@@ -135,12 +157,21 @@ namespace kASA {
 						sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
 
 						//cout << kMerToAminoacid(sAAFrames[j], 12) << endl;
+						auto kmerForSearchInTrie = sAAFrames[j];
+						if (bUnfunny) {
+							/*uint64_t tVal = 0;
+							for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
+								tVal |= (sAAFrames[j] & (31ULL << iLeftStart)) << iShifted;
+							}
+							sAAFrames[j] = tVal;*/
+							kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
+						}
 
-						const auto& range = T.GetIndexRange(sAAFrames[j] >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
+						const auto& range = T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
 						if (get<0>(range) != numeric_limits<uint64_t>::max()) {
 
-							for (int8_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
-								vCountGarbagekMerPerK[kVal] += (sAAFrames[j] & _tails[kVal]) == _tails[kVal];
+							for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
+								vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 							}
 
 							//if (sTempAA != 'U' && aDeletekMerCounter[j] == 0) {
@@ -177,8 +208,13 @@ namespace kASA {
 				for (; iCurrentkMerCounter < iMaxRange; ++iCurrentkMerCounter) {
 					//resultsVec[iProcIt][iSizeOfResultsBefore + iCurrentkMerCounter] = make_tuple(aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12), iReadID);
 
-					const auto& kMer = aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12);
-					//cout << kMerToAminoacid(kMer, 12) << endl;
+					auto kMer = aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12);
+					
+					if (bUnfunny) {
+						kMer = aminoAcidsToAminoAcid(kMer);;
+					}
+					
+					
 					const auto& range = T.GetIndexRange(kMer >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
 					if (get<0>(range) != numeric_limits<uint64_t>::max()) {
 
@@ -906,9 +942,19 @@ namespace kASA {
 				if (kMerVecOut) {
 					kMerVecOut->resize(iStart + iResultingSize);
 				}
-				for (const auto& element : vResultingkMers) {
+				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
 						if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
+							if (bUnfunny) {
+								/*uint64_t tVal = 0;
+								for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
+									tVal |= (get<0>(element) & (31ULL << iLeftStart)) << iShifted;
+								}
+								get<0>(element) = tVal;*/
+
+								get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
+							}
+
 							if (kMerVecOut) {
 								kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
 							}
@@ -929,8 +975,18 @@ namespace kASA {
 				if (kMerVecOut) {
 					kMerVecOut->resize(iStart + iResultingSize);
 				}
-				for (const auto& element : vResultingkMers) {
+				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
+						if (bUnfunny) {
+							/*uint64_t tVal = 0;
+							for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
+								tVal |= (get<0>(element) & (31ULL << iLeftStart)) << iShifted;
+							}
+							get<0>(element) = tVal;*/
+							
+							get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
+						}
+
 						if (kMerVecOut) {
 							kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
 						}
@@ -976,8 +1032,12 @@ namespace kASA {
 				if (kMerVecOut) {
 					kMerVecOut->resize(iStart + iResultingSize);
 				}
-				for (const auto& element : vResultingkMers) {
+				for (auto& element : vResultingkMers) {
 					if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
+						if (bUnfunny) {
+							get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
+						}
+
 						if (kMerVecOut) {
 							kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
 						}
@@ -997,7 +1057,11 @@ namespace kASA {
 				if (kMerVecOut) {
 					kMerVecOut->resize(iStart + iResultingSize);
 				}
-				for (const auto& element : vResultingkMers) {
+				for (auto& element : vResultingkMers) {
+					if (bUnfunny) {
+						get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
+					}
+
 					if (kMerVecOut) {
 						kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
 					}
@@ -1368,10 +1432,33 @@ namespace kASA {
 				}
 
 				// Create Trie and frequencies out of final file
-				stxxlFile libFile(fOutFile, stxxlFile::RDONLY);
-				const contentVecType_32p libVec(&libFile, iSizeOfFinalIndex);
+				stxxlFile* libFile = new stxxlFile(fOutFile, stxxlFile::RDONLY);
+				const contentVecType_32p* libVec = new const contentVecType_32p(libFile, iSizeOfFinalIndex);
 				Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-				T.SaveToStxxlVec(&libVec, fOutFile, &arrFrequencies, mIDsAsIdx);
+				T.SaveToStxxlVec(libVec, fOutFile, &arrFrequencies, mIDsAsIdx);
+
+				// If taxaOnly index is desired, create it here:
+				if (bUnfunny) {
+					Utilities::createFile(fOutFile+"_taxOnly");
+					stxxlFile* taxaOnlyFile = new stxxlFile(fOutFile+"_taxOnly", stxxlFile::RDWR);
+					taxaOnly* taxaOnlyFileVec = new taxaOnly(taxaOnlyFile, iSizeOfFinalIndex);
+
+					auto tOIt = taxaOnlyFileVec->begin();
+					for (const auto& elem : *libVec) {
+						*tOIt = static_cast<uint16_t>(mIDsAsIdx.find(elem.second)->second);
+						++tOIt;
+					}
+
+					taxaOnlyFileVec->export_files("_");
+					delete taxaOnlyFileVec;
+					delete taxaOnlyFile;
+					delete libVec;
+					libFile->close_remove();
+					delete libFile;
+
+					remove(fOutFile.c_str());
+					rename((fOutFile + "_taxOnly").c_str(), fOutFile.c_str());
+				}
 
 				ofstream outFile(fOutFile + "_f.txt");
 				for (uint32_t j = 0; j < iIdxCounter; ++j) {

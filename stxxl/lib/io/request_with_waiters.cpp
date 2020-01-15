@@ -5,6 +5,7 @@
  *
  *  Copyright (C) 2002 Roman Dementiev <dementiev@mpi-sb.mpg.de>
  *  Copyright (C) 2008 Andreas Beckmann <beckmann@cs.uni-frankfurt.de>
+ *  Modified      2019 Silvio Weging <silvio.weging@gmail.com>
  *
  *  Distributed under the Boost Software License, Version 1.0.
  *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -50,7 +51,7 @@ void request_with_waiters::notify_waiters()
     scoped_mutex_lock lock(m_waiters_mutex);
     std::for_each(m_waiters.begin(),
                   m_waiters.end(),
-                  std::mem_fun(&onoff_switch::on)
+                  std::mem_fn(&onoff_switch::on)
                   _STXXL_FORCE_SEQUENTIAL);
 }
 

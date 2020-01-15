@@ -413,8 +413,6 @@ MigrationBackup/
 /test/work/index/*
 /test/work/results/*
 *.errlog
-/example/work/index
-/example/work/results
 /zlib/zlibBuild/zlib.pc
 /zlib/zlibBuild/zconf.h
 /zlib/zlibBuild/minigzipsh
@@ -434,3 +432,6 @@ MigrationBackup/
 /example/work/exampleIndex.txt
 /kASA_1.1.zip
 /zippable
+/build_clang
+/example/.snakemake/metadata
+/kASA_1.2.zip

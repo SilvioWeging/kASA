@@ -181,7 +181,7 @@ namespace kASA {
 					summands[arrayIdx] = (float(letterCount) / kMerAsAAString.size());
 					double H_2 = 0.0;
 					for (uint8_t i = 0; i <= arrayIdx; ++i) {
-						H_2 += summands[arrayIdx] * log2(summands[arrayIdx]);
+						H_2 += summands[i] * log2(summands[i]);
 					}
 
 					arrayIdx = 0;

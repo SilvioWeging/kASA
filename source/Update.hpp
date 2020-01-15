@@ -20,7 +20,7 @@ namespace kASA {
 	public:
 
 
-		void DeleteFromLib(const string& contentFile, const string& sLibFile, const string& fOutfile, const string& sDelNodesPath, const bool& bOverwrite, const uint64_t& iMemory) {
+		void DeleteFromLib(const string& contentFile, const string& sLibFile, const string& fOutfile, const string& sDelNodesPath, const bool& bOverwrite) {
 			try {
 				// test if files exists
 				if (!ifstream(sLibFile)) {
@@ -48,10 +48,10 @@ namespace kASA {
 				string sDummy = "";
 				while (getline(content, sDummy)) {
 					if (sDummy != "") {
-						const auto& line = Utilities::split(sDummy, '\t');
-						if (line.size() >= 4)
-						mIDsAsIdx[stoul(line[1])] = iIdxCounter;
-						mIdxToName[iIdxCounter] = line[0];
+						const auto& cline = Utilities::split(sDummy, '\t');
+						if (cline.size() >= 4)
+						mIDsAsIdx[stoul(cline[1])] = iIdxCounter;
+						mIdxToName[iIdxCounter] = cline[0];
 						++iIdxCounter;
 					}
 					else {
@@ -59,9 +59,9 @@ namespace kASA {
 					}
 				}
 
-				unique_ptr<uint64_t[]> arrFrequencies(new uint64_t[iIdxCounter * 12]);
+				unique_ptr<uint64_t[]> arrFrequencies_l(new uint64_t[iIdxCounter * 12]);
 				for (uint64_t i = 0; i < iIdxCounter * 12; ++i) {
-					arrFrequencies[i] = 0;
+					arrFrequencies_l[i] = 0;
 				}
 
 				// Create new vector
@@ -94,7 +94,7 @@ namespace kASA {
 					infoFileOut << vOut.size();
 
 					Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-					T.SaveToStxxlVec(&vOut, fOutfile, &arrFrequencies, mIDsAsIdx);
+					T.SaveToStxxlVec(&vOut, fOutfile, &arrFrequencies_l, mIDsAsIdx);
 				}
 				if (bOverwrite) {
 					remove(sLibFile.c_str());
@@ -105,9 +105,9 @@ namespace kASA {
 				ofstream frequencyFile(fOutfile + "_f.txt");
 				for (uint32_t j = 0; j < iIdxCounter; ++j) {
 					frequencyFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-					frequencyFile << arrFrequencies[j * 12];
+					frequencyFile << arrFrequencies_l[j * 12];
 					for (int32_t k = 1; k < 12; ++k) {
-						frequencyFile << "\t" << arrFrequencies[j * 12 + k];
+						frequencyFile << "\t" << arrFrequencies_l[j * 12 + k];
 					}
 					frequencyFile << endl;
 				}

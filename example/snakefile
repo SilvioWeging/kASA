@@ -1,0 +1,194 @@
+### TODO: Test for equality of output files, all modes, protein input, protein database, different alphabet, 
+
+rule all:
+	input:
+		json="work/results/example.json",
+		json2="work/results/example_s.json",
+		json3="work/results/example_u.json",
+		freq="work/index/exampleIndex_u_f.txt",
+		trie="work/index/exampleIndex_trie.txt",
+		red="work/results/redundancy.txt"
+
+rule generateCF:
+	input:
+		db="work/example.fasta",
+		tax="taxonomy/",
+		att="taxonomy/acc2tax/acc2Tax.txt"
+	output:
+		content="work/index/exampleIndex_content.txt"
+	params:
+		lvl="species",
+		ram="5",
+		callIdx="1"
+	threads: 1
+	shell:
+		"{config[path]}kASA generateCF -c {output.content} -i {input.db} -f {input.att} -y {input.tax} -u {params.lvl} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule build:
+	input:
+		content=rules.generateCF.output.content,
+		db="work/example.fasta"
+	output:
+		idx="work/index/exampleIndex"
+	params:
+		ram="5",
+		callIdx="2"
+	threads: 2
+	shell:
+		"{config[path]}kASA build -c {input.content} -d {output.idx} -i {input.db} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule cloneContent:
+	input:
+		content=rules.generateCF.output.content
+	output:
+		contentOut="work/index/content_org.txt"
+	shell:
+		"cp {input.content} {output.contentOut}"
+
+rule identify:
+	input:
+		idx=rules.build.output.idx,
+		content=rules.cloneContent.output.contentOut,
+		fq="work/example.fastq.gz"
+	output:
+		prof="work/results/example.csv",
+		json="work/results/example.json"
+	params:
+		ram="5",
+		callIdx="3"
+	threads: 2
+	shell:
+		"{config[path]}kASA identify -c {input.content} -d {input.idx} -i {input.fq} -p {output.prof} -q {output.json} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule shrink:
+	input:
+		idx=rules.build.output.idx,
+		content=rules.cloneContent.output.contentOut
+	output:
+		outIdx="work/index/exampleIndex_s"
+	params:
+		mode="2",
+		ram="5",
+		callIdx="4"
+	threads: 1
+	shell:
+		"{config[path]}kASA shrink -c {input.content} -d {input.idx} -o {output.outIdx} -s {params.mode} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule identify_s:
+	input:
+		content=rules.cloneContent.output.contentOut,
+		idx=rules.shrink.output.outIdx,
+		fq="work/example.fastq.gz"
+	output:
+		prof="work/results/example_s.csv",
+		json2="work/results/example_s.json"
+	params:
+		ram="5",
+		callIdx="5"
+	threads: 2
+	shell:
+		"{config[path]}kASA identify -c {input.content} -d {input.idx} -i {input.fq} -p {output.prof} -q {output.json2} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+
+
+rule update:
+	input:
+		dummyLink=rules.cloneContent.output.contentOut,
+		db="work/16S_NCBI.fasta",
+		tax="taxonomy/",
+		att="taxonomy/acc2tax/acc2Tax.txt",
+		content=rules.generateCF.output.content,
+		idx=rules.build.output.idx
+	output:
+		index="work/index/exampleIndex_u"
+	params:
+		lvl="species",
+		ram="5",
+		callIdx="6"
+	threads: 2
+	shell:
+		"{config[path]}kASA update -c {input.content} -d {input.idx} -i {input.db} -o {output.index} -f {input.att} -y {input.tax} -u {params.lvl} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule identify_u:
+	input:
+		content="work/index/exampleIndex_content.txt",
+		idx=rules.update.output.index,
+		fq="work/exampleInput.fasta"
+	output:
+		prof="work/results/example_u.csv",
+		json3="work/results/example_u.json"
+	params:
+		ram="5",
+		callIdx="7"
+	threads: 2
+	shell:
+		"{config[path]}kASA identify -c {input.content} -d {input.idx} -i {input.fq} -p {output.prof} -q {output.json3} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule cloneFreq:
+	input:
+		freqI=rules.update.output.index+"_f.txt"
+	output:
+		freqO="work/index/exampleIndex_u_f_duplicate.txt"
+	shell:
+		"cp {input.freqI} {output.freqO}"
+
+
+rule reconstructFrequency:
+	input:
+		linkDummy="work/index/exampleIndex_u_f_duplicate.txt",
+		linkDummy2="work/results/example_u.json",
+		index="work/index/exampleIndex_u",
+		content="work/index/exampleIndex_content.txt"
+	output:
+		freq="work/index/exampleIndex_u_f.txt"
+	params:
+		ram="5",
+		callIdx="8"
+	threads: 2
+	shell:
+		"{config[path]}kASA getFrequency -c {input.content} -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule cloneTrie:
+	input:
+		trieI=rules.build.output.idx+"_trie"
+	output:
+		trieO="work/index/exampleIndex_trie_duplicate"
+	shell:
+		"cp {input.trieI} {output.trieO}"
+
+rule cloneTrie2:
+	input:
+		trieI=rules.build.output.idx+"_trie.txt"
+	output:
+		trieO="work/index/exampleIndex_trie_duplicate.txt"
+	shell:
+		"cp {input.trieI} {output.trieO}"
+
+rule reconstructTrie:
+	input:
+		linkDummy1="work/index/exampleIndex_trie_duplicate",
+		linkDummy2="work/index/exampleIndex_trie_duplicate.txt",
+		linkDummy3="work/results/example.json",
+		index=rules.build.output.idx,
+		content=rules.cloneContent.output.contentOut
+	output:
+		trie="work/index/exampleIndex_trie.txt"
+	params:
+		ram="5",
+		callIdx="9"
+	threads: 2
+	shell:
+		"{config[path]}kASA trie -c {input.content} -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+
+rule checkRedundancy:
+	input:
+		index=rules.update.output.index,
+		content=rules.generateCF.output.content
+	output:
+		red="work/results/redundancy.txt"
+	params:
+		ram="5",
+		callIdx="10"
+	threads: 2
+	shell:
+		"{config[path]}kASA redundancy -c {input.content} -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx} > {output.red}"

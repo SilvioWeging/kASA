@@ -15,6 +15,167 @@
 
 //#include "Unittests.h"
 
+namespace kASA_help {
+	inline string getHelp(const string& m) {
+		string out = "";
+		if (m == "generateCF") {
+			out = "This mode creates a content file out of genomic data with the help of the NCBI taxonomy.\n\
+Necessary parameters:\n\
+-i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-u (--level) <level>: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose \"lowest\" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' \"sequence\" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.\n\
+-f (--acc2tax) <folder or file>: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.\n\
+-y (--taxonomy) <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.\n\
+-c (--outgoing) <file>: Here, this parameter specifies where the content file should be written to.\n\
+\n\
+Optional parameters:\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "build") {
+			out = "This mode creates a content file (if it doesn't already exist) and an index out of genomic data with the help of the NCBI taxonomy.\n\
+Necessary parameters:\n\
+-i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-d (--database) <file>: Actually path and name of the index but let's call it database since `-i` was already taken...\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+If -c is not specified:\n\
+-u (--level) <level>: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose \"lowest\" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' \"sequence\" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.\n\
+-f (--acc2tax) <folder or file>: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.\n\
+-y (--taxonomy) <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.\n\
+\n\
+Optional parameters:\n\
+-a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
+-z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "identify") {
+			out = "This mode analyzes genomic data for similarities with an index which was built with build.\n\
+Necessary parameters:\n\
+-i (--input) <file/folder>: Fastq or fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-d (--database) <file>: Actually path and name of the index but let's call it database since `-i` was already taken...\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+-p (--profile) <file>: Path and name of the profile that is put out.\n\
+-q (--rtt) <file>: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!\n\
+\n\
+Optional parameters:\n\
+-r (--ram): Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.\n\
+-k <upper> <lower>: Bounds for `k`, all `k`'s in between will be evaluated as well.If your intuition is more like `<lower > <upper>` then that's okay too. Default: 12 7.\n\
+--kH <upper>: Set only the upper bound.\n\
+--kL <lower>: Set only the lower bound.\n\
+-b (--beasts) <number>: Number of hit taxa shown for each read. Default: 3.\n\
+-h (--human): Changes the output of the profile so that only necessary information is provided, see below.\n\
+-e (--unique): Ignores duplicates of k-mers in every read.This helps removing bias from repeats but messes with error scores, so consider it BETA.\n\
+-a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
+-z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
+\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "update") {
+			out = "This mode updates an existing index with new genomic data.\n\
+Necessary parameters:\n\
+-i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-d (--database) <file>: Current index. No default.\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+-u (--level) <level>: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose \"lowest\" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' \"sequence\" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.\n\
+-f (--acc2tax) <folder or file>: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.\n\
+-y (--taxonomy) <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.\n\
+-o (--outgoing) <file>: Either the existing index or a new file name, depending on whether you want to keep the old file or not. Default: overwrite.\n\
+\n\
+Optional parameters:\n\
+-a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
+-z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
+\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "shrink") {
+		out = "This mode reduces the size of an existing index.\n\
+Necessary parameters:\n\
+-d (--database) <file>: Index file. No default.\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+-s (--strategy) <1, 2 or 3>: Shrink the index in the first, second or third way. Default is 2.\n\
+-g (--percentage) <integer>: Deletes the given percentage of k-mers from every taxon.This parameter may also be applied when building the index (for example: -g 50 skips every second k-mer).\n\
+-o (--outgoing) <file>: Output path and name of your shrunken index file. Your other index cannot be overwritten with this. Default: takes your index file and appends a \"_s\".\n\
+\n\
+Optional parameters:\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "delete") {
+		out = "This mode deletes deprecated entries from an existing index via the delnodes.dmp file from the NCBI taxonomy.\n\
+Necessary parameters:\n\
+-d (--database) <file>: Index file. No default.\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+-l (--deleted) <file>: delete taxa via the NCBI taxonomy file.\n\
+-o (--outgoing) <file>: Either the existing index or a new file name, depending on whether you want to keep the old file or not. Default: overwrite.\n\
+Optional parameters:\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "getFrequency") {
+		out = "This mode generates the frequencies file (containing the number of k-mers for every taxon) for an existing index.\n\
+Necessary parameters:\n\
+-d (--database) <file>: Index file. No default.\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+\n\
+Optional parameters:\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
+-m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+-v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+";
+		}
+		else if (m == "redundancy") {
+		out = "This mode calculates for an existing index, how many taxa belong to each k-mer.\n\
+Necessary parameters:\n\
+-d (--database) <file>: Index file. No default.\n\
+-c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
+\n\
+Optional parameters:\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+";
+		}
+		else if (m == "trie") {
+		out = "This mode creates the prefix trie file needed for \"identify\".\n\
+Necessary parameters:\n\
+-d (--database) <file>: Index file. No default.\n\
+\n\
+Optional parameters:\n\
+-t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
+-x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
+";
+		}
+		return out;
+	}
+}
+
 struct SCompareForSortIDsMAP {
 	bool operator() (const uint64_t& a, const uint64_t& b) const {
 		return a < b;
@@ -29,7 +190,7 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false, bUnfunny = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
@@ -58,11 +219,15 @@ int main(int argc, char* argv[]) {
 		}
 		cMode = vParameters[1];
 
-		// still available parameters: jw
+		// still available parameters: w
 
 		for (int32_t i = 2; i < argc; ++i) {
 			string sParameter = vParameters[i];
-			if (sParameter == "-o" || sParameter == "--outgoing") {
+			if (sParameter == "--help") {
+				cout << "OUT: HELP CALLED FOR MODE " << cMode << "\n\n" << kASA_help::getHelp(cMode) << endl;
+				return 0;
+			}
+			else if (sParameter == "-o" || sParameter == "--outgoing") {
 				sDBPathOut = Utilities::removeSpaceAndEndline(vParameters[++i]);
 			}
 			else if (sParameter == "-t" || sParameter == "--temp") {
@@ -85,6 +250,12 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "-z" || sParameter == "--translated") {
 				bTranslated = true;
+			}
+			else if (sParameter == "-j" || sParameter == "--sloppy") {
+				bUnfunny = true;
+#ifdef _DEBUG
+				//kASA::kASA::setAAToAATable(Utilities::removeSpaceAndEndline(vParameters[++i]));
+#endif
 			}
 			else if (sParameter == "-d" || sParameter == "--database") {
 				indexFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
@@ -217,7 +388,7 @@ int main(int argc, char* argv[]) {
 
 
 		if (cMode == "build") {
-			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
+			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode, bUnfunny);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
@@ -245,14 +416,14 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		else if (cMode == "generateCF") {
-			if (sDBPathOut == "") {
+			if (contentFileIn == "") {
 				throw runtime_error("Where should I put the content file?");
 			}
 			if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
 				throw runtime_error("No acc2Tax file or taxonomy path given...");
 			}
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);
-			kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sDBPathOut, sTaxLevel);
+			kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel);
 		}
 		else if (cMode == "update") {
 			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
@@ -283,7 +454,7 @@ int main(int argc, char* argv[]) {
 
 			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode);
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), static_cast<uint64_t>(iMemorySizeAvail*0.9 - 1024ull * 1024ull * 1024ull));
+			kASAObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut));
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
@@ -315,7 +486,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		else if (cMode == "identify") {
-			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode);
+			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bUnfunny);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
@@ -555,6 +726,87 @@ int main(int argc, char* argv[]) {
 			outSizeFile << tempPV.size() << endl << iSize;
 			tempPV.export_files("_");
 			tempPV2.export_files("_");
+		}
+		else if (cMode == "fuckit") {
+		
+
+		uint32_t iIdxCounter = 1;
+		unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
+		ifstream content(contentFileIn);
+		string sDummy = "";
+		while (getline(content, sDummy)) {
+			if (sDummy != "") {
+				const auto& line = Utilities::split(sDummy, '\t');
+				if (line.size() == 4) {
+					mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+					++iIdxCounter;
+				}
+			}
+		}
+
+		ifstream sizeFile(indexFile + "_info.txt"); // "_info.txt"
+		uint64_t iSize = 0;
+		sizeFile >> iSize;
+
+		stxxlFile temp(indexFile, stxxl::file::RDONLY);
+		const contentVecType_32p tempV(&temp, iSize);
+
+		Utilities::createFile(sTempPath+"_tmp");
+
+		stxxlFile tempOut(sTempPath + "_tmp", stxxl::file::RDWR);
+		contentVecType_32p tempPV(&tempOut, iSize);
+		
+
+		auto t1It = tempV.cbegin();
+		auto tOIt = tempPV.begin();
+		while (t1It != tempV.cend()) {
+			tOIt->second = t1It->second;
+			uint64_t tVal = 0;
+			for (int32_t i=55, j = 0; i>=5; i-=10, j+=5) {
+				tVal |= (t1It->first & (31ULL << i)) << j;
+			}
+			tOIt->first = tVal;
+
+			++t1It;
+			++tOIt;
+		}
+		
+		struct SCompareStructForSTXXLSort {
+			bool operator() (const packedBigPair& a, const packedBigPair& b) const {
+				return a < b;
+			}
+
+			packedBigPair min_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::min(); t.second = numeric_limits<uint32_t>::min(); return t; }
+			packedBigPair max_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::max(); t.second = numeric_limits<uint32_t>::max(); return t; }
+		};
+
+		stxxl::sort(tempPV.begin(), tempPV.end(), SCompareStructForSTXXLSort(), iMemorySizeAvail);
+
+		Utilities::createFile(sDBPathOut);
+		stxxlFile realOut(sDBPathOut, stxxl::file::RDWR);
+		taxaOnly realIdx(&realOut, iSize);
+
+		auto realIt = realIdx.begin();
+		tOIt = tempPV.begin();
+		while (tOIt != tempPV.end()) {
+			*realIt = mIDsAsIdx.find(tOIt->second)->second;
+			++realIt;
+			++tOIt;
+		}
+
+		ofstream outSizeFile(sDBPathOut + "_info.txt");
+		outSizeFile << tempPV.size();
+		outSizeFile.close();
+		ifstream oldFreqFile(indexFile + "_f.txt", std::ios::binary);
+		ofstream newFreqFile(sDBPathOut + "_f.txt", std::ios::binary);
+
+		newFreqFile << oldFreqFile.rdbuf();
+
+		Trie T(static_cast<int8_t>(12), static_cast<int8_t>(iLowerK), iTrieDepth);
+		T.SaveToStxxlVec(&tempPV, sDBPathOut);
+
+
+		realIdx.export_files("_");
 		}
 	} catch (const exception& e) {
 		cerr << "ERROR: " << e.what() << endl;

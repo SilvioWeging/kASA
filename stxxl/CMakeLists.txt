@@ -227,7 +227,7 @@ if(CXX_HAS_TEMPLATE_DEPTH)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=1024")
 endif()
 
-#CHANGES MADE BY SILVIO WEGING FOR KASA: C++14 instead of C++11
+#CHANGES MADE BY SILVIO WEGING FOR KASA: C++14 instead of C++11, enable clang without apple
 
 # enable C++17
 if(MSVC)
@@ -236,28 +236,31 @@ elseif(CYGWIN)
   # C++11 is very restrictive on Cygwin
 elseif(NOT NO_CXX11)
   # try -std= flags to enable C++17
-  check_cxx_compiler_flag(-std=c++17 CXX_HAS_STD_CXX14)
+  check_cxx_compiler_flag(-std=c++17 CXX_HAS_STD_CXX17)
   if(CXX_HAS_STD_CXX17)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
   else()
-    check_cxx_compiler_flag(-std=c++0x CXX_HAS_STD_CXX0X)
-    if(CXX_HAS_STD_CXX0X)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+    check_cxx_compiler_flag(-std=c++11 CXX_HAS_STD_CXX11)
+    if(CXX_HAS_STD_CXX11)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+    else()
+        message(SEND_ERROR "No supported language standard detected. kASA needs at least C++11!")
     endif()
   endif()
-  # on MacOSX with clang we need to use libc++ for C++11 headers
-  if(APPLE)
+endif()
+
+# on MacOSX with clang we need to use libc++ for C++11 headers
+#if(APPLE)
     if (CMAKE_CXX_COMPILER MATCHES ".*clang[+][+]"
         OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
       check_cxx_compiler_flag(-stdlib=libc++ CXX_HAS_STDLIB_LIBCXX)
       if(CXX_HAS_STDLIB_LIBCXX)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
       else()
-        message(SEND_ERROR "Compilation on MacOSX with clang requires libc++.")
+        message(SEND_ERROR "Compilation with clang requires libc++.")
       endif()
     endif()
-  endif(APPLE)
-endif()
+#endif(APPLE)
 
 # check C++ compiler for C++11 features
 

@@ -25,6 +25,7 @@
     <ClInclude Include="..\..\source\MetaHeader.h" />
     <ClInclude Include="..\..\source\Read.hpp" />
     <ClInclude Include="..\..\source\Shrink.hpp" />
+    <ClInclude Include="..\..\source\ThreadPool.h" />
     <ClInclude Include="..\..\source\Trie.hpp" />
     <ClInclude Include="..\..\source\Update.hpp" />
     <ClInclude Include="..\..\source\Utilities.hpp" />
@@ -128,6 +129,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
       <EnableModules>true</EnableModules>
       <UndefinePreprocessorDefinitions>build -d ../../../test/work/index/exampleIndex -i ../../../test/work/example.fasta -m 8 -n 4 -f ../../../test/taxonomy/acc2Tax/ -y ../../../test/taxonomy/ -u species -v</UndefinePreprocessorDefinitions>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

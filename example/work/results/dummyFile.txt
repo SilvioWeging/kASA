@@ -1,0 +1,3 @@
+Unfortunately I can't commit empty folders. So this file exists.
+This saves you time as you don't have to create these folders yourself.
+'Cause I'm nice like that.

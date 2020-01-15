@@ -43,9 +43,9 @@ You can use the system specific pre-compiled binaries in the `/bin` folder but I
 
 Note, that kASA is a console application so if you want to use these binaries, you must either use a terminal (Linux, macOS, Linux Subsystem for Windows) or PowerShell (Windows). A GUI may be implemented, depending on the amount of requests in the [poll](https://github.com/SilvioWeging/kASA/issues/1). If you're using the PowerShell, don't forget to add ".exe" at the end of each call to kASA: `.\<path to kASA>\kASA.exe`.
 
-If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+14 or if possible C\+\+17 (for `filesystem` and `execution`). This relates to Visual Studio 2017 and at least GCC version 6.1. On Linux and macOS, cmake is needed as well.
+If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+11 or if possible C\+\+17 (for `filesystem` and `execution`). We successfully tested it with Visual Studio 2017, GCC version 6.1, LLVM/Clang 9.0 and Apple Clang 9.0. [Here](https://en.cppreference.com/w/cpp/compiler_support) is a table showing if your version is sufficient. On Linux and macOS, cmake is needed as well.
 
-kASA depends on the [STXXL](https://stxxl.org/) and [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) but contains all necessary files so you don't need to download those.
+kASA depends on the [STXXL](https://stxxl.org/), [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) and [ThreadPool](https://github.com/log4cplus/Threadpool) but contains all necessary files so you don't need to download those.
 
 Last but not least: kASA provides an error (starts with "ERROR: ") and an output (starts with "OUT: ") stream. You can seperate them with 2> or 1>.
 
@@ -71,13 +71,16 @@ Now for kASA itself, type the following commands:
 
 ### macOS
 
-Since the native C\+\+ compiler on macOS (Clang) is not compatible with kASA(yet?), you'll need GCC (and cmake). Here are a few links, where you can get it:
+If you have Clang with LLVM installed (check with `clang --version`, is usually included in Xcode) do the same as above (Linux).
+
+Should you prefer the GCC toolchain or don't have cmake installed, the following steps might be helpful:
+
 * [Command Line Tools](http://osxdaily.com/2014/02/12/install-command-line-tools-mac-os-x/)
 * [Homebrew](https://brew.sh/)
 * [GCC](https://discussions.apple.com/thread/8336714)
 * cmake: open a terminal and type `brew install cmake`
 
-Afterwards (thanks for going through this trouble), please type this into your terminal:
+Afterwards, please type this into your terminal:
 ```
 	export CC=/usr/local/bin/gcc
 	export CXX=/usr/local/bin/g++
@@ -93,7 +96,7 @@ Do [this](https://docs.microsoft.com/en-us/cpp/windows/how-to-use-the-windows-10
 
 Switch to Release mode with x64.
 
-Compile.
+Build the project.
 
 Change Parameters in Property Page &rarr; Debugging &rarr; Command Arguments.
 
@@ -124,16 +127,16 @@ Some parameters which are used by most modes:
 ##### Mandatory
 * `-d (--database) <file>`: Actually path and name of the index but let's call it database since `-i` was already taken...
 * `-c (--content) <file>`: Points to the content file. Can be defaulted when calling `build`, see [here](#generate-a-content-file).
-* `-o (--outgoing) <file>`: Only important for `shrink`, `update` and `generateCF`. This file can be either the existing index or a new file name, depending on whether you want to keep the old file or not.
+* `-o (--outgoing) <file>`: Only important for `shrink` and `update`. This file can be either the existing index or a new file name, depending on whether you want to keep the old file or not.
 
 ##### Optional
-* `-t (--temp) <path>`: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS, [here](https://stxxl.org/tags/1.4.1/install_config.html) are some details.
+* `<mode> --help`: Shows all parameters for a given mode.
+* `-t (--temp) <path>`: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS, [here](https://stxxl.org/tags/1.4.1/install_config.html) are some details. Typically, the path of the executable is used.
 * `-n (--threads) <number>`: Number of parallel threads. Recommendation for different settings (due to I/O bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C\+\+17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.
-* `-m (--memory) <number>`: Amount of Gigabytes available to kASA. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write "inf" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.
+* `-m (--memory) <number>`: Amount of RAM in Gigabytes available to kASA. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write "inf" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.
 * `-x (--callidx) <number>`: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.
 * `-v (--verbose)`: Prints out a little more information e.g. how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.
-* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
-* `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Default: Hardcoded translation table.
 
 ### Generate a content file
 ##### Context
@@ -147,7 +150,7 @@ Accession numbers in the fasta file(s) should be placed either right after the "
 
 If the content file contains entries with "EWAN_...", this stands for "Entries Without Accession Numbers". "unnamed" means they have a taxid but no name could be found (maybe due to deprecation).
 
-This mode can be coupled with [Build](#build) by calling `build` and providing the same parameters described here but leaving out `-o` and `-c`. This creates a content file next to the index named `<index name>_content.txt` which then is considered the default. This eliminates the necessity of providing the `-c` parameter in almost every call.
+This mode can be coupled with [Build](#build) by calling `build` and providing the same parameters described here but leaving out `-c`. This creates a content file next to the index named `<index name>_content.txt` which then is considered the default. This eliminates the necessity of providing the `-c` parameter in almost every call.
 
 Note, that this step is optional if you provide your own content file or another index with the same content file shall be created (this means creating subsets of a full index is possible with the same content file). The accepted format per line is as follows:
 ```
@@ -161,14 +164,15 @@ Hyphomicrobium denitrificans	53399	582899;670307	NC_014313.1;NC_021172.1
 The taxids are required to be integers and no header line is necessary. This file can be given to `build` via the `-c` parameter.
 
 ##### Necessary parameters
-* `-u (--level) <level>`: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' "sequence" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.
+* `-i (--input) <file/folder>`: Fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
+* `-u (--level) <level>`: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' "sequence" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number. Default: species.
 * `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.
 * `-y (--taxonomy)` <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.
-* `-o (--outgoing) <file>`: Here, this parameter specifies where the content file should be written to.
+* `-c (--content) <file>`: Here, this parameter specifies where the content file should be written to.
 ##### Example call 
 ```
-<path to kASA>/kASA generateCF -i <fastaFile(s)> -o <content file> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> (-v )
-e.g.: [weging@example ~] kASA/kASA generateCF -i work/example.fasta -o work/content.txt -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+<path to kASA>/kASA generateCF -i <fastaFile(s)> -c <content file> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> (-v )
+e.g.: [weging@example ~] kASA/kASA generateCF -i work/example.fasta -c work/content.txt -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 ```
 
 ### Build
@@ -179,6 +183,9 @@ This step can take much space and time, depending on the complexity and size of 
 
 The content file from the previous mode is given to kASA via the `-c` parameter or can be created together with the index.
 
+##### Necessary parameters
+* `-i (--input) <file/folder>`: Fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
+* `-d (--database) <file>`: Actually path and name of the index but let's call it database since `-i` was already taken...
 ##### Optional paramameters
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
@@ -217,12 +224,14 @@ If a read cannot be identified, the array "Matched taxa" in json format is empty
 
 Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster hash table instead of a prefix trie is used.
 
-The last line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
+The first line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
 
 ##### Necessary paramameters
+* `-i (--input) <file/folder>`: Fastq or fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
 * `-q (--rtt) <file>`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
 ##### Optional paramameters
+* `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
@@ -300,6 +309,7 @@ It's not necessary to change the content file in this case although you should a
 If you've created the content file together with the index, this default content file will be used.
 
 ##### Necessary paramameters
+* `-i (--input) <file/folder>`: Fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
 * `-o (--outgoing) <file>`: Either the existing index or a new file name, depending on whether you want to keep the old file or not. Default: overwrite.
 * `-l (--deleted) <file>`: delete taxa via the NCBI taxonomy file.
 ##### Optional paramameters
@@ -337,32 +347,33 @@ e.g.: [weging@example ~] kASA/kASA build -c work/content.txt -d work/exampleInde
 ``` 
 
 ### Miscellaneous
-1. If you've lost your frequency file "`<index name>_f.txt`", you can create one without building the index anew:
+1. If you've lost your frequency file "`<index name>_f.txt`" and have not shrunken the index via mode 2, you can create one without building the index anew:
 ```
 <path to kASA>/kASA getFrequency -c <content file> -d <path and name of the index file> -t <temporary directory> -m <amount of RAM> -n <number of threads>
 ``` 
-2. If you've lost your trie file "`<index name>_trie`", your call's gonna look like:
+
+2. If you've lost your trie file "`<index name>_trie`" and have not shrunken the index via mode 2, your call's gonna look like:
 ```
 <path to kASA>/kASA trie -d <path and name of the index file> -t <temporary directory>
 ``` 
-If you've lost the `_info.txt` file associated with your index: Get the size in bytes, divide by 12 (not shrunken) or 6 (shrunken via method 2) and create a `<index name>_info.txt` file with the result as first line in it.
+
+3. If you've lost the `_info.txt` file associated with your index: Get the size in bytes, divide by 12 (not shrunken) or 6 (shrunken via method 2) and create a `<index name>_info.txt` file with the result as first line in it.
 For the shrunken index, add a 3 as second line in the file (which indicates, that it has been shrunken).
 
-3. You can measure the redundancy of your (non-halved) index via:
+4. You can measure the redundancy of your (non-halved) index via:
 ```
 <path to kASA>/kASA redundancy -c <content file> -d <path and name of the index file> -t <temporary directory>
 ```
-This gives you a hint whether you should look at the unique relative frequencies and/or the non-unique relative frequencies. It's measured by counting how many tax IDs 99% of your k-mers have. If for example almost every k-mer has only one taxon, that's pretty unique.
+This gives you a hint whether you should look at the unique relative frequencies and/or the non-unique relative frequencies. It's measured by counting how many tax IDs 99% of your k-mers have. If for example almost every k-mer has only one associated taxon, that's pretty unique.
 
-4. The folder `example/` contains a minimum working example for most of the calls presented in this Readme with a dummy taxonomy, .fasta and .fastq.gz file.
+5. The folder `example/` contains a minimum working example for most of the calls presented in this Readme with a dummy taxonomy, .fasta and .fastq.gz file. If you have [Snakemake](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html) installed, you can use the Snakemake file inside the folder to run all possible modes. Go inside the folder with `cd` and type `snakemake --config path=../build/` to point to the path where executable of kASA lies. If anything goes awry, please tell me.
 
 ## Useful scripts
-- generateCF.py: The python 3 version of the `generateCF` mode described [here](#generate-a-content-file).
-- jsonToFrequencies.py: Creates a profile based on the most prominent taxa per read. Usage: `-i <kASA output> -o <result> (-t threshold for rel. score)`. Consumes a lot of memory because the json file is loaded into memory.
+- jsonToFrequencies.py: Creates a profile based on the most prominent taxa per read. Usage: `-i <kASA output> -o <result> (-t <threshold for rel. score>)`. Consumes a lot of memory because the json file is loaded into memory.
 - hrToFrequencies.py: Same as above but for human readable output.
-- csvToCAMI.py: Converts a profiling output into the CAMI profile format. Needs the NCBI 'nodes.dmp' and 'names.dmp' file for upwards traversing of the taxonomic tree. 
-- camiToKrona.py: Converts the CAMI profile to a file format readable by [Krona](https://github.com/marbl/Krona/wiki)
-- jsonToCAMIBin.py: Converts the json output file into the CAMI binning format.
+- csvToCAMI.py: Converts a profiling output into the CAMI profile format. Needs the NCBI 'nodes.dmp' and 'names.dmp' file for upwards traversing of the taxonomic tree. Usage: `-i <kASA output> -o <result> -n <nodes.dmp> -m <names.dmp> -k <k value> -u <u: unique, o: overall, n: non-unique> (-t <threshold>)`.
+- camiToKrona.py: Converts the CAMI profile to a file format readable by [Krona](https://github.com/marbl/Krona/wiki). Usage: `-i <cami file> -o <krona file>`.
+- jsonToCAMIBin.py: Converts the json output file into the CAMI binning format. Usage: `-i <json file> -o <cami file>`.
 
 
 ## Todos and upcoming
@@ -375,7 +386,8 @@ This gives you a hint whether you should look at the unique relative frequencies
 - ~~Allow gzipped files as input for `build`~~
 - ~~RAM mode~~
 - ~~Omission of the prefix trie if enough RAM (ca 12GB) is available~~
-- Support of Clang (macOS)
+- ~~Support of Clang (macOS)~~
+- ~~Snakemake pipeline for quality control~~
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - small collection of adapter sequences

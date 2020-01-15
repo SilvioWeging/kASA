@@ -48,7 +48,7 @@ namespace kASA {
 		unique_ptr<int32_t[]> _aOfK;
 		const string _sMaxKBlank;
 
-		static int8_t _sAminoAcids_bs[];
+		static int8_t _sAminoAcids_bs[], _sAminoAcids_aas[];
 		const static int8_t _sAminoAcids_cs[], _sAminoAcids_un[];
 		const int8_t _aRevComp[6] = { 'T','G','A','C','X','Z' };
 
@@ -78,6 +78,45 @@ namespace kASA {
 		}
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// translates with and sets up the lookup table for the sloppy mode
+		inline uint64_t aminoAcidsToAminoAcid(const uint64_t& kmer) {
+			uint64_t iOut = 0;
+			for (int i = 0, j = 0; i < 12; i += 2, ++j) {
+				const int32_t& iShift = 5 * (10 - i);
+				// the &31 is necessary because the letters in the loopup table are in the column of printable letters of the ascii table
+				// 1023 gets two letters which are joined via the lookup table
+				// the last shift ensures, that the 6 letter word is on the left side of the integer
+				iOut |= static_cast<uint64_t>(_sAminoAcids_aas[(kmer & (1023ULL << iShift)) >> iShift] & 31) << (55 - j * 5);
+			}
+			return iOut;
+		}
+
+	public:
+		static inline void setAAToAATable(const string& file) {
+			string sDummy = "";
+			ifstream mappings(file); // C:/Users/Silvio/Desktop/out.csv
+			while (getline(mappings, sDummy)) {
+				if (sDummy != "") {
+					auto spl = Utilities::split(Utilities::removeSpaceAndEndline(sDummy), ',');
+					const uint32_t& index = ((static_cast<uint32_t>(spl[0][0]) & 31) << 5) | (static_cast<uint32_t>(spl[0][1]) & 31);
+					_sAminoAcids_aas[index] = static_cast<uint32_t>(spl[1][0]) & 31;
+				}
+			}
+#ifdef _DEBUG
+			ofstream dummyOut("I:/DA/lookupJ.txt");
+			for (int i = 0; i < 900; ++i) {
+				if (static_cast<char>(_sAminoAcids_aas[i] + 64) == '\\') {
+					dummyOut << "'\\', ";
+				}
+				else {
+					dummyOut << "'" << static_cast<char>(_sAminoAcids_aas[i] + 64) << "', ";
+				}
+			}
+#endif
+		}
+	protected:
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Creates the reverse complement of a DNA string
 		inline string reverseComplement(const string& sDNA) {
 			const int32_t& iDNALength = int32_t(sDNA.length());
@@ -91,10 +130,10 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Creates default config for stxxl, only called once
 		inline void createConfig(const string& tempFileName, const int32_t& iNumCall, const string& mode = "", const bool& bDelete = true) {
-#if _WIN32 || _WIN64
+#if (_WIN32 || _WIN64) && !defined(__llvm__)
 			string IOCall = (mode != "") ? mode : "wincall autogrow";
 #endif
-#if __GNUC__
+#if __GNUC__ || defined(__llvm__)
 			string IOCall = (mode != "") ? mode : "syscall unlink autogrow"; 
 #endif
 			if (bDelete) {
@@ -149,7 +188,7 @@ namespace kASA {
 			_iMaxMemUsePerThread = (3072 / iNumOfProcs) * 1024 * 1024;
 #endif
 
-			omp_set_num_threads(_iNumOfThreads);
+			//omp_set_num_threads(_iNumOfThreads);
 
 			_iMaxK = (iHigherK <= _iHighestK && iHigherK >= iLowerK) ? iHigherK : _iHighestK;
 			_iMinK = (iLowerK < _iLowestK) ? _iLowestK : _iMinK;
@@ -290,16 +329,29 @@ namespace kASA {
 				aFrequencyArray[j] = 0;
 			}
 
-			// count up in parallel
-#pragma omp parallel for
-			for (int64_t i = 0; i < int64_t(iSizeOfVec); ++i) {
-				const auto& entry = (libvec[omp_get_thread_num()])->at(i);
-				const auto& idx = (omp_get_thread_num() * iIdxCounter + Utilities::checkIfInMap(mContent, entry.second)->second) * uint64_t(iMaxNumK);
-				for (int32_t k = 0; k < iMaxNumK; ++k) {
-					const int32_t& shift = 5 * k;
-					if (((entry.first >> shift) & 31) != 30) {
-						++(aFrequencyArray[idx + k]);
+			// count up
+			vector<thread> workerThreads;
+			uint64_t iPartialSize = iSizeOfVec / _iNumOfThreads;
+			uint64_t iPartialRemainder = iSizeOfVec % _iNumOfThreads;
+			auto func = [&](const int32_t iThreadID) {
+				for (uint64_t i = iThreadID * iPartialSize; i < (iThreadID + 1) * iPartialSize + (((iThreadID + 1) * iPartialSize + iPartialRemainder == iSizeOfVec) ? iPartialRemainder : 0); ++i) {
+					const auto& entry = (libvec[iThreadID])->at(i);
+					const auto& idx = (iThreadID * iIdxCounter + Utilities::checkIfInMap(mContent, entry.second)->second) * uint64_t(iMaxNumK);
+					for (int32_t k = 0; k < iMaxNumK; ++k) {
+						const int32_t& shift = 5 * k;
+						if (((entry.first >> shift) & 31) != 30) {
+							++(aFrequencyArray[idx + k]);
+						}
 					}
+				}
+			};
+
+			for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+				workerThreads.push_back(thread(func, iThreadID));
+			}
+			for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+				if (workerThreads[iThreadID].joinable()) {
+					workerThreads[iThreadID].join();
 				}
 			}
 
@@ -804,7 +856,7 @@ namespace kASA {
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Lookup table for Amino Acids, used in dnaToAminoAcid, can be modified via file
+	// Lookup table for Amino Acids, used in dnaToAminoAcid, can be modified via file
 	int8_t kASA::_sAminoAcids_bs[] = {
 		'K', 'N', 'N', 'K', '^', 'U', ' ', ' ',  // AAA	AAC	AAT	AAG	AAX	AAZ
 		'T', 'T', 'T', 'T', '^', 'U', ' ', ' ',	 // ACA ACC ACT ACG	ACX ACZ
@@ -852,6 +904,38 @@ namespace kASA {
 		'U', 'U', 'U', 'U', 'U', 'U', ' ', ' ',
 		'U', 'U', 'U', 'U', 'U', 'U', ' ', ' ',
 		'U', 'U', 'U', 'U', 'U', 'U' };
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Lookup table for Amino Acids to AA conversion, used in aminoAcidsToAminoAcid, can be modified via file
+	int8_t kASA::_sAminoAcids_aas[900] = {
+		'@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', '@', 
+		'G', '\\', '[', 'P', 'I', 'L', '[', ']', 'B', 'D', 'M', 'X', 'T', 'X', 'Z', 'Z', 'W', 'U', 'C', 'Y', ']', 'U', 'D', 'W', 'X', 'J', 'S', 'S', 'W', '^', '@', '@', 'K', 
+		'O', 'C', 'C', 'B', 'G', 'G', 'O', 'B', 'V', 'L', 'I', 'K', 'I', 'B', 'N', 'W', 'F', 'X', 'A', 'Q', 'D', '\\', 'S', 'Q', ']', 'A', 'C', 'U', '^', '@', '@', 'B', 'L', 
+		'S', 'Z', '[', 'L', 'G', 'I', 'U', '[', 'H', 'D', 'W', '\\', ']', 'U', 'D', 'P', 'A', 'J', ']', 'H', 'S', 'G', 'V', 'V', 'C', 'R', 'Z', '^', '@', '@', 'V', 'I', '\\', 
+		'Z', 'M', 'Q', 'Y', 'I', 'S', 'G', 'I', 'J', '[', 'F', 'Y', '[', 'J', 'J', 'C', 'Y', 'U', 'J', 'A', 'F', 'D', 'K', 'L', 'B', 'B', '^', '@', '@', 'F', 'G', 'R', 'Z', 'A', 
+		'C', 'O', 'J', 'V', 'N', 'H', 'P', 'N', 'X', 'N', 'C', 'L', 'Q', 'K', 'V', 'X', 'K', 'B', 'O', 'N', 'W', 'L', 'S', 'D', '^', '@', '@', 'Y', 'J', 'K', 'I', 'Q', 'X', 'I', 
+		'J', 'M', 'G', '\\', '[', 'M', 'V', 'W', 'M', 'A', 'P', 'F', 'V', 'A', 'G', 'Z', 'B', 'Z', 'D', 'S', '\\', 'M', '^', '@', '@', 'V', 'Z', 'M', 'J', '\\', 'X', 'F', 'T', 
+		'V', 'E', 'W', 'C', 'U', 'R', '[', 'Z', 'U', 'H', 'S', 'I', 'W', 'F', 'C', 'N', '\\', 'N', 'V', 'W', 'F', '^', '@', '@', 'X', 'W', 'B', 'B', 'R', 'U', 'V', 'O', 'U', '\\',
+		'R', 'Y', 'S', 'Z', 'Q', 'C', 'G', 'L', 'M', 'W', 'Y', 'P', 'Z', 'F', 'G', 'U', 'D', 'S', 'V', '^', '@', '@', 'V', 'A', 'U', 'S', 'R', 'L', 'B', 'G', 'N', 'I', 'F', '\\', 
+		'F', 'P', 'M', 'K', 'C', 'F', 'B', 'X', 'U', 'Y', 'D', 'K', 'V', 'W', 'O', 'N', 'N', '^', '@', '@', 'Z', 'U', 'S', 'O', 'I', 'Z', 'J', 'Q', 'J', 'O', 'Z', 'X', 'A', 'X',
+		'R', 'C', 'G', '[', '[', 'H', 'P', 'Z', 'N', 'Z', 'D', 'H', 'J', '\\', 'T', '^', '@', '@', 'S', 'W', 'G', 'Z', 'A', 'X', 'H', 'D', 'H', 'Y', 'D', 'Z', 'E', 'K', 'H', 'H',
+		'Q', 'H', '\\', 'L', 'O', 'Y', 'S', 'V', 'I', 'X', 'G', ']', 'R', '^', '@', '@', 'Y', 'Z', 'H', 'T', '\\', 'C', '[', 'L', 'D', 'I', 'U', 'G', 'S', '\\', 'V', 'I', 'S', '[',
+		'I', 'X', 'E', 'G', '\\', 'A', 'D', 'X', 'R', 'I', 'Y', '^', '@', '@', 'A', 'I', 'O', 'W', 'P', 'A', 'R', 'U', 'I', 'H', 'H', 'S', 'V', ']', 'D', '\\', 'U', 'U', 'T', 'K', 
+		'M', 'N', 'J', 'T', 'J', '[', 'A', 'W', 'I', '^', '@', '@', 'P', 'M', 'G', 'Z', 'N', 'X', 'F', '[', 'Q', 'D', 'Y', 'Y', 'N', 'K', 'R', 'H', 'Q', 'O', 'T', 'C', 'Z', 'M', 'Z',
+		'I', 'Z', 'X', 'W', 'D', '[', '^', '@', '@', 'A', 'Q', 'X', 'P', 'I', 'F', 'T', 'H', 'H', 'Q', 'V', '[', 'P', 'M', 'U', 'X', 'K', ']', 'E', 'U', 'E', 'R', 'O', 'K', 'J', '\\', 
+		'I', 'A', 'E', '^', '@', '@', 'Z', 'S', 'G', 'A', 'L', 'X', 'L', 'I', 'Q', 'O', 'H', '\\', 'H', 'G', 'F', 'B', ']', 'U', 'H', 'J', 'Z', 'J', 'O', 'F', 'Q', ']', 'A', 'H', 'E', 
+		'^', '@', '@', 'B', 'J', 'W', 'P', 'N', 'E', 'U', 'V', 'I', ']', 'C', 'N', 'E', 'Y', 'I', 'J', 'O', 'E', 'W', 'R', 'Y', 'G', 'K', 'F', 'C', 'K', 'A', 'Y', 'Q', '^', '@', '@', 'G',
+		'\\', 'M', 'G', 'N', 'K', 'Z', 'F', 'I', 'J', 'N', 'G', 'E', 'Y', 'P', 'Z', 'U', 'I', 'C', 'N', 'Q', 'Q', 'R', 'K', 'W', 'U', 'R', 'X', 'T', '^', '@', '@', 'V', 'W', 'G', 'I', 'W',
+		'B', 'S', 'R', 'H', 'R', 'J', 'K', 'T', 'X', 'N', 'J', 'X', 'U', 'F', 'F', ']', 'R', 'J', 'C', 'Z', 'G', 'F', ']', 'G', '^', '@', '@', 'G', 'F', 'X', '[', 'H', 'Y', 'S', 'T', '\\',
+		'Q', 'F', 'W', 'B', 'J', 'S', 'H', 'W', 'U', ']', 'S', 'K', 'C', 'U', 'A', 'N', 'A', 'U', 'V', 'J', '^', '@', '@', 'T', 'T', 'F', 'M', 'X', 'F', 'A', 'Q', 'Y', 'G', 'N', 'L', 'A',
+		'\\', 'M', 'E', ']', 'N', 'B', 'A', 'Q', 'Y', 'T', 'E', 'O', 'X', 'V', 'C', 'J', '^', '@', '@', 'E', 'Q', 'O', ']', 'H', 'N', 'S', '\\', 'P', 'Y', 'J', 'Q', 'D', 'A', 'L', 'E', 
+		'V', 'S', 'R', 'M', 'N', 'U', 'Q', 'A', 'B', 'P', 'T', 'P', 'F', '^', '@', '@', 'R', '[', 'D', '[', 'Y', 'M', 'C', 'Q', '\\', 'L', 'Q', '[', 'T', 'N', 'H', 'B', 'N', 'B', 'M', 
+		'L', 'P', 'E', 'Y', 'X', 'J', 'W', 'C', 'E', 'C', '^', '@', '@', 'N', '[', 'V', '[', 'X', 'N', 'R', 'B', 'P', 'V', 'H', 'W', 'O', 'Y', 'T', 'A', 'P', 'M', 'F', 'K', 'A', 'A', 
+		'E', 'S', 'D', ']', 'S', 'E', 'H', '^', '@', '@', 'Y', 'O', 'Q', 'R', 'V', 'M', 'O', 'L', 'Q', 'K', 'P', 'C', 'M', 'Y', '[', 'M', 'L', 'S', 'H', 'O', 'M', '\\', 'E', 'E', 'V',
+		'K', '[', 'L', 'O', '^', '@', '@', 'T', 'Q', 'T', 'T', '[', 'Y', 'O', 'Q', '[', 'Y', 'F', 'V', 'W', 'S', 'W', 'O', 'K', 'P', 'R', 'P', 'D', '\\', 'T', 'K', 'T', ']', 'M', 'T', 'K',
+		'^', '@', '@', 'W', 'K', ']', '\\', 'B', 'E', 'O', 'R', 'M', ']', 'K', 'P', '[', 'F', 'L', 'L', 'L', 'L', 'O', 'E', 'D', 'B', 'E', 'R', 'D', 'K', 'P', '\\', 'B', '^', '@', '@', 'B', 'M', 'R'
+	};
+
 	///////////////////////////////////////////////////////////////////////////////
 	const int8_t kASA::_sAminoAcids_cs[] = {
 		'K', 'K', 'K', 'K', '^', 'U', ' ', ' ',  // AAA	AAC	AAT	AAG	AAX	AAZ

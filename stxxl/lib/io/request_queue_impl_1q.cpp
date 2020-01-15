@@ -7,6 +7,7 @@
  *  Copyright (C) 2009 Andreas Beckmann <beckmann@cs.uni-frankfurt.de>
  *  Copyright (C) 2009 Johannes Singler <singler@ira.uka.de>
  *  Copyright (C) 2013 Timo Bingmann <tb@panthema.net>
+ *  Modified      2019 Silvio Weging <silvio.weging@gmail.com>
  *
  *  Distributed under the Boost Software License, Version 1.0.
  *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -14,6 +15,7 @@
  **************************************************************************/
 
 #include <algorithm>
+#include <functional>
 
 #include <stxxl/bits/config.h>
 #include <stxxl/bits/common/error_handling.h>
@@ -31,7 +33,7 @@
 
 STXXL_BEGIN_NAMESPACE
 
-struct file_offset_match : public std::binary_function<request_ptr, request_ptr, bool>
+struct file_offset_match 
 {
     bool operator () (
         const request_ptr& a,
@@ -63,7 +65,7 @@ void request_queue_impl_1q::add_request(request_ptr& req)
     {
         scoped_mutex_lock Lock(m_queue_mutex);
         if (std::find_if(m_queue.begin(), m_queue.end(),
-                         bind2nd(file_offset_match(), req) _STXXL_FORCE_SEQUENTIAL)
+                         std::bind(file_offset_match(), std::placeholders::_1, req) _STXXL_FORCE_SEQUENTIAL)
             != m_queue.end())
         {
             STXXL_ERRMSG("request submitted for a BID with a pending request");
