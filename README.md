@@ -53,19 +53,23 @@ Last but not least: kASA provides an error (starts with "ERROR: ") and an output
 
 ### Linux
 
-Clone the repository.
+Install cmake if you haven't already.
 
-Open a terminal and go to the path with `cd <installPath>/zlib`.
+Open a terminal and navigate to the folder in which you would like to have kASA.
+
+Clone the repository with `git clone https://github.com/SilvioWeging/kASA.git`.
+
+First, build the zlib by going into the folder `zlib`.
+
+Call `chmod +x configure` to give the file execution rights.
 
 Create the folder `zlibBuild` and `cd` into it.
 
 Type `../configure` and after that `make`.
 
-Now for kASA itself, type the following commands:
+Now for kASA itself, please type the following commands:
 
-* `cd <installPath>`
-* `mkdir <build folder name>`
-* `cd <build folder name>`
+* `cd <installPath>/build` (or create/rename the folder)
 * `cmake -DCMAKE_BUILD_TYPE=Release ..`
 * `make`
 
@@ -106,14 +110,11 @@ Run without debugging.
 
 ## TL;DR
 ```
-<path to kASA>/kASA build -d <path and name of index file to be build> -i <fasta or folder with fastas> -m <amount of available GB> -n <number of parallel threads> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> <verbose>
-e.g.: [weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fasta -m 8 -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+build/kASA build -d <path and name of index file to be build> -i <fasta or folder with fastas> -m <amount of available GB> -n <number of parallel threads> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> <verbose>
+e.g.: [weging@example:/kASA$] build/kASA build -d example/work/index/exampleIndex -i example/work/example.fasta -m 8 -n 2 -f example/taxonomy/acc2Tax/ -y example/taxonomy/ -u species -v
 
-<path to kASA>/kASA shrink -d <path and name of index file> -s <1 or 2> (-g <percentage>)
-e.g.: [weging@example ~] kASA/kASA shrink -d work/exampleIndex -s 2
-
-<path to kASA>/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -n <number of parallel threads>
-e.g.: [weging@example ~] kASA/kASA identify -d work/exampleIndex_s -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.rtt -h -m 8 -n 2
+build/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -n <number of parallel threads>
+e.g.: [weging@example:/kASA$] build/kASA identify -d example/work/index/exampleIndex -i example/work/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 5 -n 2
 ```
 
 ## Modes and parameters
@@ -172,7 +173,7 @@ The taxids are required to be integers and no header line is necessary. This fil
 ##### Example call 
 ```
 <path to kASA>/kASA generateCF -i <fastaFile(s)> -c <content file> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> (-v )
-e.g.: [weging@example ~] kASA/kASA generateCF -i work/example.fasta -c work/content.txt -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+e.g.: [weging@example:/kASA$] build/kASA generateCF -i work/example.fasta -c work/content.txt -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 ```
 
 ### Build
@@ -193,10 +194,10 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 ##### Example call
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
-e.g.: [weging@example ~] kASA/kASA build -c work/content.txt -d work/exampleIndex -i work/example.fasta -m 8 -t work/tmp/ -n 2
+e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
 
 Create content file and index:
-[weging@example ~] kASA/kASA build -d work/exampleIndex -i work/example.fasta -m 8 -t work/tmp/ -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+[weging@example:/kASA$] build/kASA build -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 ```
 
 ### Identify
@@ -218,7 +219,7 @@ But because too much information isn't always nice, you can specify how much tax
 
 The per read error score ranges from -1 to 1. A 1 means that the best score deviates as far as possible from the optimal score, 0 means a perfect match and -1 means that the reverse complement also fits perfectly. In human readable format, only the error of the best score is printed.
 
-Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
+Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p example/work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
 
 If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
 
@@ -244,7 +245,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
-e.g.: [weging@example ~] kASA/kASA identify -c work/content.txt -d work/exampleIndex -i work/example.fastq.gz -p work/results/example.csv -q work/results/example.json -m 8 -t work/tmp/ -k 12 9 -n 2
+e.g.: [weging@example:/kASA$] build/kASA identify -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 8 -t example/work/tmp/ -k 12 9 -n 2
 ```
 #### Output
 ##### Normal:
@@ -319,10 +320,10 @@ If you've created the content file together with the index, this default content
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>
-e.g.: [weging@example ~] kASA/kASA update -c work/content.txt -d work/exampleIndex -o work/updatedIndex -i work/newStuff.fasta -t work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
+e.g.: [weging@example:/kASA$] build/kASA update -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/updatedIndex -i example/work/newStuff.fasta -t example/work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
 
 <path to kASA>/kASA delete -c <content file> -d <path and name of the index file> -o <path and name of the new index> -l <delnodes.dmp> -t <temporary directory> -m <amount of RAM>
-e.g.: [weging@example ~] kASA/kASA delete -c work/content.txt -d work/exampleIndex -o work/updatedIndex -l taxonomy/delnodes.dmp -t work/tmp/ -m 8
+e.g.: [weging@example:/kASA$] build/kASA delete -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/updatedIndex -l taxonomy/delnodes.dmp -t example/work/tmp/ -m 8
 ``` 
 
 ### Shrink
@@ -341,9 +342,9 @@ The parameter `-o` also decides here, where to put your new index.
 ##### Example call
 ```
 <path to kASA>/kASA shrink -c <content file> -d <path and name of the index file> -o <path and name of the new index> -s <1 or 2> -g <percentage> -t <temporary directory>
-e.g.: [weging@example ~] kASA/kASA shrink -c work/content.txt -d work/exampleIndex -o work/exampleIndex_s -s 2 -t work/tmp/
-e.g.: [weging@example ~] kASA/kASA shrink -c work/content.txt -d work/exampleIndex -s 1 -g 25 -t work/tmp/
-e.g.: [weging@example ~] kASA/kASA build -c work/content.txt -d work/exampleIndex -g 50 -i work/example.fasta -m 8 -t work/tmp/ -n 2
+e.g.: [weging@example:/kASA$] build/kASA shrink -c example/work/content.txt -d  example/work/index/exampleIndex -o  example/work/index/exampleIndex_s -s 2 -t example/work/tmp/
+e.g.: [weging@example:/kASA$] build/kASA shrink -c example/work/content.txt -d  example/work/index/exampleIndex -s 1 -g 25 -t example/work/tmp/
+e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -g 50 -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
 ``` 
 
 ### Miscellaneous

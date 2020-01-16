@@ -18,7 +18,10 @@
 namespace kASA_help {
 	inline string getHelp(const string& m) {
 		string out = "";
-		if (m == "generateCF") {
+		if (m == "") {
+			out = "Hello and welcome to kASA.\nYou did not specify any parameters.\nPlease read the README file on our Github https://github.com/SilvioWeging/kASA or select a mode and call <mode> --help to get a list of parameters for the selected mode.\nPossible modes are: generateCF, build, identify, shrink, update, delete, getFrequency, redundancy, trie.\nGood luck and have a nice day!";
+		}
+		else if (m == "generateCF") {
 			out = "This mode creates a content file out of genomic data with the help of the NCBI taxonomy.\n\
 Necessary parameters:\n\
 -i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
@@ -215,7 +218,9 @@ int main(int argc, char* argv[]) {
 		cout << endl;
 
 		if (argc == 1) {
-			throw runtime_error("No Parameters given!");
+			cout << "OUT: \n\n" << kASA_help::getHelp("") << endl;
+			return 0;
+			//throw runtime_error("No Parameters given!");
 		}
 		cMode = vParameters[1];
 
@@ -728,85 +733,88 @@ int main(int argc, char* argv[]) {
 			tempPV2.export_files("_");
 		}
 		else if (cMode == "fuckit") {
-		
 
-		uint32_t iIdxCounter = 1;
-		unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
-		ifstream content(contentFileIn);
-		string sDummy = "";
-		while (getline(content, sDummy)) {
-			if (sDummy != "") {
-				const auto& line = Utilities::split(sDummy, '\t');
-				if (line.size() == 4) {
-					mIDsAsIdx[stoul(line[1])] = iIdxCounter;
-					++iIdxCounter;
+
+			uint32_t iIdxCounter = 1;
+			unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
+			ifstream content(contentFileIn);
+			string sDummy = "";
+			while (getline(content, sDummy)) {
+				if (sDummy != "") {
+					const auto& line = Utilities::split(sDummy, '\t');
+					if (line.size() == 4) {
+						mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+						++iIdxCounter;
+					}
 				}
 			}
-		}
 
-		ifstream sizeFile(indexFile + "_info.txt"); // "_info.txt"
-		uint64_t iSize = 0;
-		sizeFile >> iSize;
+			ifstream sizeFile(indexFile + "_info.txt"); // "_info.txt"
+			uint64_t iSize = 0;
+			sizeFile >> iSize;
 
-		stxxlFile temp(indexFile, stxxl::file::RDONLY);
-		const contentVecType_32p tempV(&temp, iSize);
+			stxxlFile temp(indexFile, stxxl::file::RDONLY);
+			const contentVecType_32p tempV(&temp, iSize);
 
-		Utilities::createFile(sTempPath+"_tmp");
+			Utilities::createFile(sTempPath + "_tmp");
 
-		stxxlFile tempOut(sTempPath + "_tmp", stxxl::file::RDWR);
-		contentVecType_32p tempPV(&tempOut, iSize);
-		
+			stxxlFile tempOut(sTempPath + "_tmp", stxxl::file::RDWR);
+			contentVecType_32p tempPV(&tempOut, iSize);
 
-		auto t1It = tempV.cbegin();
-		auto tOIt = tempPV.begin();
-		while (t1It != tempV.cend()) {
-			tOIt->second = t1It->second;
-			uint64_t tVal = 0;
-			for (int32_t i=55, j = 0; i>=5; i-=10, j+=5) {
-				tVal |= (t1It->first & (31ULL << i)) << j;
-			}
-			tOIt->first = tVal;
 
-			++t1It;
-			++tOIt;
-		}
-		
-		struct SCompareStructForSTXXLSort {
-			bool operator() (const packedBigPair& a, const packedBigPair& b) const {
-				return a < b;
+			auto t1It = tempV.cbegin();
+			auto tOIt = tempPV.begin();
+			while (t1It != tempV.cend()) {
+				tOIt->second = t1It->second;
+				uint64_t tVal = 0;
+				for (int32_t i = 55, j = 0; i >= 5; i -= 10, j += 5) {
+					tVal |= (t1It->first & (31ULL << i)) << j;
+				}
+				tOIt->first = tVal;
+
+				++t1It;
+				++tOIt;
 			}
 
-			packedBigPair min_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::min(); t.second = numeric_limits<uint32_t>::min(); return t; }
-			packedBigPair max_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::max(); t.second = numeric_limits<uint32_t>::max(); return t; }
-		};
+			struct SCompareStructForSTXXLSort {
+				bool operator() (const packedBigPair& a, const packedBigPair& b) const {
+					return a < b;
+				}
 
-		stxxl::sort(tempPV.begin(), tempPV.end(), SCompareStructForSTXXLSort(), iMemorySizeAvail);
+				packedBigPair min_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::min(); t.second = numeric_limits<uint32_t>::min(); return t; }
+				packedBigPair max_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::max(); t.second = numeric_limits<uint32_t>::max(); return t; }
+			};
 
-		Utilities::createFile(sDBPathOut);
-		stxxlFile realOut(sDBPathOut, stxxl::file::RDWR);
-		taxaOnly realIdx(&realOut, iSize);
+			stxxl::sort(tempPV.begin(), tempPV.end(), SCompareStructForSTXXLSort(), iMemorySizeAvail);
 
-		auto realIt = realIdx.begin();
-		tOIt = tempPV.begin();
-		while (tOIt != tempPV.end()) {
-			*realIt = mIDsAsIdx.find(tOIt->second)->second;
-			++realIt;
-			++tOIt;
+			Utilities::createFile(sDBPathOut);
+			stxxlFile realOut(sDBPathOut, stxxl::file::RDWR);
+			taxaOnly realIdx(&realOut, iSize);
+
+			auto realIt = realIdx.begin();
+			tOIt = tempPV.begin();
+			while (tOIt != tempPV.end()) {
+				*realIt = mIDsAsIdx.find(tOIt->second)->second;
+				++realIt;
+				++tOIt;
+			}
+
+			ofstream outSizeFile(sDBPathOut + "_info.txt");
+			outSizeFile << tempPV.size();
+			outSizeFile.close();
+			ifstream oldFreqFile(indexFile + "_f.txt", std::ios::binary);
+			ofstream newFreqFile(sDBPathOut + "_f.txt", std::ios::binary);
+
+			newFreqFile << oldFreqFile.rdbuf();
+
+			Trie T(static_cast<int8_t>(12), static_cast<int8_t>(iLowerK), iTrieDepth);
+			T.SaveToStxxlVec(&tempPV, sDBPathOut);
+
+
+			realIdx.export_files("_");
 		}
-
-		ofstream outSizeFile(sDBPathOut + "_info.txt");
-		outSizeFile << tempPV.size();
-		outSizeFile.close();
-		ifstream oldFreqFile(indexFile + "_f.txt", std::ios::binary);
-		ofstream newFreqFile(sDBPathOut + "_f.txt", std::ios::binary);
-
-		newFreqFile << oldFreqFile.rdbuf();
-
-		Trie T(static_cast<int8_t>(12), static_cast<int8_t>(iLowerK), iTrieDepth);
-		T.SaveToStxxlVec(&tempPV, sDBPathOut);
-
-
-		realIdx.export_files("_");
+		else {
+			cout << "ERROR: No mode specified.\nPlease select a mode from the following list: generateCF, build, identify, shrink, update, delete, getFrequency, redundancy, trie." << endl;
 		}
 	} catch (const exception& e) {
 		cerr << "ERROR: " << e.what() << endl;
