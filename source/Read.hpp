@@ -544,10 +544,10 @@ namespace kASA {
 					iProcID = (iProcID + 1) % _iNumOfThreads;
 					//iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(uint64_t));
 					if (_iMinK <= 6) {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint64_t, uint64_t>) + sizeof(Utilities::rangeContainer));
+						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint64_t, uint64_t>) + sizeof(Utilities::rangeContainer) + sizeof(function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)>));
 					}
 					else {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(Utilities::rangeContainer));
+						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(Utilities::rangeContainer) + sizeof(function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)>));
 					}
 					//cout << iSoftMaxSize << endl;
 					if (iSoftMaxSize <= 0) {
@@ -764,10 +764,10 @@ namespace kASA {
 					iSumOfkMers += iNumOfkMers;
 					iProcID = (iProcID + 1) % _iNumOfThreads;
 					if (_iMinK <= 6) {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint64_t, uint64_t>) + sizeof(Utilities::rangeContainer));
+						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint64_t, uint64_t>) + sizeof(Utilities::rangeContainer) + sizeof(function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)>));
 					}
 					else {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(Utilities::rangeContainer));
+						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(Utilities::rangeContainer) + sizeof(function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)>));
 					}
 					
 					if (iSoftMaxSize <= 0) {

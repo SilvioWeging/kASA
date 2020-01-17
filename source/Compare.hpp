@@ -94,7 +94,7 @@ namespace kASA {
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const int32_t& iThreadID, const pair<uint64_t, Utilities::rangeContainer>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const int32_t& iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 
@@ -105,7 +105,7 @@ namespace kASA {
 				vector<Utilities::sBitArray> vMemoryOfTaxIDs(_iNumOfK, Utilities::sBitArray(iSpecIDRange));
 
 
-				const uint64_t& ivInSize = (_iMinK <= 6) ? vIn.second.kMers_ST6.size() : vIn.second.kMers_GT6.size();
+				const uint64_t& ivInSize = (_iMinK <= 6) ? vIn->second.kMers_ST6.size() : vIn->second.kMers_GT6.size();
 
 				uint64_t iIdxIn = 0;
 
@@ -131,7 +131,7 @@ namespace kASA {
 
 				while (iIdxIn < ivInSize) {
 
-					const pair<uint64_t, uint32_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint32_t>>(vIn.second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint32_t>>(vIn.second.kMers_GT6[iIdxIn]);
+					const pair<uint64_t, uint32_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint32_t>>(vIn->second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint32_t>>(vIn->second.kMers_GT6[iIdxIn]);
 					
 					int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
 					int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
@@ -168,7 +168,7 @@ namespace kASA {
 					}
 
 					const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
-					const auto rangeBeginIt = libBeginIt + vIn.first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn.first) + vIn.second.range;
+					const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
 
 
 					if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
@@ -380,7 +380,7 @@ namespace kASA {
 
 
 		template <typename vecType>
-		inline void createProfile(const int32_t iThreadID, const pair<uint64_t, Utilities::rangeContainer>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {
+		inline void createProfile(const int32_t iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {
 
 			try {
 
@@ -389,7 +389,7 @@ namespace kASA {
 				vector<Utilities::sBitArray> vMemoryOfTaxIDs(_iNumOfK, Utilities::sBitArray(iSpecIDRange));
 
 
-				const uint64_t& ivInSize = (_iMinK <= 6) ? vIn.second.kMers_ST6.size() : vIn.second.kMers_GT6.size();
+				const uint64_t& ivInSize = (_iMinK <= 6) ? vIn->second.kMers_ST6.size() : vIn->second.kMers_GT6.size();
 
 				uint64_t iIdxIn = 0;
 
@@ -410,7 +410,7 @@ namespace kASA {
 
 				while (iIdxIn < ivInSize) {
 
-					const pair<uint64_t, uint64_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint64_t>>(vIn.second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint64_t>>(vIn.second.kMers_GT6[iIdxIn]);
+					const pair<uint64_t, uint64_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint64_t>>(vIn->second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint64_t>>(vIn->second.kMers_GT6[iIdxIn]);
 
 					int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
 					int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
@@ -445,7 +445,7 @@ namespace kASA {
 
 
 					const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
-					const auto rangeBeginIt = libBeginIt + vIn.first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn.first) + vIn.second.range;
+					const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
 
 					if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
 						seenResultIt = rangeBeginIt;
@@ -629,32 +629,32 @@ namespace kASA {
 		}
 
 		template <typename vecType>
-		inline void compareWithDatabase_sloppy(const int32_t& iThreadID, const pair<uint64_t, Utilities::rangeContainer>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase_sloppy(const int32_t& iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 
 				//auto start = std::chrono::high_resolution_clock::now();
 
-				const uint64_t& ivInSize = vIn.second.kMers_ST6.size();
+				const uint64_t& ivInSize = vIn->second.kMers_ST6.size();
 
 				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
 				auto seenResultIt = libBeginIt;
 
-				const auto rangeBeginIt = libBeginIt + vIn.first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn.first) + vIn.second.range;
+				const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
 				seenResultIt = rangeBeginIt;
 
 				while (seenResultIt != rangeEndIt + 1) {
 					const auto& iCurrentLib = *seenResultIt;
 
-					vCount[iCurrentLib] += static_cast<double>(ivInSize) / (vIn.second.range + 1);
+					vCount[iCurrentLib] += static_cast<double>(ivInSize) / (vIn->second.range + 1);
 
 
-					if (vIn.second.range == 0) {
+					if (vIn->second.range == 0) {
 						vCountUnique[iCurrentLib] += ivInSize;
 					}
 
 					const auto& score = arrWeightingFactors[0] * (1.f / ivInSize);
-					for (const auto& elem : vIn.second.kMers_ST6) {
+					for (const auto& elem : vIn->second.kMers_ST6) {
 						const auto& arrayIdx = mReadIDToArrayIdx.find(get<1>(elem))->second * iSpecIDRange + iCurrentLib;
 						//#pragma omp atomic
 						vReadIDtoGenID[arrayIdx] += score;
@@ -681,26 +681,26 @@ namespace kASA {
 		}
 
 		template <typename vecType>
-		inline void createProfile_sloppy(const int32_t iThreadID, const pair<uint64_t, Utilities::rangeContainer>& vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique) {
+		inline void createProfile_sloppy(const int32_t iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique) {
 
 			try {
 
 
-				const uint64_t& ivInSize = vIn.second.kMers_ST6.size();
+				const uint64_t& ivInSize = vIn->second.kMers_ST6.size();
 
 				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
 				auto seenResultIt = libBeginIt;
 
-				const auto rangeBeginIt = libBeginIt + vIn.first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn.first) + vIn.second.range;
+				const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
 				seenResultIt = rangeBeginIt;
 
 				while (seenResultIt != rangeEndIt + 1) {
 					const auto& iCurrentLib = *seenResultIt;
 					//#pragma omp atomic
-					vCount[iCurrentLib] += static_cast<double>(ivInSize) / (vIn.second.range + 1);
+					vCount[iCurrentLib] += static_cast<double>(ivInSize) / (vIn->second.range + 1);
 
 
-					if (vIn.second.range == 0) {
+					if (vIn->second.range == 0) {
 						//#pragma omp atomic
 						vCountUnique[iCurrentLib] += ivInSize;
 					}
@@ -965,17 +965,6 @@ namespace kASA {
 					throw runtime_error("One of the files does not exist");
 				}
 
-				// Create threadpool(s), in stxxl mode we can only have synced parallelism (as in no two threads should not access the same vector instance)
-				vector<unique_ptr<progschj::ThreadPool>> workerThreadPool;
-				if (bRAM) {
-					workerThreadPool.push_back(unique_ptr<progschj::ThreadPool>(new progschj::ThreadPool(_iNumOfThreads)));
-				}
-				else {
-					for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-						workerThreadPool.push_back(unique_ptr<progschj::ThreadPool>(new progschj::ThreadPool(1)));
-					}
-				}
-
 				// get names of idxes
 				ifstream fContent(contentFile);
 				uint32_t iAmountOfSpecies = 1;
@@ -1140,6 +1129,17 @@ namespace kASA {
 						vLib_RAM_Half.clear();
 						vLib_RAM_taxaOnly.clear();
 						vLib_RAM_Full.clear();
+					}
+				}
+
+				// Create threadpool(s), in stxxl mode we can only have synced parallelism (as in no two threads should not access the same vector instance)
+				vector<unique_ptr<progschj::ThreadPool>> workerThreadPool;
+				if (bRAM) {
+					workerThreadPool.push_back(unique_ptr<progschj::ThreadPool>(new progschj::ThreadPool(_iNumOfThreads)));
+				}
+				else {
+					for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+						workerThreadPool.push_back(unique_ptr<progschj::ThreadPool>(new progschj::ThreadPool(1)));
 					}
 				}
 
@@ -1417,7 +1417,7 @@ namespace kASA {
 							iNumOfReadsSum += transferBetweenRuns->iNumOfNewReads;
 						}
 						
-						function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>&)> foo;
+						function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)> foo;
 
 						// now compare with index
 						start = std::chrono::high_resolution_clock::now();
@@ -1492,7 +1492,7 @@ namespace kASA {
 						// in RAM mode, this optimizes load-balance
 						if (bRAM) {
 							for (auto mapIt = vInputVec.cbegin(); mapIt != vInputVec.cend(); ++mapIt) {
-								auto task = bind(foo, 0, ref(*mapIt));
+								auto task = bind(foo, 0, &(*mapIt));
 								workerThreadPool[0]->emplace(task);
 							}
 							workerThreadPool[0]->startThreads();
@@ -1505,13 +1505,14 @@ namespace kASA {
 								size_t iParallelCounter = 0;
 								for (auto mapIt = vInputVec.cbegin(); mapIt != vInputVec.cend(); ++mapIt, ++iParallelCounter) {
 									if (static_cast<int32_t>(iParallelCounter%_iNumOfThreads) == iThreadID) {
-										auto task = bind(foo, iThreadID, ref(*mapIt));
+										auto task = bind(foo, iThreadID, &(*mapIt));
 										workerThreadPool[iThreadID]->emplace(task);
 									}
 								}
+							}
+							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
 								workerThreadPool[iThreadID]->startThreads();
 							}
-
 							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
 								workerThreadPool[iThreadID]->wait_until_empty();
 								workerThreadPool[iThreadID]->wait_until_nothing_in_flight();
