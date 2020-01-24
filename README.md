@@ -45,7 +45,7 @@ Note, that kASA is a console application so if you want to use these binaries, y
 
 If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+11 or if possible C\+\+17 (for `filesystem` and `execution`). We successfully tested it with Visual Studio 2017, GCC version 6.1, LLVM/Clang 9.0 and Apple Clang 9.0. [Here](https://en.cppreference.com/w/cpp/compiler_support) is a table showing if your version is sufficient. On Linux and macOS, cmake is needed as well.
 
-kASA depends on the [STXXL](https://stxxl.org/), [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) and [ThreadPool](https://github.com/log4cplus/Threadpool) but contains all necessary files so you don't need to download those.
+kASA depends on the [STXXL](https://stxxl.org/) and [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) but contains all necessary files so you don't need to download those.
 
 Last but not least: kASA provides an error (starts with "ERROR: ") and an output (starts with "OUT: ") stream. You can seperate them with 2> or 1>.
 

@@ -45,7 +45,7 @@
     <ClInclude Include="..\..\zlib\gzstream.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\ThreadPool.h">
+    <ClInclude Include="..\..\source\WorkerThread.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

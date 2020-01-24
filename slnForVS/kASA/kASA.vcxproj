@@ -25,10 +25,10 @@
     <ClInclude Include="..\..\source\MetaHeader.h" />
     <ClInclude Include="..\..\source\Read.hpp" />
     <ClInclude Include="..\..\source\Shrink.hpp" />
-    <ClInclude Include="..\..\source\ThreadPool.h" />
     <ClInclude Include="..\..\source\Trie.hpp" />
     <ClInclude Include="..\..\source\Update.hpp" />
     <ClInclude Include="..\..\source\Utilities.hpp" />
+    <ClInclude Include="..\..\source\WorkerThread.hpp" />
     <ClInclude Include="..\..\zlib\gzstream.hpp" />
   </ItemGroup>
   <ItemGroup>

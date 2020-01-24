@@ -10,7 +10,7 @@
 #pragma once
 #include "Read.hpp"
 #include "Trie.hpp"
-#include "ThreadPool.h"
+#include "WorkerThread.hpp"
 
 namespace kASA {
 	class Compare : public Read {
@@ -1133,15 +1133,8 @@ namespace kASA {
 				}
 
 				// Create threadpool(s), in stxxl mode we can only have synced parallelism (as in no two threads should not access the same vector instance)
-				vector<unique_ptr<progschj::ThreadPool>> workerThreadPool;
-				if (bRAM) {
-					workerThreadPool.push_back(unique_ptr<progschj::ThreadPool>(new progschj::ThreadPool(_iNumOfThreads)));
-				}
-				else {
-					for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-						workerThreadPool.push_back(unique_ptr<progschj::ThreadPool>(new progschj::ThreadPool(1)));
-					}
-				}
+				vector<WorkerThread> workerThreadPool(_iNumOfThreads);
+				
 
 				// load Trie
 				const uint8_t& iTD = iTrieDepth;
@@ -1350,7 +1343,7 @@ namespace kASA {
 #endif
 #endif
 						// sort inside each vector (in parallel)
-						auto sortingFunction = [this,&vInputVec,&bUnique](const int32_t iThreadID) {
+						auto sortingFunction = [this, &vInputVec, &bUnique](const int32_t iThreadID) {
 							size_t iParallelCount = 0;
 
 							for (auto it = vInputVec.begin(); it != vInputVec.end(); ++it, ++iParallelCount) {
@@ -1375,24 +1368,15 @@ namespace kASA {
 						};
 
 						// enqueue and run
-						if (bRAM) {
-							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-								workerThreadPool[0]->enqueue(sortingFunction, iThreadID);
-							}
-							workerThreadPool[0]->wait_until_empty();
-							workerThreadPool[0]->wait_until_nothing_in_flight();
+						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+							workerThreadPool[iThreadID].pushTask(bind(sortingFunction, iThreadID));
+							workerThreadPool[iThreadID].startThread();
 						}
-						else {
-							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-								workerThreadPool[iThreadID]->enqueue(sortingFunction, iThreadID);
-							}
 
-							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-								workerThreadPool[iThreadID]->wait_until_empty();
-								workerThreadPool[iThreadID]->wait_until_nothing_in_flight();
-							}
+						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+							workerThreadPool[iThreadID].waitUntilFinished();
 						}
-					
+
 						auto end = std::chrono::high_resolution_clock::now();
 						iTimeFastq += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
@@ -1416,7 +1400,7 @@ namespace kASA {
 						else {
 							iNumOfReadsSum += transferBetweenRuns->iNumOfNewReads;
 						}
-						
+
 						function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)> foo;
 
 						// now compare with index
@@ -1424,10 +1408,6 @@ namespace kASA {
 
 						if (bReadIDsAreInteresting) {
 							if (bRAM) {
-
-								// Queue could be very long...
-								workerThreadPool[0]->set_queue_size_limit(vInputVec.size());
-
 								if (bPartitioned) {
 									foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
@@ -1456,10 +1436,6 @@ namespace kASA {
 						}
 						else {
 							if (bRAM) {
-								
-								// Queue could be very long...
-								workerThreadPool[0]->set_queue_size_limit(vInputVec.size());
-
 								if (bPartitioned) {
 									foo = bind(&Compare::createProfile<vector<packedPair>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
 								}
@@ -1488,38 +1464,47 @@ namespace kASA {
 							}
 						}
 
-						// because the stxxl is not threadsafe (as in two threads cannot access different locations on the drive), we need to distinguish between the parallelism
-						// in RAM mode, this optimizes load-balance
-						if (bRAM) {
-							for (auto mapIt = vInputVec.cbegin(); mapIt != vInputVec.cend(); ++mapIt) {
-								auto task = bind(foo, 0, &(*mapIt));
-								workerThreadPool[0]->emplace(task);
-							}
-							workerThreadPool[0]->startThreads();
-
-							workerThreadPool[0]->wait_until_empty();
-							workerThreadPool[0]->wait_until_nothing_in_flight();
+						// because the stxxl is not threadsafe (as in two threads cannot access different locations on the drive), we need to separate the work
+						uint64_t iSumOfRanges = 0;
+						for (const auto& entry : vInputVec) {
+							iSumOfRanges += entry.second.range + 1;
 						}
-						else {
-							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-								size_t iParallelCounter = 0;
-								for (auto mapIt = vInputVec.cbegin(); mapIt != vInputVec.cend(); ++mapIt, ++iParallelCounter) {
-									if (static_cast<int32_t>(iParallelCounter%_iNumOfThreads) == iThreadID) {
-										auto task = bind(foo, iThreadID, &(*mapIt));
-										workerThreadPool[iThreadID]->emplace(task);
-									}
-								}
+						int32_t iPartitionCount = 16;
+						size_t iDiv = iSumOfRanges / (iPartitionCount*_iNumOfThreads);
+						//size_t iMod = vInputVec.size() % _iNumOfThreads;
+						auto inputIt = vInputVec.cbegin();
+
+						for (int32_t iThreadIDCounter = 0; iThreadIDCounter < iPartitionCount*_iNumOfThreads; ++iThreadIDCounter) {
+							int32_t iThreadID = iThreadIDCounter % _iNumOfThreads;
+							//size_t iParallelCounter = 0;
+							workerThreadPool[iThreadID].setNumberOfTasks(vInputVec.size() / static_cast<size_t>(_iNumOfThreads) + 1);
+
+							uint64_t iCurrentSum = 0;
+							//for (size_t iInputVecCounter = iThreadID* iDiv; iInputVecCounter < (iThreadID + 1)* iDiv + !(!iMod); ++iInputVecCounter, ++inputIt) {
+							uint32_t iMaxRange = 0;
+							while (iCurrentSum < iDiv && inputIt != vInputVec.cend()) {
+								auto task = bind(foo, iThreadID, &(*inputIt));
+								workerThreadPool[iThreadID].pushTask(task);
+								iCurrentSum += inputIt->second.range + 1;
+								if (inputIt->second.range > iMaxRange) iMaxRange = inputIt->second.range;
+								++inputIt;
 							}
-							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-								workerThreadPool[iThreadID]->startThreads();
-							}
-							for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-								workerThreadPool[iThreadID]->wait_until_empty();
-								workerThreadPool[iThreadID]->wait_until_nothing_in_flight();
-							}
-							
+							//}
+
+							//cout << iMaxRange <<  " " <<  iCurrentSum << " " << workerThreadPool[iThreadID].printVecSize() << endl;
+
+							//if (iMod) {
+							//	--iMod;
+							//}
 						}
 
+						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+							workerThreadPool[iThreadID].startThread();
+						}
+						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+							workerThreadPool[iThreadID].waitUntilFinished();
+						}
+					
 						if (someThingWentWrong) {
 							rethrow_exception(someThingWentWrong);
 						}
@@ -1812,6 +1797,7 @@ namespace kASA {
 							}
 							
 							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								cout << iNumberOfkMersInInput * (ikMerlength + 1) << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << iSumOfIdentified[ikMerlength] << endl;
 								tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput*(ikMerlength + 1)) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(iSumOfIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput*(ikMerlength + 1)) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 							}
 							tableFileStream << "\n" << sOutStr.str();
