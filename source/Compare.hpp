@@ -1467,35 +1467,22 @@ namespace kASA {
 						// because the stxxl is not threadsafe (as in two threads cannot access different locations on the drive), we need to separate the work
 						uint64_t iSumOfRanges = 0;
 						for (const auto& entry : vInputVec) {
-							iSumOfRanges += entry.second.range + 1;
+							iSumOfRanges += (entry.second.range + 1)*( (_iMinK >= 6) ? entry.second.kMers_GT6.size() : entry.second.kMers_ST6.size() );
 						}
-						int32_t iPartitionCount = 16;
-						size_t iDiv = iSumOfRanges / (iPartitionCount*_iNumOfThreads);
-						//size_t iMod = vInputVec.size() % _iNumOfThreads;
+						size_t iDiv = iSumOfRanges / _iNumOfThreads;
 						auto inputIt = vInputVec.cbegin();
 
-						for (int32_t iThreadIDCounter = 0; iThreadIDCounter < iPartitionCount*_iNumOfThreads; ++iThreadIDCounter) {
-							int32_t iThreadID = iThreadIDCounter % _iNumOfThreads;
-							//size_t iParallelCounter = 0;
+						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+
 							workerThreadPool[iThreadID].setNumberOfTasks(vInputVec.size() / static_cast<size_t>(_iNumOfThreads) + 1);
 
 							uint64_t iCurrentSum = 0;
-							//for (size_t iInputVecCounter = iThreadID* iDiv; iInputVecCounter < (iThreadID + 1)* iDiv + !(!iMod); ++iInputVecCounter, ++inputIt) {
-							uint32_t iMaxRange = 0;
 							while (iCurrentSum < iDiv && inputIt != vInputVec.cend()) {
 								auto task = bind(foo, iThreadID, &(*inputIt));
 								workerThreadPool[iThreadID].pushTask(task);
-								iCurrentSum += inputIt->second.range + 1;
-								if (inputIt->second.range > iMaxRange) iMaxRange = inputIt->second.range;
+								iCurrentSum += (inputIt->second.range + 1)*((_iMinK >= 6) ? inputIt->second.kMers_GT6.size() : inputIt->second.kMers_ST6.size());
 								++inputIt;
 							}
-							//}
-
-							//cout << iMaxRange <<  " " <<  iCurrentSum << " " << workerThreadPool[iThreadID].printVecSize() << endl;
-
-							//if (iMod) {
-							//	--iMod;
-							//}
 						}
 
 						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
@@ -1797,7 +1784,7 @@ namespace kASA {
 							}
 							
 							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								cout << iNumberOfkMersInInput * (ikMerlength + 1) << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << iSumOfIdentified[ikMerlength] << endl;
+								//cout << iNumberOfkMersInInput * (ikMerlength + 1) << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << iSumOfIdentified[ikMerlength] << endl;
 								tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput*(ikMerlength + 1)) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(iSumOfIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput*(ikMerlength + 1)) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 							}
 							tableFileStream << "\n" << sOutStr.str();
@@ -1822,6 +1809,7 @@ namespace kASA {
 					iTimeFastq = 0;
 					iTimeCompare = 0;
 					vReadNameAndLength.clear();
+					fill(vNumberOfGarbagekMersPerK.begin(), vNumberOfGarbagekMersPerK.end(), 0);
 
 					for (uint64_t i = 0; i < iMult; ++i) {
 						vCount_all[i] = 0.;
