@@ -217,6 +217,17 @@ int main(int argc, char* argv[]) {
 		}
 		cout << endl;
 
+		// Default temporary path:
+#if  _WIN64
+		sTempPath = string(getenv("appdata")) + "/";
+#elif __linux__
+		sTempPath = "/var/tmp/";
+#elif __APPLE__
+		sTempPath = "/private/tmp/";
+#else
+		cerr << "Default temporary path not found, please specify it if you didn't already..." << endl;
+#endif
+
 		if (argc == 1) {
 			cout << "OUT: \n\n" << kASA_help::getHelp("") << endl;
 			return 0;
@@ -240,6 +251,9 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "-u" || sParameter == "--level") {
 				sTaxLevel = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				if (sTaxLevel == "sequence") {
+					sTaxLevel = "lowest";
+				}
 			}
 			else if (sParameter == "-e" || sParameter == "--unique") {
 				bUnique = true;
