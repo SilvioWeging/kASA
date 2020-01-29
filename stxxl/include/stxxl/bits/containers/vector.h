@@ -1483,7 +1483,7 @@ public:
         {
             flush();
         }
-        catch (io_error e)
+        catch (const io_error& e)
         {
             STXXL_ERRMSG("io_error thrown in ~vector(): " << e.what());
         }

@@ -846,7 +846,7 @@ namespace kASA {
 							fOut << sOutStr.str();
 						}
 
-						fill(resultVec.begin(), resultVec.begin() + iCountOfHits, make_tuple(0ULL, 0.f, 0.0));
+						fill(resultVec.begin(), resultVec.end(), make_tuple(0ULL, 0.f, 0.0));
 					}
 
 					vReadNameAndLength.pop_front();
