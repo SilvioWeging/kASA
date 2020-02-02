@@ -691,7 +691,7 @@ namespace kASA {
 
 					const auto res = taxToNames.find(elem.first);
 					if (res != taxToNames.end()) {
-						contentFile << res->second << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << endl;
+						contentFile << Utilities::removeCharFromString(res->second, ',') << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << endl;
 					}
 					else {
 						contentFile << "unnamed_" << iUnnamedCounter++ << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << endl;

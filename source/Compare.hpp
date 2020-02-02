@@ -978,7 +978,7 @@ namespace kASA {
 				while (getline(fContent, sTempLine)) {
 					if (sTempLine != "") {
 						const auto& tempLineContent = Utilities::split(sTempLine, '\t');
-						mOrganisms.push_back(tempLineContent[0]);
+						mOrganisms.push_back(Utilities::removeCharFromString(tempLineContent[0], ','));
 						mIdxToTax.push_back(stoul(tempLineContent[1]));
 						mTaxToIdx[stoul(tempLineContent[1])] = iAmountOfSpecies++;
 					}
@@ -1677,10 +1677,10 @@ namespace kASA {
 					// save to file(s)
 					ofstream tableFileStream;
 					//tableFileStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-					tableFileStream.open((vInputFiles.size() > 1) ? fTableFile + fileName + ".csv" : fTableFile);
 					//auto orgBuf = cout.rdbuf();
 					if (fTableFile != "") {
 						//cout.rdbuf(tableFileStream.rdbuf());
+						tableFileStream.open((vInputFiles.size() > 1) ? fTableFile + fileName + ".csv" : fTableFile);
 
 						if (bHumanReadable) {
 							// short version: taxID,Name,Unique Percentage of highest k,Non-unique Percentage of highest k\n
