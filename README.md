@@ -223,7 +223,7 @@ Note, that if you input a folder, file names are appended to your string given v
 
 If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
 
-Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster hash table instead of a prefix trie is used.
+Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster lookup table instead of a prefix trie is used.
 
 The first line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
 

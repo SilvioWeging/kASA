@@ -474,9 +474,7 @@ namespace Utilities {
 		}
 
 		inline void clear() {
-			for (uint64_t i = 0; i < _iNumOfBlocks; ++i) {
-				_arr[i] = 0ULL;
-			}
+			memset(_arr.get(), 0, _iNumOfBlocks * sizeof(uint64_t));
 			_iNumOfElements = 0;
 			_pPosOfFirstElem = make_pair(numeric_limits<uint64_t>::max(), static_cast<uint8_t>(64));
 		}

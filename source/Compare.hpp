@@ -94,7 +94,7 @@ namespace kASA {
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const int32_t& iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const int32_t& iThreadID, const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 
@@ -104,267 +104,275 @@ namespace kASA {
 				//vector<uint32_t> vMemoryCounterOnly(_iNumOfK, 0);
 				vector<Utilities::sBitArray> vMemoryOfTaxIDs(_iNumOfK, Utilities::sBitArray(iSpecIDRange));
 
+				for (auto vInIndex = vInStart; vInIndex < vInEnd; ++vInIndex) {
 
-				const uint64_t& ivInSize = (_iMinK <= 6) ? vIn->second.kMers_ST6.size() : vIn->second.kMers_GT6.size();
-
-				uint64_t iIdxIn = 0;
-
-				/*for (int32_t iK = 0; iK < _iNumOfK; ++iK) {
-					vReadIDs[iK].clear();
-					vReadIDs[iK].reserve(100);
-					vMemoryOfSeenkMers[iK] = 0;
-					//vMemoryCounterOnly[iK] = 0;
-					vMemoryOfTaxIDs[iK].clear();
-				}*/
-
-				tuple<uint64_t, uint64_t> iSeenInput = make_pair(0, 0);
-
-				const int32_t& ikDifferenceTop = _iHighestK - _iMaxK;
-
-				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
-				auto seenResultIt = libBeginIt;
-				bool bInputIterated = false;
-				//uint64_t iIdxLib = 0;
-				//uint64_t iBitMask = 1152921503533105152ULL;
-				//uint64_t iLastRangeBegin = 0;
-
-
-				while (iIdxIn < ivInSize) {
-
-					const pair<uint64_t, uint32_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint32_t>>(vIn->second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint32_t>>(vIn->second.kMers_GT6[iIdxIn]);
-					
-					int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
-					int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
-					auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-
-					// If the ending is ^ it's not going to hit anyway, might as well stop here
-					if ((iCurrentkMerShifted & 31) == 30) {
-						++iIdxIn;
-						bInputIterated = true;
-						continue;
+					for (int32_t i = 0; i < _iNumOfK; ++i) {
+						vReadIDs[i].clear();
+						vMemoryOfSeenkMers[i] = 0;
+						vMemoryOfTaxIDs[i].clear();
 					}
 
-					////////////////////////////////////////////////////////////////////////
+					const uint64_t& ivInSize = (_iMinK <= 6) ? vIn[vInIndex].second.kMers_ST6.size() : vIn[vInIndex].second.kMers_GT6.size();
 
-					// Count duplicates too
-					if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
-						for (int32_t ik = _iNumOfK - 1; ik >= 0; --ik) {
-							const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
-							const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
-							if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
-								//++vMemoryCounterOnly[ikLengthCounter];
-								vReadIDs[ik].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
-								//vReadIDs_[mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second * _iNumOfK + ikLengthCounter]++;
-							}
+					uint64_t iIdxIn = 0;
+
+					/*for (int32_t iK = 0; iK < _iNumOfK; ++iK) {
+						vReadIDs[iK].clear();
+						vReadIDs[iK].reserve(100);
+						vMemoryOfSeenkMers[iK] = 0;
+						//vMemoryCounterOnly[iK] = 0;
+						vMemoryOfTaxIDs[iK].clear();
+					}*/
+
+					tuple<uint64_t, uint64_t> iSeenInput = make_pair(0, 0);
+
+					const int32_t& ikDifferenceTop = _iHighestK - _iMaxK;
+
+					const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
+					auto seenResultIt = libBeginIt;
+					bool bInputIterated = false;
+					//uint64_t iIdxLib = 0;
+					//uint64_t iBitMask = 1152921503533105152ULL;
+					//uint64_t iLastRangeBegin = 0;
+
+
+					while (iIdxIn < ivInSize) {
+
+						const pair<uint64_t, uint32_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint32_t>>(vIn[vInIndex].second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint32_t>>(vIn[vInIndex].second.kMers_GT6[iIdxIn]);
+
+						int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
+						int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
+						auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
+
+						// If the ending is ^ it's not going to hit anyway, might as well stop here
+						if ((iCurrentkMerShifted & 31) == 30) {
+							++iIdxIn;
+							bInputIterated = true;
+							continue;
 						}
 
+						////////////////////////////////////////////////////////////////////////
 
-						++iIdxIn;
-						bInputIterated = true;
-						continue;
-					}
-					else {
-						iSeenInput = iCurrentkMer;
-					}
-
-					const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
-					const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
-
-
-					if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
-						seenResultIt = rangeBeginIt;
-					}
-					else {
-						if (shiftVal(rangeEndIt->first) == iCurrentkMerShifted) {
-							// we need the first occurence in the database
-							uint64_t iTemp = 1;
-							while (shiftVal((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
-								++iTemp;
+						// Count duplicates too
+						if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
+							for (int32_t ik = _iNumOfK - 1; ik >= 0; --ik) {
+								const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
+								const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
+								if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
+									//++vMemoryCounterOnly[ikLengthCounter];
+									vReadIDs[ik].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+									//vReadIDs_[mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second * _iNumOfK + ikLengthCounter]++;
+								}
 							}
-							seenResultIt = rangeEndIt - (iTemp - 1);
+
+
+							++iIdxIn;
+							bInputIterated = true;
+							continue;
 						}
 						else {
-							if (iCurrentkMerShifted < shiftVal(rangeBeginIt->first) || iCurrentkMerShifted > shiftVal(rangeEndIt->first)) {
-								//cout << kMerToAminoacid(get<0>(iCurrentkMer),12) << " " << kMerToAminoacid(iCurrentkMerShifted,12) << " " << kMerToAminoacid(rangeBeginIt->first, 12) << " " << kMerToAminoacid(shiftVal(rangeBeginIt->first), 12) << " " << kMerToAminoacid(shiftVal(rangeEndIt->first), 12) << endl;
-								++iIdxIn;
-								bInputIterated = true;
-								continue;
-							}
-							else {
-								seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, this](const decltype(*libBeginIt)& a, const uint64_t& val) { return (_iMinK > 6) ? ((a.first & 1073741823ULL) >> shift) < val : (a.first >> shift) < val; });
-							}
+							iSeenInput = iCurrentkMer;
 						}
-					}
 
-					bool bBreakOut = false;
-					while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
-
-						const tuple<uint64_t, uint32_t>& iCurrentLib = (_iMinK > 6) ? static_cast<tuple<uint64_t, uint32_t>>(make_tuple(seenResultIt->first & 1073741823ULL, seenResultIt->second)) : tuple<uint64_t, uint32_t>(make_tuple(seenResultIt->first, seenResultIt->second));
-
-						for (; ikLengthCounter >= 0; --ikLengthCounter) {
-
-							shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
-							iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-
-							// No matching of stupid stuff!
-							if ((iCurrentkMerShifted & 31) == 30) {
-								bBreakOut = true;
-								break;
-							}
+						const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
+						const auto rangeBeginIt = libBeginIt + vIn[vInIndex].first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn[vInIndex].first) + vIn[vInIndex].second.range;
 
 
-							const auto& iCurrentLibkMerShifted = get<0>(iCurrentLib) >> shift;
-
-							if (iCurrentkMerShifted < iCurrentLibkMerShifted) {
-								bBreakOut = true;
-								break;
+						if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
+							seenResultIt = rangeBeginIt;
+						}
+						else {
+							if (shiftVal(rangeEndIt->first) == iCurrentkMerShifted) {
+								// we need the first occurence in the database
+								uint64_t iTemp = 1;
+								while (shiftVal((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
+									++iTemp;
+								}
+								seenResultIt = rangeEndIt - (iTemp - 1);
 							}
 							else {
-								if (!(iCurrentLibkMerShifted < iCurrentkMerShifted)) {
-
-									if (iCurrentLibkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
-
-										//++vMemoryCounterOnly[ikLengthCounter];
-										markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
-										vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
-										//vReadIDs_[mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second * _iNumOfK + ikLengthCounter]++;
-									}
-									else {
-										const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
-										auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
-										it.SetNumOfEntries(numOfEntries);
-										for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
-											const auto& tempIndex = iSpecIDRange * _iNumOfK*iThreadID + (*it)*_iNumOfK + ikLengthCounter;
-											const auto& numOfHits = vReadIDs[ikLengthCounter].size();
-											//#pragma omp atomic
-											vCount[tempIndex] += double(numOfHits) / numOfEntries;
-
-											if (numOfEntries == 1) {
-												//#pragma omp atomic
-												vCountUnique[tempIndex] += numOfHits;
-											}
-
-											const auto& entry = *it;
-											const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
-
-											for (const auto& readID : vReadIDs[ikLengthCounter]) {
-												//const auto& readIDScore = 1.f / vReadIDs_[readID * _iNumOfK + ikLengthCounter];
-												//if (readIDScore) {
-												const auto& score = weight * (1.f / numOfEntries);//(1.f + logf(static_cast<float>(numOfEntries)));
-												const auto& arrayIdx = readID * iSpecIDRange + entry;
-												//#pragma omp atomic
-												vReadIDtoGenID[arrayIdx] += score;
-
-												//}
-											}
-										}
-
-										//for (const auto& readID : vReadIDs[ikLengthCounter]) {
-										//	vReadIDs_[readID * _iNumOfK + ikLengthCounter] = 0;
-										//}
-
-										vReadIDs[ikLengthCounter].clear();
-										vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
-										//vReadIDs_[mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second * _iNumOfK + ikLengthCounter] = 1;
-
-										vMemoryOfTaxIDs[ikLengthCounter].clear();
-										markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
-
-										//vMemoryCounterOnly[ikLengthCounter] = 1;
-
-										vMemoryOfSeenkMers[ikLengthCounter] = iCurrentLibkMerShifted;
-									}
-
+								if (iCurrentkMerShifted < shiftVal(rangeBeginIt->first) || iCurrentkMerShifted > shiftVal(rangeEndIt->first)) {
+									//cout << kMerToAminoacid(get<0>(iCurrentkMer),12) << " " << kMerToAminoacid(iCurrentkMerShifted,12) << " " << kMerToAminoacid(rangeBeginIt->first, 12) << " " << kMerToAminoacid(shiftVal(rangeBeginIt->first), 12) << " " << kMerToAminoacid(shiftVal(rangeEndIt->first), 12) << endl;
+									++iIdxIn;
+									bInputIterated = true;
+									continue;
 								}
 								else {
-									uint64_t iTempCounter = 1;
-									const uint64_t& iCurrentLibSuffix = seenResultIt->first;
-									while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-										const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-										int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
-										for (; iUntilK > ikLengthCounter; --iUntilK) {
-											if ((iCurrentLibSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
-												markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
+									seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, this](const decltype(*libBeginIt)& a, const uint64_t& val) { return (_iMinK > 6) ? ((a.first & 1073741823ULL) >> shift) < val : (a.first >> shift) < val; });
+								}
+							}
+						}
+
+						bool bBreakOut = false;
+						while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
+
+							const tuple<uint64_t, uint32_t>& iCurrentLib = (_iMinK > 6) ? static_cast<tuple<uint64_t, uint32_t>>(make_tuple(seenResultIt->first & 1073741823ULL, seenResultIt->second)) : tuple<uint64_t, uint32_t>(make_tuple(seenResultIt->first, seenResultIt->second));
+
+							for (; ikLengthCounter >= 0; --ikLengthCounter) {
+
+								shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
+								iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
+
+								// No matching of stupid stuff!
+								if ((iCurrentkMerShifted & 31) == 30) {
+									bBreakOut = true;
+									break;
+								}
+
+
+								const auto& iCurrentLibkMerShifted = get<0>(iCurrentLib) >> shift;
+
+								if (iCurrentkMerShifted < iCurrentLibkMerShifted) {
+									bBreakOut = true;
+									break;
+								}
+								else {
+									if (!(iCurrentLibkMerShifted < iCurrentkMerShifted)) {
+
+										if (iCurrentLibkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
+
+											//++vMemoryCounterOnly[ikLengthCounter];
+											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
+											vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+											//vReadIDs_[mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second * _iNumOfK + ikLengthCounter]++;
+										}
+										else {
+											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+											auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
+											it.SetNumOfEntries(numOfEntries);
+											for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
+												const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLengthCounter + (*it);
+												const auto& numOfHits = vReadIDs[ikLengthCounter].size();
+												//#pragma omp atomic
+												vCount[tempIndex] += double(numOfHits) / numOfEntries;
+
+												if (numOfEntries == 1) {
+													//#pragma omp atomic
+													vCountUnique[tempIndex] += numOfHits;
+												}
+
+												const auto& entry = *it;
+												const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
+
+												for (const auto& readID : vReadIDs[ikLengthCounter]) {
+													//const auto& readIDScore = 1.f / vReadIDs_[readID * _iNumOfK + ikLengthCounter];
+													//if (readIDScore) {
+													const auto& score = weight * (1.f / numOfEntries);//(1.f + logf(static_cast<float>(numOfEntries)));
+													const auto& arrayIdx = readID * iSpecIDRange + entry;
+													//#pragma omp atomic
+													vReadIDtoGenID[arrayIdx] += score;
+
+													//}
+												}
+											}
+
+											//for (const auto& readID : vReadIDs[ikLengthCounter]) {
+											//	vReadIDs_[readID * _iNumOfK + ikLengthCounter] = 0;
+											//}
+
+											vReadIDs[ikLengthCounter].clear();
+											vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+											//vReadIDs_[mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second * _iNumOfK + ikLengthCounter] = 1;
+
+											vMemoryOfTaxIDs[ikLengthCounter].clear();
+											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
+
+											//vMemoryCounterOnly[ikLengthCounter] = 1;
+
+											vMemoryOfSeenkMers[ikLengthCounter] = iCurrentLibkMerShifted;
+										}
+
+									}
+									else {
+										uint64_t iTempCounter = 1;
+										const uint64_t& iCurrentLibSuffix = seenResultIt->first;
+										while (seenResultIt + iTempCounter != rangeEndIt + 1) {
+											const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
+											int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
+											for (; iUntilK > ikLengthCounter; --iUntilK) {
+												if ((iCurrentLibSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
+													markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
+												}
+												else {
+													break;
+												}
+											}
+											if (iCurrentLibSuffix == iNextLibSuffix) {
+												++iTempCounter;
 											}
 											else {
 												break;
 											}
 										}
-										if (iCurrentLibSuffix == iNextLibSuffix) {
-											++iTempCounter;
-										}
-										else {
-											break;
-										}
+										//iIdxLib += iTempCounter;
+										seenResultIt += iTempCounter;
+										bInputIterated = false;
+										break;
 									}
-									//iIdxLib += iTempCounter;
-									seenResultIt += iTempCounter;
-									bInputIterated = false;
-									break;
 								}
 							}
-						}
-						// loop through to find other hits in the library
-						if (ikLengthCounter == -1) {
-							uint64_t iTempCounter = 1;
-							const uint64_t& iCurrentLibSuffix = static_cast<uint64_t>(seenResultIt->first);
-							while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-								const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-								const auto& iNextLibIdx = (seenResultIt + iTempCounter)->second;
-								if (iCurrentLibSuffix == iNextLibSuffix) {
-									for (int16_t ikLengthCounter_ = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter_ > ikLengthCounter; --ikLengthCounter_) {
-										markTaxIDs(iNextLibIdx, vMemoryOfTaxIDs[ikLengthCounter_], mTaxToIdx, getVec(vLib, iThreadID)); // to identify multiple hits 
-									}
+							// loop through to find other hits in the library
+							if (ikLengthCounter == -1) {
+								uint64_t iTempCounter = 1;
+								const uint64_t& iCurrentLibSuffix = static_cast<uint64_t>(seenResultIt->first);
+								while (seenResultIt + iTempCounter != rangeEndIt + 1) {
+									const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
+									const auto& iNextLibIdx = (seenResultIt + iTempCounter)->second;
+									if (iCurrentLibSuffix == iNextLibSuffix) {
+										for (int16_t ikLengthCounter_ = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter_ > ikLengthCounter; --ikLengthCounter_) {
+											markTaxIDs(iNextLibIdx, vMemoryOfTaxIDs[ikLengthCounter_], mTaxToIdx, getVec(vLib, iThreadID)); // to identify multiple hits 
+										}
 
-									++iTempCounter;
+										++iTempCounter;
+									}
+									else {
+										bBreakOut = true;
+										break;
+									}
 								}
-								else {
-									bBreakOut = true;
-									break;
-								}
+
+								seenResultIt += iTempCounter;
+							}
+						}
+						++iIdxIn;
+						bInputIterated = true;
+					}
+
+
+					// Don't forget the last saved part
+					for (int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter >= 0; --ikLengthCounter) {
+						const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+						auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
+						it.SetNumOfEntries(numOfEntries);
+						for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
+							const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLengthCounter + (*it);
+							const auto& numOfHits = vReadIDs[ikLengthCounter].size();
+							//#pragma omp atomic
+							vCount[tempIndex] += float(numOfHits) / numOfEntries;
+
+							if (numOfEntries == 1) {
+								//#pragma omp atomic
+								vCountUnique[tempIndex] += numOfHits;
 							}
 
-							seenResultIt += iTempCounter;
+							const auto& entry = *it;
+							const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
+
+							for (const auto& readID : vReadIDs[ikLengthCounter]) {
+								//const auto& readIDScore = 1.f / vReadIDs_[readID * _iNumOfK + ikLengthCounter];
+								//if (readIDScore) {
+								const auto& score = weight * (1.f / numOfEntries);//(1.f + logf(static_cast<float>(numOfEntries)));
+								const auto& arrayIdx = readID * iSpecIDRange + entry;
+								//#pragma omp atomic
+								vReadIDtoGenID[arrayIdx] += score;
+
+								//}
+							}
 						}
+						//for (const auto& readID : vReadIDs[ikLengthCounter]) {
+						//	vReadIDs_[readID * _iNumOfK + ikLengthCounter] = 0;
+						//}
 					}
-					++iIdxIn;
-					bInputIterated = true;
-				}
-
-
-				// Don't forget the last saved part
-				for (int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter >= 0; --ikLengthCounter) {
-					const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
-					auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
-					it.SetNumOfEntries(numOfEntries);
-					for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
-						const auto& tempIndex = (*it)*_iNumOfK + ikLengthCounter;
-						const auto& numOfHits = vReadIDs[ikLengthCounter].size();
-						//#pragma omp atomic
-						vCount[tempIndex] += float(numOfHits) / numOfEntries;
-
-						if (numOfEntries == 1) {
-							//#pragma omp atomic
-							vCountUnique[tempIndex] += numOfHits;
-						}
-
-						const auto& entry = *it;
-						const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
-
-						for (const auto& readID : vReadIDs[ikLengthCounter]) {
-							//const auto& readIDScore = 1.f / vReadIDs_[readID * _iNumOfK + ikLengthCounter];
-							//if (readIDScore) {
-							const auto& score = weight * (1.f / numOfEntries);//(1.f + logf(static_cast<float>(numOfEntries)));
-							const auto& arrayIdx = readID * iSpecIDRange + entry;
-							//#pragma omp atomic
-							vReadIDtoGenID[arrayIdx] += score;
-
-							//}
-						}
-					}
-					//for (const auto& readID : vReadIDs[ikLengthCounter]) {
-					//	vReadIDs_[readID * _iNumOfK + ikLengthCounter] = 0;
-					//}
 				}
 			}
 			catch (...) {
@@ -380,7 +388,7 @@ namespace kASA {
 
 
 		template <typename vecType>
-		inline void createProfile(const int32_t iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {
+		inline void createProfile(const int32_t iThreadID, const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {
 
 			try {
 
@@ -388,224 +396,231 @@ namespace kASA {
 				vector<uint32_t> vMemoryCounterOnly(_iNumOfK, 0);
 				vector<Utilities::sBitArray> vMemoryOfTaxIDs(_iNumOfK, Utilities::sBitArray(iSpecIDRange));
 
+				for (auto vInIndex = vInStart; vInIndex < vInEnd; ++vInIndex) {
 
-				const uint64_t& ivInSize = (_iMinK <= 6) ? vIn->second.kMers_ST6.size() : vIn->second.kMers_GT6.size();
-
-				uint64_t iIdxIn = 0;
-
-				/*for (int32_t iK = 0; iK < _iNumOfK; ++iK) {
-					vMemoryOfSeenkMers[iK] = 0;
-					vMemoryCounterOnly[iK] = 0;
-					vMemoryOfTaxIDs[iK].clear();
-				}*/
-
-				tuple<uint64_t, uint64_t> iSeenInput = make_pair(0, 0);
-
-				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
-				auto seenResultIt = libBeginIt;
-
-				bool bInputIterated = false;
-				//uint64_t iIdxLib = 0;
-				//uint64_t iLastRangeBegin = 0;
-
-				while (iIdxIn < ivInSize) {
-
-					const pair<uint64_t, uint64_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint64_t>>(vIn->second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint64_t>>(vIn->second.kMers_GT6[iIdxIn]);
-
-					int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
-					int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
-					auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-
-					// If the ending is ^ it's not going to hit anyway, might as well stop here
-					if ((iCurrentkMerShifted & 31) == 30) {
-						++iIdxIn;
-						bInputIterated = true;
-						continue;
+					for (int32_t i = 0; i < _iNumOfK; ++i) {
+						vMemoryCounterOnly[i] = 0;
+						vMemoryOfSeenkMers[i] = 0;
+						vMemoryOfTaxIDs[i].clear();
 					}
 
-					////////////////////////////////////////////////////////////////////////
+					const uint64_t& ivInSize = (_iMinK <= 6) ? vIn[vInIndex].second.kMers_ST6.size() : vIn[vInIndex].second.kMers_GT6.size();
 
-					// Count duplicates too
-					if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
-						for (int32_t ik = _iNumOfK - 1; ik >= 0; --ik) {
-							const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
-							const auto& iCurrkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
-							if (iCurrkMerShifted_ == vMemoryOfSeenkMers[ik]) {
-								++vMemoryCounterOnly[ik];
-							}
+					uint64_t iIdxIn = 0;
+
+					/*for (int32_t iK = 0; iK < _iNumOfK; ++iK) {
+						vMemoryOfSeenkMers[iK] = 0;
+						vMemoryCounterOnly[iK] = 0;
+						vMemoryOfTaxIDs[iK].clear();
+					}*/
+
+					tuple<uint64_t, uint64_t> iSeenInput = make_pair(0, 0);
+
+					const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
+					auto seenResultIt = libBeginIt;
+
+					bool bInputIterated = false;
+					//uint64_t iIdxLib = 0;
+					//uint64_t iLastRangeBegin = 0;
+
+					while (iIdxIn < ivInSize) {
+
+						const pair<uint64_t, uint64_t>& iCurrentkMer = (_iMinK <= 6) ? static_cast<pair<uint64_t, uint64_t>>(vIn[vInIndex].second.kMers_ST6[iIdxIn]) : static_cast<pair<uint64_t, uint64_t>>(vIn[vInIndex].second.kMers_GT6[iIdxIn]);
+
+						int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
+						int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
+						auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
+
+						// If the ending is ^ it's not going to hit anyway, might as well stop here
+						if ((iCurrentkMerShifted & 31) == 30) {
+							++iIdxIn;
+							bInputIterated = true;
+							continue;
 						}
 
-						++iIdxIn;
-						bInputIterated = true;
-						continue;
-					}
-					else {
-						iSeenInput = iCurrentkMer;
-					}
+						////////////////////////////////////////////////////////////////////////
 
-
-					const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
-					const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
-
-					if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
-						seenResultIt = rangeBeginIt;
-					}
-					else {
-						if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
-							// we need the first occurence in the database
-							uint64_t iTemp = 1;
-							while (shiftVal((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
-								++iTemp;
+						// Count duplicates too
+						if (get<0>(iSeenInput) == get<0>(iCurrentkMer) && bInputIterated) {
+							for (int32_t ik = _iNumOfK - 1; ik >= 0; --ik) {
+								const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
+								const auto& iCurrkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
+								if (iCurrkMerShifted_ == vMemoryOfSeenkMers[ik]) {
+									++vMemoryCounterOnly[ik];
+								}
 							}
-							seenResultIt = rangeEndIt - (iTemp - 1);
+
+							++iIdxIn;
+							bInputIterated = true;
+							continue;
 						}
 						else {
-							if (iCurrentkMerShifted < shiftVal(rangeBeginIt->first) || iCurrentkMerShifted > shiftVal(rangeEndIt->first)) {
-								++iIdxIn;
-								bInputIterated = true;
-								continue;
-							}
-							else {
-								seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, this](const decltype(*libBeginIt)& a, const uint64_t& val) { return (_iMinK > 6) ? ((a.first & 1073741823ULL) >> shift) < val : (a.first >> shift) < val; });
-							}
+							iSeenInput = iCurrentkMer;
 						}
-					}
 
-					bool bBreakOut = false;
-					while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
-						const tuple<uint64_t, uint32_t>& iCurrentLib = (_iMinK > 6) ? static_cast<tuple<uint64_t, uint32_t>>(make_tuple(seenResultIt->first & 1073741823ULL, seenResultIt->second)) : tuple<uint64_t, uint32_t>(make_tuple(seenResultIt->first, seenResultIt->second));
-						//cout << get<0>(iCurrentLib) << " " << get<1>(iCurrentLib) << endl;
 
-						for (; ikLengthCounter >= 0; --ikLengthCounter) {
+						const auto shiftVal = [&shift, this](const uint64_t& val) { return (_iMinK > 6) ? (val & 1073741823ULL) >> shift : (val >> shift); };
+						const auto rangeBeginIt = libBeginIt + vIn[vInIndex].first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn[vInIndex].first) + vIn[vInIndex].second.range;
 
-							shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
-							iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
-							
-							// No matching of stupid stuff!
-							if ((iCurrentkMerShifted & 31) == 30) {
-								bBreakOut = true;
-								break;
-							}
-							
-							const auto& iCurrentLibkMerShifted = get<0>(iCurrentLib) >> shift;
-
-							if (iCurrentkMerShifted < iCurrentLibkMerShifted) {
-								bBreakOut = true;
-								break;
+						if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
+							seenResultIt = rangeBeginIt;
+						}
+						else {
+							if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
+								// we need the first occurence in the database
+								uint64_t iTemp = 1;
+								while (shiftVal((rangeEndIt - iTemp)->first) == iCurrentkMerShifted) {
+									++iTemp;
+								}
+								seenResultIt = rangeEndIt - (iTemp - 1);
 							}
 							else {
-								if (!(iCurrentLibkMerShifted < iCurrentkMerShifted)) {
-									/*if (!bInputIterated) {
-										if (iCurrentLibkMerShifted == vMemoryOfSeenkMers[ikLengthCounter] && get<1>(iCurrentLib) == vMemoryOfSeenTaxIDs[ikLengthCounter]) {
-											continue;
-										}
-										else {
-											vMemoryOfSeenTaxIDs[ikLengthCounter] = get<1>(iCurrentLib);
-										}
-									}*/
-
-									if (iCurrentLibkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
-										++vMemoryCounterOnly[ikLengthCounter];
-										markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
-									}
-									else {
-										const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
-										auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
-										it.SetNumOfEntries(numOfEntries);
-										for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
-											const auto& tempIndex = iSpecIDRange * _iNumOfK*iThreadID + (*it)*_iNumOfK + ikLengthCounter;
-
-											//#pragma omp atomic
-											vCount[tempIndex] += double(vMemoryCounterOnly[ikLengthCounter]) / numOfEntries;
-
-
-											if (numOfEntries == 1) {
-												//#pragma omp atomic
-												vCountUnique[tempIndex] += vMemoryCounterOnly[ikLengthCounter];
-											}
-										}
-
-										vMemoryOfTaxIDs[ikLengthCounter].clear();
-										markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
-
-										vMemoryCounterOnly[ikLengthCounter] = 1;
-
-										vMemoryOfSeenkMers[ikLengthCounter] = iCurrentLibkMerShifted;
-									}
+								if (iCurrentkMerShifted < shiftVal(rangeBeginIt->first) || iCurrentkMerShifted > shiftVal(rangeEndIt->first)) {
+									++iIdxIn;
+									bInputIterated = true;
+									continue;
 								}
 								else {
-									uint64_t iTempCounter = 1;
-									const uint64_t& iCurrentLibSuffix = static_cast<uint64_t>(seenResultIt->first);
-									while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-										const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-										int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
-										for (; iUntilK > ikLengthCounter; --iUntilK) {
-											if ((iCurrentLibSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
-												markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
+									seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift, this](const decltype(*libBeginIt)& a, const uint64_t& val) { return (_iMinK > 6) ? ((a.first & 1073741823ULL) >> shift) < val : (a.first >> shift) < val; });
+								}
+							}
+						}
+
+						bool bBreakOut = false;
+						while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
+							const tuple<uint64_t, uint32_t>& iCurrentLib = (_iMinK > 6) ? static_cast<tuple<uint64_t, uint32_t>>(make_tuple(seenResultIt->first & 1073741823ULL, seenResultIt->second)) : tuple<uint64_t, uint32_t>(make_tuple(seenResultIt->first, seenResultIt->second));
+							//cout << get<0>(iCurrentLib) << " " << get<1>(iCurrentLib) << endl;
+
+							for (; ikLengthCounter >= 0; --ikLengthCounter) {
+
+								shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
+								iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
+
+								// No matching of stupid stuff!
+								if ((iCurrentkMerShifted & 31) == 30) {
+									bBreakOut = true;
+									break;
+								}
+
+								const auto& iCurrentLibkMerShifted = get<0>(iCurrentLib) >> shift;
+
+								if (iCurrentkMerShifted < iCurrentLibkMerShifted) {
+									bBreakOut = true;
+									break;
+								}
+								else {
+									if (!(iCurrentLibkMerShifted < iCurrentkMerShifted)) {
+										/*if (!bInputIterated) {
+											if (iCurrentLibkMerShifted == vMemoryOfSeenkMers[ikLengthCounter] && get<1>(iCurrentLib) == vMemoryOfSeenTaxIDs[ikLengthCounter]) {
+												continue;
+											}
+											else {
+												vMemoryOfSeenTaxIDs[ikLengthCounter] = get<1>(iCurrentLib);
+											}
+										}*/
+
+										if (iCurrentLibkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
+											++vMemoryCounterOnly[ikLengthCounter];
+											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
+										}
+										else {
+											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+											auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
+											it.SetNumOfEntries(numOfEntries);
+											for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
+												const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLengthCounter + (*it);
+
+												//#pragma omp atomic
+												vCount[tempIndex] += double(vMemoryCounterOnly[ikLengthCounter]) / numOfEntries;
+
+
+												if (numOfEntries == 1) {
+													//#pragma omp atomic
+													vCountUnique[tempIndex] += vMemoryCounterOnly[ikLengthCounter];
+												}
+											}
+
+											vMemoryOfTaxIDs[ikLengthCounter].clear();
+											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
+
+											vMemoryCounterOnly[ikLengthCounter] = 1;
+
+											vMemoryOfSeenkMers[ikLengthCounter] = iCurrentLibkMerShifted;
+										}
+									}
+									else {
+										uint64_t iTempCounter = 1;
+										const uint64_t& iCurrentLibSuffix = static_cast<uint64_t>(seenResultIt->first);
+										while (seenResultIt + iTempCounter != rangeEndIt + 1) {
+											const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
+											int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
+											for (; iUntilK > ikLengthCounter; --iUntilK) {
+												if ((iCurrentLibSuffix >> 5 * iUntilK) == (iNextLibSuffix >> 5 * iUntilK)) {
+													markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
+												}
+												else {
+													break;
+												}
+											}
+											if (iCurrentLibSuffix == iNextLibSuffix) {
+												++iTempCounter;
 											}
 											else {
 												break;
 											}
 										}
-										if (iCurrentLibSuffix == iNextLibSuffix) {
-											++iTempCounter;
-										}
-										else {
-											break;
-										}
+										//iIdxLib += iTempCounter;
+										seenResultIt += iTempCounter;
+										bInputIterated = false;
+										break;
 									}
-									//iIdxLib += iTempCounter;
-									seenResultIt += iTempCounter;
-									bInputIterated = false;
-									break;
 								}
 							}
-						}
-						// loop through to find other hits in the library
-						if (ikLengthCounter == -1) {
-							uint64_t iTempCounter = 1;
-							const uint64_t& iCurrentLibSuffix = static_cast<uint64_t>(seenResultIt->first);
-							while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-								const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-								const auto& iNextLibIdx = (seenResultIt + iTempCounter)->second;
-								if (iCurrentLibSuffix == iNextLibSuffix) {
-									for (int16_t ikLengthCounter_ = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter_ > ikLengthCounter; --ikLengthCounter_) {
-										markTaxIDs(iNextLibIdx, vMemoryOfTaxIDs[ikLengthCounter_], mTaxToIdx, getVec(vLib, iThreadID)); // to identify multiple hits  
+							// loop through to find other hits in the library
+							if (ikLengthCounter == -1) {
+								uint64_t iTempCounter = 1;
+								const uint64_t& iCurrentLibSuffix = static_cast<uint64_t>(seenResultIt->first);
+								while (seenResultIt + iTempCounter != rangeEndIt + 1) {
+									const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
+									const auto& iNextLibIdx = (seenResultIt + iTempCounter)->second;
+									if (iCurrentLibSuffix == iNextLibSuffix) {
+										for (int16_t ikLengthCounter_ = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter_ > ikLengthCounter; --ikLengthCounter_) {
+											markTaxIDs(iNextLibIdx, vMemoryOfTaxIDs[ikLengthCounter_], mTaxToIdx, getVec(vLib, iThreadID)); // to identify multiple hits  
+										}
+
+										++iTempCounter;
 									}
+									else {
+										bBreakOut = true;
+										break;
+									}
+								}
 
-									++iTempCounter;
-								}
-								else {
-									bBreakOut = true;
-									break;
-								}
+								seenResultIt += iTempCounter;
 							}
-
-							seenResultIt += iTempCounter;
 						}
+						++iIdxIn;
+						bInputIterated = true;
 					}
-					++iIdxIn;
-					bInputIterated = true;
-				}
 
 
-				// Don't forget the last saved part
-				for (int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter >= 0; --ikLengthCounter) {
-					const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
-					auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
-					it.SetNumOfEntries(numOfEntries);
-					for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
-						const auto& tempIndex = (*it)*_iNumOfK + ikLengthCounter;
-						//#pragma omp atomic
-						vCount[tempIndex] += float(vMemoryCounterOnly[ikLengthCounter]) / numOfEntries;
-
-						if (numOfEntries == 1) {
+					// Don't forget the last saved part
+					for (int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter >= 0; --ikLengthCounter) {
+						const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+						auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
+						it.SetNumOfEntries(numOfEntries);
+						for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
+							const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLengthCounter + (*it);
 							//#pragma omp atomic
-							vCountUnique[tempIndex] += vMemoryCounterOnly[ikLengthCounter];
+							vCount[tempIndex] += float(vMemoryCounterOnly[ikLengthCounter]) / numOfEntries;
+
+							if (numOfEntries == 1) {
+								//#pragma omp atomic
+								vCountUnique[tempIndex] += vMemoryCounterOnly[ikLengthCounter];
+							}
 						}
 					}
 				}
-
 			}
 			catch (...) {
 				if (someThingWentWrong == nullptr) {
@@ -629,45 +644,47 @@ namespace kASA {
 		}
 
 		template <typename vecType>
-		inline void compareWithDatabase_sloppy(const int32_t& iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase_sloppy(const int32_t& iThreadID, const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 
 				//auto start = std::chrono::high_resolution_clock::now();
+				for (auto vInIndex = vInStart; vInIndex < vInEnd; ++vInIndex) {
 
-				const uint64_t& ivInSize = vIn->second.kMers_ST6.size();
+					const uint64_t& ivInSize = vIn[vInIndex].second.kMers_ST6.size();
 
-				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
-				auto seenResultIt = libBeginIt;
+					const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
+					auto seenResultIt = libBeginIt;
 
-				const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
-				seenResultIt = rangeBeginIt;
+					const auto rangeBeginIt = libBeginIt + vIn[vInIndex].first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn[vInIndex].first) + vIn[vInIndex].second.range;
+					seenResultIt = rangeBeginIt;
 
-				while (seenResultIt != rangeEndIt + 1) {
-					const auto& iCurrentLib = *seenResultIt;
+					while (seenResultIt != rangeEndIt + 1) {
+						const auto& iCurrentLib = *seenResultIt;
 
-					vCount[iCurrentLib] += static_cast<double>(ivInSize) / (vIn->second.range + 1);
+						vCount[iSpecIDRange*iThreadID + iCurrentLib] += static_cast<double>(ivInSize) / (vIn[vInIndex].second.range + 1);
 
 
-					if (vIn->second.range == 0) {
-						vCountUnique[iCurrentLib] += ivInSize;
+						if (vIn[vInIndex].second.range == 0) {
+							vCountUnique[iSpecIDRange*iThreadID + iCurrentLib] += ivInSize;
+						}
+
+						const auto& score = arrWeightingFactors[0] * (1.f / ivInSize);
+						for (const auto& elem : vIn[vInIndex].second.kMers_ST6) {
+							const auto& arrayIdx = mReadIDToArrayIdx.find(get<1>(elem))->second * iSpecIDRange + iCurrentLib;
+							//#pragma omp atomic
+							vReadIDtoGenID[arrayIdx] += score;
+
+						}
+
+						++seenResultIt;
 					}
 
-					const auto& score = arrWeightingFactors[0] * (1.f / ivInSize);
-					for (const auto& elem : vIn->second.kMers_ST6) {
-						const auto& arrayIdx = mReadIDToArrayIdx.find(get<1>(elem))->second * iSpecIDRange + iCurrentLib;
-						//#pragma omp atomic
-						vReadIDtoGenID[arrayIdx] += score;
-
-					}
-
-					++seenResultIt;
+					/*auto end = std::chrono::high_resolution_clock::now();
+					criticalSectionLock.lock();
+					cout << "OUT: Time: " << iThreadID << " " <<  chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << " ns" << endl;
+					criticalSectionLock.unlock();*/
 				}
-
-				/*auto end = std::chrono::high_resolution_clock::now();
-				criticalSectionLock.lock();
-				cout << "OUT: Time: " << iThreadID << " " <<  chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << " ns" << endl;
-				criticalSectionLock.unlock();*/
 			}
 			catch (...) {
 				if (someThingWentWrong == nullptr) {
@@ -681,32 +698,32 @@ namespace kASA {
 		}
 
 		template <typename vecType>
-		inline void createProfile_sloppy(const int32_t iThreadID, const pair<uint64_t, Utilities::rangeContainer>* vIn, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique) {
+		inline void createProfile_sloppy(const int32_t iThreadID, const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange) {
 
 			try {
+				for (auto vInIndex = vInStart; vInIndex < vInEnd; ++vInIndex) {
 
+					const uint64_t& ivInSize = vIn[vInIndex].second.kMers_ST6.size();
 
-				const uint64_t& ivInSize = vIn->second.kMers_ST6.size();
+					const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
+					auto seenResultIt = libBeginIt;
 
-				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
-				auto seenResultIt = libBeginIt;
+					const auto rangeBeginIt = libBeginIt + vIn[vInIndex].first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn[vInIndex].first) + vIn[vInIndex].second.range;
+					seenResultIt = rangeBeginIt;
 
-				const auto rangeBeginIt = libBeginIt + vIn->first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn->first) + vIn->second.range;
-				seenResultIt = rangeBeginIt;
-
-				while (seenResultIt != rangeEndIt + 1) {
-					const auto& iCurrentLib = *seenResultIt;
-					//#pragma omp atomic
-					vCount[iCurrentLib] += static_cast<double>(ivInSize) / (vIn->second.range + 1);
-
-
-					if (vIn->second.range == 0) {
+					while (seenResultIt != rangeEndIt + 1) {
+						const auto& iCurrentLib = *seenResultIt;
 						//#pragma omp atomic
-						vCountUnique[iCurrentLib] += ivInSize;
-					}
-					++seenResultIt;
-				}
+						vCount[iSpecIDRange*iThreadID + iCurrentLib] += static_cast<double>(ivInSize) / (vIn[vInIndex].second.range + 1);
 
+
+						if (vIn[vInIndex].second.range == 0) {
+							//#pragma omp atomic
+							vCountUnique[iSpecIDRange*iThreadID + iCurrentLib] += ivInSize;
+						}
+						++seenResultIt;
+					}
+				}
 			}
 			catch (...) {
 				if (someThingWentWrong == nullptr) {
@@ -846,7 +863,11 @@ namespace kASA {
 							fOut << sOutStr.str();
 						}
 
-						fill(resultVec.begin(), resultVec.end(), make_tuple(0ULL, 0.f, 0.0));
+						for (auto& entry : resultVec) {
+							get<0>(entry) = 0;
+							get<1>(entry) = 0.f;
+							get<2>(entry) = 0.0;
+						}
 					}
 
 					vReadNameAndLength.pop_front();
@@ -957,7 +978,7 @@ namespace kASA {
 
 	public:
 		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique) {
+		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique, const bool& bUseArry) {
 			
 			try {
 				// test if files exists
@@ -1133,12 +1154,15 @@ namespace kASA {
 				}
 
 				// Create threadpool(s), in stxxl mode we can only have synced parallelism (as in no two threads should not access the same vector instance)
-				vector<WorkerThread> workerThreadPool(_iNumOfThreads);
+				vector<WorkerThread> workerThreadPool(_iNumOfK);
+				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+					workerThreadPool[i].setID(i);
+				}
 				
 
 				// load Trie
 				const uint8_t& iTD = iTrieDepth;
-				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK >= 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > (kASA::kASA::aminoacidTokMer("]^^^^^")*sizeof(packedBigPair)+1024ULL*1024ULL*1024ULL));
+				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK >= 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > (kASA::kASA::aminoacidTokMer("]^^^^^")*sizeof(packedBigPair)+1024ULL*1024ULL*1024ULL), bUseArry);
 				T.LoadFromStxxlVec(sLibFile);
 				T.SetForIsInTrie( (_iMinK < 6) ? static_cast<uint8_t>(_iMinK) : static_cast<uint8_t>(6));
 
@@ -1343,7 +1367,7 @@ namespace kASA {
 #endif
 #endif
 						// sort inside each vector (in parallel)
-						auto sortingFunction = [this, &vInputVec, &bUnique](const int32_t iThreadID) {
+						function<void(const int32_t&)> sortingFunction = [this, &vInputVec, &bUnique](const int32_t iThreadID) {
 							size_t iParallelCount = 0;
 
 							for (auto it = vInputVec.begin(); it != vInputVec.end(); ++it, ++iParallelCount) {
@@ -1369,7 +1393,7 @@ namespace kASA {
 
 						// enqueue and run
 						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-							workerThreadPool[iThreadID].pushTask(bind(sortingFunction, iThreadID));
+							workerThreadPool[iThreadID].pushTask(sortingFunction);
 							workerThreadPool[iThreadID].startThread();
 						}
 
@@ -1384,24 +1408,26 @@ namespace kASA {
 						if (bReadIDsAreInteresting) {
 							// This holds the mapping read ID -> Genus ID
 							if (iNumOfReads <= iNumOfReadsOld) {
-								for (uint64_t i = 0; i < iNumOfReads*iAmountOfSpecies; ++i) {
+								memset(vReadIDtoTaxID.get(), 0, iNumOfReads*iAmountOfSpecies * sizeof(float));
+								/*for (uint64_t i = 0; i < iNumOfReads*iAmountOfSpecies; ++i) {
 									vReadIDtoTaxID[i] = 0.f;
-								}
+								}*/
 							}
 							else {
 								vReadIDtoTaxID.reset();
 								vReadIDtoTaxID.reset(new float[iNumOfReads*iAmountOfSpecies]);
 
-								for (uint64_t i = 0; i < iNumOfReads*iAmountOfSpecies; ++i) {
+								memset(vReadIDtoTaxID.get(), 0, iNumOfReads*iAmountOfSpecies * sizeof(float));
+								/*for (uint64_t i = 0; i < iNumOfReads*iAmountOfSpecies; ++i) {
 									vReadIDtoTaxID[i] = 0.f;
-								}
+								}*/
 							}
 						}
 						else {
 							iNumOfReadsSum += transferBetweenRuns->iNumOfNewReads;
 						}
 
-						function<void(const int32_t&, const pair<uint64_t, Utilities::rangeContainer>*)> foo;
+						function<void(const int32_t&, const uint64_t&, const uint64_t&)> foo;
 
 						// now compare with index
 						start = std::chrono::high_resolution_clock::now();
@@ -1409,27 +1435,27 @@ namespace kASA {
 						if (bReadIDsAreInteresting) {
 							if (bRAM) {
 								if (bPartitioned) {
-									foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
 									if (bUnfunny) {
-										foo = bind(&Compare::compareWithDatabase_sloppy< vector<uint16_t>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
+										foo = bind(&Compare::compareWithDatabase_sloppy< vector<uint16_t>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 									else {
-										foo = bind(&Compare::compareWithDatabase< vector<packedBigPair>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+										foo = bind(&Compare::compareWithDatabase< vector<packedBigPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 								}
 							}
 							else {
 								if (bPartitioned) {
-									foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, placeholders::_2, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
 									if (bUnfunny) {
-										foo = bind(&Compare::compareWithDatabase_sloppy<unique_ptr<unique_ptr<const taxaOnly>[]>>, this, placeholders::_1, placeholders::_2, ref(vLib_taxaOnly), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
+										foo = bind(&Compare::compareWithDatabase_sloppy<unique_ptr<unique_ptr<const taxaOnly>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib_taxaOnly), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 									else {
-										foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType_32p>[]>>, this, placeholders::_1, placeholders::_2, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+										foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType_32p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 								}
 							}
@@ -1437,27 +1463,27 @@ namespace kASA {
 						else {
 							if (bRAM) {
 								if (bPartitioned) {
-									foo = bind(&Compare::createProfile<vector<packedPair>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
+									foo = bind(&Compare::createProfile<vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
 								}
 								else {
 									if (bUnfunny) {
-										foo = bind(&Compare::createProfile_sloppy<vector<uint16_t>*>, this, placeholders::_1, placeholders::_2, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique));
+										foo = bind(&Compare::createProfile_sloppy<vector<uint16_t>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies));
 									}
 									else {
-										foo = bind(&Compare::createProfile< vector<packedBigPair>* >, this, placeholders::_1, placeholders::_2, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
+										foo = bind(&Compare::createProfile< vector<packedBigPair>* >, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
 									}
 								}
 							}
 							else {
 								if (bPartitioned) {
-									foo = bind(&Compare::createProfile< unique_ptr<unique_ptr<const index_t_p>[]> >, this, placeholders::_1, placeholders::_2, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
+									foo = bind(&Compare::createProfile< unique_ptr<unique_ptr<const index_t_p>[]> >, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
 								}
 								else {
 									if (bUnfunny) {
-										foo = bind(&Compare::createProfile_sloppy< unique_ptr<unique_ptr<const taxaOnly>[]> >, this, placeholders::_1, placeholders::_2, ref(vLib_taxaOnly), ref(vCount_all), ref(vCount_unique));
+										foo = bind(&Compare::createProfile_sloppy< unique_ptr<unique_ptr<const taxaOnly>[]> >, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib_taxaOnly), ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies));
 									}
 									else {
-										foo = bind(&Compare::createProfile< unique_ptr<unique_ptr<const contentVecType_32p>[]> >, this, placeholders::_1, placeholders::_2, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
+										foo = bind(&Compare::createProfile< unique_ptr<unique_ptr<const contentVecType_32p>[]> >, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(iAmountOfSpecies), ref(mTaxToIdx));
 									}
 								}
 
@@ -1470,19 +1496,21 @@ namespace kASA {
 							iSumOfRanges += (entry.second.range + 1)*( (_iMinK >= 6) ? entry.second.kMers_GT6.size() : entry.second.kMers_ST6.size() );
 						}
 						size_t iDiv = iSumOfRanges / _iNumOfThreads;
+						uint64_t iStart = 0, iEnd = 0;
 						auto inputIt = vInputVec.cbegin();
 
 						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
 
-							workerThreadPool[iThreadID].setNumberOfTasks(vInputVec.size() / static_cast<size_t>(_iNumOfThreads) + 1);
 
 							uint64_t iCurrentSum = 0;
 							while (iCurrentSum < iDiv && inputIt != vInputVec.cend()) {
-								auto task = bind(foo, iThreadID, &(*inputIt));
-								workerThreadPool[iThreadID].pushTask(task);
 								iCurrentSum += (inputIt->second.range + 1)*((_iMinK >= 6) ? inputIt->second.kMers_GT6.size() : inputIt->second.kMers_ST6.size());
 								++inputIt;
+								++iEnd;
 							}
+							auto task = bind(foo, placeholders::_1, iStart, iEnd);
+							workerThreadPool[iThreadID].pushTask(task);
+							iStart = iEnd;
 						}
 
 						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
@@ -1641,7 +1669,7 @@ namespace kASA {
 
 					// sum up parallel results
 					for (int32_t iThreadID = 1; iThreadID < _iNumOfThreads; ++iThreadID) {
-						const uint64_t& iStepsize = iThreadID * _iNumOfK*iAmountOfSpecies;
+						const uint64_t& iStepsize = iThreadID * _iNumOfK * iAmountOfSpecies;
 						for (uint64_t iIdx = 0; iIdx < _iNumOfK*iAmountOfSpecies; ++iIdx) {
 							vCount_all[iIdx] += vCount_all[iStepsize + iIdx];
 							vCount_unique[iIdx] += vCount_unique[iStepsize + iIdx];
@@ -1655,10 +1683,10 @@ namespace kASA {
 					for (uint32_t iSpecIdx = 1; iSpecIdx < iAmountOfSpecies; ++iSpecIdx) {
 						vector<pair<double, uint64_t>> vTemp(_iNumOfK);
 						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							const uint64_t& iTempScore = vCount_unique[iSpecIdx*uint64_t(_iNumOfK) + ikMerlength];
+							const uint64_t& iTempScore = vCount_unique[iSpecIdx + ikMerlength*iAmountOfSpecies];
 							vSumOfUniquekMers[ikMerlength] += iTempScore;
-							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx*uint64_t(_iNumOfK) + ikMerlength];
-							vTemp[ikMerlength] = make_pair(vCount_all[iSpecIdx*uint64_t(_iNumOfK) + ikMerlength], iTempScore);
+							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx + ikMerlength * iAmountOfSpecies];
+							vTemp[ikMerlength] = make_pair(vCount_all[iSpecIdx + ikMerlength * iAmountOfSpecies], iTempScore);
 						}
 						vOut[iSpecIdx] = make_tuple(mOrganisms[iSpecIdx], vTemp, mIdxToTax[iSpecIdx]);
 					}

@@ -22,7 +22,8 @@ using namespace std;
 class WorkerThread {
 
 	vector<thread> T;
-	vector<function<void()>> tasks;
+	int32_t ID = 0;
+	vector<function<void(const int32_t&)>> tasks;
 	condition_variable cv_worker;
 	condition_variable cv_master;
 	mutex taskMutex;
@@ -36,6 +37,11 @@ public:
 	}
 
 	////////////////////////////////////////////////////////
+	inline void setID(const uint32_t& ID) {
+		this->ID = ID;
+	}
+
+	////////////////////////////////////////////////////////
 	inline ~WorkerThread() {
 		std::unique_lock<std::mutex> lock(taskMutex);
 		stop = true;
@@ -44,8 +50,8 @@ public:
 	}
 
 	////////////////////////////////////////////////////////
-	inline void pushTask(const function<void()>& task) {
-		tasks.push_back([task]() { task(); });
+	inline void pushTask(const function<void(const int32_t&)>& task) {
+		tasks.push_back([task](const int32_t& id) { task(id); });
 	}
 
 	////////////////////////////////////////////////////////
@@ -91,7 +97,7 @@ private:
 					}
 
 					for (const auto& entry : tasks) {
-						entry();
+						entry(this->ID);
 					}
 
 					tasks.clear();

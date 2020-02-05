@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false, bUnfunny = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false, bUnfunny = false, bUseArry = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
@@ -394,6 +394,9 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "--stxxl") {
 				sStxxlMode = vParameters[++i];
 			}
+			else if (sParameter == "--array") {
+				bUseArry = true;
+			}
 			else {
 				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 			}
@@ -517,7 +520,7 @@ int main(int argc, char* argv[]) {
 
 			kASAObj.bHumanReadable = bHumanReadable;
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique);
+			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, bUseArry);
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 #if _WIN32 || _WIN64

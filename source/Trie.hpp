@@ -270,12 +270,13 @@ private:
 
 	unique_ptr<Node> _root;
 
-	vector<packedBigPair> _vAllPrefixes;
+	vector<packedBigPair> _prefixLookuptable;
+	vector<tuple<uint32_t,uint64_t,uint32_t>> _prefixArray;
 
 public:
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const bool& bShitLoadOfRAM = false) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
+	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const bool& bShitLoadOfRAM = false, const bool& bUseArray = false) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
 		for (uint8_t i = 1; i < iMaxLevel; ++i) {
 			_Bitmask |= 31ULL << (5 * i);
 		}
@@ -287,8 +288,13 @@ public:
 		}
 
 		if (bShitLoadOfRAM) {
-			_vAllPrefixes.resize(kASA::kASA::aminoacidTokMer("]^^^^^"), packedBigPair(numeric_limits<uint64_t>::max(),0));
-			iSizeOfTrie = _vAllPrefixes.size() * sizeof(packedBigPair);
+			_prefixLookuptable.resize(kASA::kASA::aminoacidTokMer("]^^^^^"), packedBigPair(numeric_limits<uint64_t>::max(),0));
+			iSizeOfTrie = _prefixLookuptable.size() * sizeof(packedBigPair);
+		}
+		else {
+			if (bUseArray) {
+				_prefixArray.resize(1);
+			}
 		}
 	}
 
@@ -305,11 +311,16 @@ public:
 	}
 
 	inline void GetIfVecIsUsed() {
-		if (_vAllPrefixes.size()) {
+		if (_prefixLookuptable.size()) {
 			cout << "OUT: Hash table (faster) will be used for prefix matching..." << endl;
 		}
 		else {
-			cout << "OUT: Trie will be used for prefix matching..." << endl;
+			if (_prefixArray.size()) {
+				cout << "OUT: Array will be used for prefix matching..." << endl;
+			}
+			else {
+				cout << "OUT: Trie will be used for prefix matching..." << endl;
+			}
 		}
 	}
 
@@ -396,6 +407,9 @@ public:
 			ifstream sizeFile(loadPath + "_trie.txt");
 			uint64_t iSizeOfTrieVec;
 			sizeFile >> iSizeOfTrieVec;
+			if (_prefixArray.size()) {
+				_prefixArray.reserve(iSizeOfTrieVec);
+			}
 			stxxlFile trieFile(loadPath + "_trie", stxxl::file::RDONLY);
 			const trieVector trieVec(&trieFile, iSizeOfTrieVec);
 			uint64_t iStart = 0, iEnd = 0, iCount = 0;
@@ -419,15 +433,25 @@ public:
 				if (static_cast<uint32_t>(iDiff) > _iMaxRange) {
 					_iMaxRange = iDiff;
 				}
-				if (_vAllPrefixes.size() > 0) {
-					_vAllPrefixes[iReducedkMer] = packedBigPair(iStart, iDiff);
+				if (_prefixLookuptable.size() > 0) {
+					_prefixLookuptable[iReducedkMer] = packedBigPair(iStart, iDiff);
 				}
 				else {
-					_root->IncreaseIndex(iReducedkMer, iStart, static_cast<uint32_t>(iDiff), iSizeOfTrie);
+					if (_prefixArray.size() > 0) {
+						_prefixArray.push_back(make_tuple(iReducedkMer, iStart, iDiff));
+					}
+					else {
+						_root->IncreaseIndex(iReducedkMer, iStart, static_cast<uint32_t>(iDiff), iSizeOfTrie);
+					}
 				}
 				iStart = iSum;
 				iEnd += iCount;
 			}
+
+			if (_prefixArray.size() > 0) {
+				iSizeOfTrie = iSizeOfTrieVec * sizeof(tuple<uint32_t, uint64_t, uint32_t>);
+			}
+
 			//sort(vRanges.begin(), vRanges.end());
 			//cout << vRanges[vRanges.size() / 2] << " " << vRanges.back() << endl;
 			//cout << iMaxRange << " " << iSumOfRanges/double(iNumOfRanges) << " " << iNumOfRanges <<  endl;
@@ -495,11 +519,22 @@ public:
 	}
 
 	inline std::tuple<uint64_t, uint32_t> GetIndexRange(const uint64_t& kMer, const int8_t& iCurrentK) const {
-		if (_vAllPrefixes.size() > 0) {
-			return make_tuple(_vAllPrefixes[kMer].first, _vAllPrefixes[kMer].second);
+		if (_prefixLookuptable.size() > 0) {
+			return make_tuple(_prefixLookuptable[kMer].first, _prefixLookuptable[kMer].second);
 		}
 		else {
-			return _root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel);
+			if (_prefixArray.size() > 0) {
+				auto res = lower_bound(_prefixArray.cbegin(), _prefixArray.cend(), kMer, [](const tuple<uint32_t, uint64_t, uint32_t>& a, const uint64_t& val) { return get<0>(a) < val; });
+				if (res != _prefixArray.cend() && get<0>(*res) == kMer) {
+					return make_tuple(get<1>(*res), get<2>(*res));
+				}
+				else {
+					return make_tuple(numeric_limits<uint64_t>::max(), 0);
+				}
+			}
+			else {
+				return _root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel);
+			}
 		}
 	}
 	
