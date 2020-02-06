@@ -221,7 +221,8 @@ The per read error score ranges from -1 to 1. A 1 means that the best score devi
 
 Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p example/work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
 
-If a read cannot be identified, the array "Matched taxa" in json format is empty, and "-" is printed in every column instead of taxa, names and scores in human readable format.
+If a read cannot be identified, the array "Top hits" in json format is empty, and in human readable format "-" is printed in every column instead of taxa, names and scores. 
+The "Top hits" array will only contain multiple entries, if their k-mer Score is identical. Otherwise it contains the entry with the highest relative Score and all other hits are saved into the "Further hits" array.
 
 Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster lookup table instead of a prefix trie is used.
 
@@ -252,26 +253,35 @@ e.g.: [weging@example:/kASA$] build/kASA identify -c example/work/content.txt -d
 ###### Identification
 ```
 [
+{
+	"Read number": 0,
+	"Specifier from input file": "NZ_CP013542.1+NZ_JFYQ01000033.1",
+	"Top hits": [
 	{
-		"Read number": 0,
-		"Specifier from input file": "NZ_CP013542.1+NZ_JFYQ01000033.1",
-		"Matched taxa": [
-			{
-				"tax ID": "396",
-				"Name": "Rhizobium phaseoli",
-				"k-mer Score": 33.32,
-				"Relative Score": 1.03767e+00,
-				"Error": 0.67
-			},
-			{
-				"tax ID": "1270",
-				"Name": "Micrococcus luteus",
-				"k-mer Score": 30.467,
-				"Relative Score": 9.71243e-01
-				"Error": 0.69
-			}
-		]
+		"tax ID": "396",
+		"Name": "Rhizobium phaseoli",
+		"k-mer Score": 33.32,
+		"Relative Score": 1.03767e+00,
+		"Error": 0.67
 	}
+	],
+	"Further hits": [
+	{
+		"tax ID": "1270",
+		"Name": "Micrococcus luteus",
+		"k-mer Score": 31.42,
+		"Relative Score": 9.71243e-01
+		"Error": 0.69
+	},
+	{
+		"tax ID": "2128",
+		"Name": "Mycoplasma flocculare",
+		"k-mer Score": 0.0833333,
+		"Relative Score": 4.561024e-03,
+		"Error": 0.99729
+	}
+	]
+}
 ]
 ```
 

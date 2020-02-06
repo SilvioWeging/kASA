@@ -312,7 +312,7 @@ public:
 
 	inline void GetIfVecIsUsed() {
 		if (_prefixLookuptable.size()) {
-			cout << "OUT: Hash table (faster) will be used for prefix matching..." << endl;
+			cout << "OUT: Lookup table (faster) will be used for prefix matching..." << endl;
 		}
 		else {
 			if (_prefixArray.size()) {

@@ -22,7 +22,8 @@ def jsonReadQuantity(argv):
 	
 	for read in kASAOutput:
 		readCount += 1
-		taxa = read["Matched taxa"]
+		taxa = read["Top hits"]
+		taxa += read["Further hits"]
 		#print(),read["Read number"],read["Specifier from input file"])
 		#return
 		if len(taxa) == 0:

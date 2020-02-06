@@ -783,12 +783,23 @@ namespace kASA {
 							else {
 								fOut << "," << "\n" << "{" << "\n";
 							}
-							fOut << "\t\"Read number\": " << readIdx << "," << "\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << "\n" << "\t\"Matched taxa\": [" << "\n" << "\t]" << "\n" << "}";
+							fOut << "\t\"Read number\": " << readIdx << "," << "\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << "\n" << "\t\"Top hits\": [" << "\n" << "\t]," << "\n" <<"\t\"Further hits\": [" << "\n" << "\t]" << "\n" << "}";
 						}
 					}
 					else {
 
-						partial_sort(resultVec.begin(), resultVec.begin() + iNumOfBeasts, resultVec.end(), [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<2>(a) > get<2>(b); });
+						partial_sort(resultVec.begin(), resultVec.begin() + iCountOfHits, resultVec.end(), [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<2>(a) > get<2>(b); });
+
+						int32_t iTopHitCounter = 1;
+						auto sameScore = get<1>(resultVec[0]);
+						for (int16_t i = 1; i < iCountOfHits && i < iNumOfBeasts; ++i) {
+							if (get<1>(resultVec[i]) == sameScore) {
+								++iTopHitCounter;
+							}
+							else {
+								break;
+							}
+						}
 
 						//cout << iRealReadIDStart + readIdx << endl;
 
@@ -835,11 +846,30 @@ namespace kASA {
 								sOutStr << "," << "\n" << "{" << "\n";
 							}
 
-							sOutStr << "\t\"Read number\": " << iRealReadIDStart + readIdx << ",\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\",\n" << "\t\"Matched taxa\": [\n";
+							sOutStr << "\t\"Read number\": " << iRealReadIDStart + readIdx << ",\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\",\n" << "\t\"Top hits\": [\n";
 							auto it = resultVec.begin();
+
+							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+								if (i == 0) {
+									sOutStr << "\t{\n";
+								}
+								else {
+									sOutStr << ",\n\t{\n";
+								}
+
+								sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
+									<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
+									<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
+									<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
+									<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
+									<< "\t}";
+							}
+
+							sOutStr << "\n\t],\n\t\"Further hits\": [\n";
+
 							float iValueBefore = 0;
-							for (int16_t j = 0, i = 0; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
-								if (j == 0) {
+							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+								if (j == iTopHitCounter) {
 									sOutStr << "\t{\n";
 								}
 								else {
@@ -897,77 +927,124 @@ namespace kASA {
 					}
 				}
 
-				partial_sort(vTempResultVec.begin(), vTempResultVec.begin() + iNumOfBeasts, vTempResultVec.end(), [](const tuple<uint64_t, float, double>& p1, const tuple<uint64_t, float, double>& p2) { return get<2>(p1) > get<2>(p2); });
-
-				if (bHumanReadable) {
-					string sOut = "", sOut2 = "", sOut3 = "";
-
-					sOut += to_string(iReadNum) + "\t" + vReadNameAndLength.first + "\t";
-					auto it = vTempResultVec.begin();
-					float iValueBefore = 0;
-					for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
-						sOut += to_string(mIdxToTax[get<0>(*it)]) + ";";
-						ostringstream e_value;
-						e_value.precision(5);
-						e_value << std::scientific << get<2>(*it) << "," << std::defaultfloat << get<1>(*it);
-
-						sOut2 += mOrganisms[get<0>(*it)] + ";";
-						sOut3 += e_value.str() + ";";
-
-						if (iValueBefore != get<1>(*it)) {
-							iValueBefore = get<1>(*it);
-							++j;
+				if (vTempResultVec.size() == 0) {
+					if (bHumanReadable) {
+						fOut << iReadNum << "\t" << vReadNameAndLength.first << "\t-\t-\t-" << "\n";
+					}
+					else {
+						if (iReadNum == 0) {
+							fOut << "{" << "\n";
 						}
-					}
-					if (sOut.back() == ';') {
-						sOut.pop_back();
-					}
-					if (sOut2.back() == ';') {
-						sOut2.pop_back();
-					}
-					if (sOut3.back() == ';') {
-						sOut3.pop_back();
-					}
-					if (sOut2.length()) {
-						fOut << sOut + "\t" + sOut2 + "\t" + sOut3 + "\t" << (bestScore - get<1>(vTempResultVec[0])) / bestScore << "\n";
+						else {
+							fOut << "," << "\n" << "{" << "\n";
+						}
+						fOut << "\t\"Read number\": " << iReadNum << "," << "\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << "\n" << "\t\"Top hits\": [" << "\n" << "\t]," << "\n" << "\t\"Further hits\": [" << "\n" << "\t]" << "\n" << "}";
 					}
 				}
 				else {
-					// json
-					ostringstream sOutStr;
-					if (iReadNum == 0) {
-						sOutStr << "{" << "\n";
-					}
-					else {
-						sOutStr << "," << "\n" << "{" << "\n";
-					}
 
-					sOutStr << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Matched taxa\": [\n";
-					auto it = vTempResultVec.begin();
-					float iValueBefore = 0;
-					for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
-						if (j == 0) {
-							sOutStr << "\t{\n";
+					sort(vTempResultVec.begin(), vTempResultVec.end(), [](const tuple<uint64_t, float, double>& p1, const tuple<uint64_t, float, double>& p2) { return get<2>(p1) > get<2>(p2); });
+
+					int32_t iTopHitCounter = 1;
+					auto sameScore = get<1>(vTempResultVec[0]);
+					for (int16_t i = 1; i < static_cast<int16_t>(vTempResultVec.size()) && i < iNumOfBeasts; ++i) {
+						if (get<1>(vTempResultVec[i]) == sameScore) {
+							++iTopHitCounter;
 						}
 						else {
-							sOutStr << ",\n\t{\n";
-						}
-						 
-						 sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
-							 << "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
-							 << "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n" 
-							 << "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
-							 << "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it))/bestScore << "\n"
-							 << "\t}";
-						
-						if (iValueBefore != get<1>(*it)) {
-							iValueBefore = get<1>(*it);
-							++j;
+							break;
 						}
 					}
 
-					sOutStr << "\n\t]\n}";
-					fOut << sOutStr.str();
+					if (bHumanReadable) {
+						string sOut = "", sOut2 = "", sOut3 = "";
+
+						sOut += to_string(iReadNum) + "\t" + vReadNameAndLength.first + "\t";
+						auto it = vTempResultVec.begin();
+						float iValueBefore = 0;
+						for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
+							sOut += to_string(mIdxToTax[get<0>(*it)]) + ";";
+							ostringstream e_value;
+							e_value.precision(5);
+							e_value << std::scientific << get<2>(*it) << "," << std::defaultfloat << get<1>(*it);
+
+							sOut2 += mOrganisms[get<0>(*it)] + ";";
+							sOut3 += e_value.str() + ";";
+
+							if (iValueBefore != get<1>(*it)) {
+								iValueBefore = get<1>(*it);
+								++j;
+							}
+						}
+						if (sOut.back() == ';') {
+							sOut.pop_back();
+						}
+						if (sOut2.back() == ';') {
+							sOut2.pop_back();
+						}
+						if (sOut3.back() == ';') {
+							sOut3.pop_back();
+						}
+						if (sOut2.length()) {
+							fOut << sOut + "\t" + sOut2 + "\t" + sOut3 + "\t" << (bestScore - get<1>(vTempResultVec[0])) / bestScore << "\n";
+						}
+					}
+					else {
+						// json
+						ostringstream sOutStr;
+						if (iReadNum == 0) {
+							sOutStr << "{" << "\n";
+						}
+						else {
+							sOutStr << "," << "\n" << "{" << "\n";
+						}
+
+						sOutStr << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Top Hits\": [\n";
+						auto it = vTempResultVec.begin();
+
+						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+							if (i == 0) {
+								sOutStr << "\t{\n";
+							}
+							else {
+								sOutStr << ",\n\t{\n";
+							}
+
+							sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
+								<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
+								<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
+								<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
+								<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
+								<< "\t}";
+						}
+
+						sOutStr << "\n\t],\n\t\"Further hits\": [\n";
+
+						float iValueBefore = 0;
+						for (int16_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
+							if (j == iTopHitCounter) {
+								sOutStr << "\t{\n";
+							}
+							else {
+								sOutStr << ",\n\t{\n";
+							}
+
+							sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
+								<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
+								<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
+								<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
+								<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
+								<< "\t}";
+
+							if (iValueBefore != get<1>(*it)) {
+								iValueBefore = get<1>(*it);
+								++j;
+							}
+						}
+
+						sOutStr << "\n\t]\n}";
+						fOut << sOutStr.str();
+					}
 				}
 			}
 			catch (...) {
@@ -1154,7 +1231,7 @@ namespace kASA {
 				}
 
 				// Create threadpool(s), in stxxl mode we can only have synced parallelism (as in no two threads should not access the same vector instance)
-				vector<WorkerThread> workerThreadPool(_iNumOfK);
+				vector<WorkerThread> workerThreadPool(_iNumOfThreads);
 				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
 					workerThreadPool[i].setID(i);
 				}

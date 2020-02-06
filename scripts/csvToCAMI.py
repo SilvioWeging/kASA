@@ -127,7 +127,7 @@ def csvToCAMI(argv):
 							taxPaths[tID] = tID + "\t" + taxRanks[i] + "\t" + shortenedIDPath + "\t" + shortenedNamePath + "\t" + str(quantity)
 			#else:
 			#	print specID
-	outFile.write("#CAMI Submission for Taxonomic Profiling\n@SampleID:SAMPLEID\n@Version:0.9.2\n@Ranks:superkingdom|phylum|class|order|family|genus|species|strain\n@TaxonomyID:?\n@__program__:kASA\n@@TAXID	RANK\tTAXPATH\tTAXPATHSN\tPERCENTAGE\n")
+	outFile.write("#CAMI Submission for Taxonomic Profiling\n@SampleID:\n@Version:0.9.2\n@Ranks:superkingdom|phylum|class|order|family|genus|species|strain\n@TaxonomyID:?\n@__program__:kASA\n@@TAXID	RANK\tTAXPATH\tTAXPATHSN\tPERCENTAGE\n")
 	rankArr = ["superkingdom", "phylum", "class", "order", "family", "genus", "species", "strain"]
 	while len(rankArr) > 0:
 		for path in taxPaths:

@@ -15,7 +15,8 @@ def jasonToCAMIBin(argv):
 	outFile.write("#CAMI Format for Binning created from kASA json output\n@Version:0.9.0\n@SEQUENCEID\tTAXID")
 	
 	for read in kASAOutput:
-		taxa = read["Matched taxa"]
-		outFile.write("\n" + read["Specifier from input file"] + "\t" + taxa[0]["tax ID"])
+		taxa = read["Top hits"]
+		if len(taxa) != 0:
+			outFile.write("\n" + read["Specifier from input file"] + "\t" + taxa[0]["tax ID"])
 
 jasonToCAMIBin(sys.argv[1:])
