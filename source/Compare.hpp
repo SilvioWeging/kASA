@@ -999,7 +999,7 @@ namespace kASA {
 							sOutStr << "," << "\n" << "{" << "\n";
 						}
 
-						sOutStr << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Top Hits\": [\n";
+						sOutStr << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Top hits\": [\n";
 						auto it = vTempResultVec.begin();
 
 						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
