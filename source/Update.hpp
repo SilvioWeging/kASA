@@ -177,7 +177,7 @@ namespace kASA {
 					// add kMers from fasta
 					Utilities::createFile(_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall));
 
-					Build brick(_sTemporaryPath, _iNumOfCall, iMemory / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
+					Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMemory / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
 
 					size_t overallCharsRead = 0;
 					unique_ptr<contentVecType_32p> dummy;

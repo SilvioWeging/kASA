@@ -15,7 +15,7 @@ namespace kASA {
 	class Build {
 	private:
 		unique_ptr<vector<packedBigPair>> vInternal;
-		vector<packedBigPair>::iterator vInternalIt;
+		uint64_t iInternalCounter = 0;
 		vector<uint64_t> vVectorSizes;
 
 		string _sTempPath = "";
@@ -24,21 +24,28 @@ namespace kASA {
 
 		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
 
+		int32_t _iNumOfThreads_ = 1;
+
 		unique_ptr<uint64_t[]> arrFrequencies;
 		unordered_map<uint32_t, uint32_t> _mContent;
 
 	public:
 
-		Build(const string& path, const int32_t& iNumOfCall, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
+		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _iNumOfThreads_(iNumOfThreads), _mContent(mContent) {
 			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
 			//ofstream derp;
 			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 			//derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
 			//derp.close();
 			//derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
-
-			vInternal.reset(new vector<packedBigPair>(iSoftLimit + 1));
-			vInternalIt = vInternal->begin();
+			try {
+				vInternal.reset(new vector<packedBigPair>());
+				vInternal->reserve(iSoftLimit + 1);
+			}
+			catch (const bad_alloc&) {
+				cerr << "ERROR: Not enough memory provided. Quitting now..." << endl;
+				throw;
+			}
 
 			_iAmountOfSpace = iSoftLimit;
 
@@ -53,10 +60,8 @@ namespace kASA {
 		/////////////////////////////////////////////////////////////////////////////////////////
 	public:
 		inline bool addToInt(const tuple<uint64_t,uint32_t>& elem) {
-			vInternalIt->first = get<0>(elem);
-			vInternalIt->second = get<1>(elem);
-			vInternalIt++;
-			if (size_t(vInternalIt - vInternal->begin()) >= _iSoftSize) {
+			vInternal->push_back(packedBigPair(get<0>(elem), get<1>(elem)));
+			if (vInternal->size() >= _iSoftSize) {
 				return false;
 			}
 			return true;
@@ -210,24 +215,24 @@ namespace kASA {
 			try {
 
 # if __GNUC__ && !defined(__llvm__)  && defined(_OPENMP)
-				__gnu_parallel::sort(vInternal->begin(), vInternalIt, __gnu_parallel::balanced_quicksort_tag());
+				__gnu_parallel::sort(vInternal->begin(), vInternal->end(), __gnu_parallel::balanced_quicksort_tag(_iNumOfThreads_));
 #else
 #if __has_include(<execution>)
-				sort(std::execution::par_unseq, vInternal->begin(), vInternalIt);
+				sort(std::execution::par_unseq, vInternal->begin(), vInternal->end());
 #else
-				sort(vInternal->begin(), vInternalIt);
+				sort(vInternal->begin(), vInternal->end());
 #endif
 #endif
 				
 
 				// squeeze it a little
-				auto newEnd = std::unique(vInternal->begin(), vInternalIt, [](packedBigPair& a, packedBigPair& b) {
+				auto newEnd = std::unique(vInternal->begin(), vInternal->end(), [](packedBigPair& a, packedBigPair& b) {
 					if (a == b) {
 						return true;
 					}
 					return false;
 				});
-				vInternalIt = newEnd;
+				vInternal->resize(newEnd - vInternal->begin());
 				// if sorting would be faster, this would make sense since you'd want to maximize the amount of data inside each temporary file but alas, this takes too long
 				//if (float(newEnd - vInternal->begin())/_iSoftSize < 0.95 && !bLastCall) {
 				//	return;
@@ -238,11 +243,11 @@ namespace kASA {
 				Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
 
 				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
-				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), vInternalIt - vInternal->cbegin()));
-				vVectorSizes.push_back(vInternalIt - vInternal->cbegin());
+				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(),vInternal->size()));
+				vVectorSizes.push_back(vInternal->size());
 				contentVecType_32p::bufwriter_type vNCIt(*vNC);
 
-				auto vIntEndItC = static_cast<vector<packedBigPair>::const_iterator>(vInternalIt);
+				auto vIntEndItC = vInternal->cend();
 				for (auto it = vInternal->cbegin(); it != vIntEndItC; ++it) {
 					vNCIt << *(it);
 				}
@@ -252,7 +257,7 @@ namespace kASA {
 				vNC->export_files("_");
 				_iCounterOfContainers++;
 
-				vInternalIt = vInternal->begin();
+				vInternal->clear();
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

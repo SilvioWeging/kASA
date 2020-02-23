@@ -137,7 +137,7 @@ Some parameters which are used by most modes:
 * `-m (--memory) <number>`: Amount of RAM in Gigabytes available to kASA. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write "inf" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.
 * `-x (--callidx) <number>`: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.
 * `-v (--verbose)`: Prints out a little more information e.g. how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.
-* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Default: Hardcoded translation table.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 
 ### Generate a content file
 ##### Context
@@ -189,7 +189,7 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 * `-d (--database) <file>`: Actually path and name of the index but let's call it database since `-i` was already taken...
 ##### Optional paramameters
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
-* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Currently in BETA.
 ##### Example call
 ```
@@ -224,7 +224,7 @@ Note, that if you input a folder, file names are appended to your string given v
 If a read cannot be identified, the array "Top hits" in json format is empty, and in human readable format "-" is printed in every column instead of taxa, names and scores. 
 The "Top hits" array will only contain multiple entries, if their k-mer Score is identical. Otherwise it contains the entry with the highest relative Score and all other hits are saved into the "Further hits" array.
 
-Should you provide more than 13 GB of RAM and a lower `k` of at least 7, a much faster lookup table instead of a prefix trie is used.
+Should you provide more than 9 GB of RAM and a lower `k` of at least 7 (default), a much faster lookup table instead of a prefix trie is used.
 
 The first line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
 
@@ -236,7 +236,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids.
-* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-k <upper> <lower>`: Bounds for `k`, all `k`'s in between will be evaluated as well. If your intuition is more like `<lower> <upper>` then that's okay too. Default: 12 7.
 * `--kH <upper>`: Set only the upper bound
 * `--kL <lower>`: Set only the lower bound
@@ -326,7 +326,7 @@ If you've created the content file together with the index, this default content
 ##### Optional paramameters
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids. Currently in BETA.
-* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>

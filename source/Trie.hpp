@@ -132,7 +132,7 @@ public:
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	inline std::tuple<uint64_t, uint32_t> GetRange(const uint64_t& kMer, const int8_t& iCurrentK, const int8_t& iMinK, const int8_t& iMaxLevel) {
+	inline void GetRange(const uint64_t& kMer, const int8_t& iCurrentK, const int8_t& iMinK, const int8_t& iMaxLevel, uint64_t&& start, uint32_t&& range) {
 		/// First handle the usual case
 		if (_iLevelDiff != iMaxLevel - iCurrentK) {
 			if (_iLevelDiff - 2 > 0) {
@@ -140,10 +140,11 @@ public:
 				//cout << TrieSnG::LISTOFAA[tempVal] << endl;
 				Node* edge = static_cast<Node*>(_Edges[tempVal]);
 				if (edge == nullptr) {
-					return std::tuple<uint64_t, uint32_t>(numeric_limits<uint64_t>::max(),0);
+					start = numeric_limits<uint64_t>::max();
+					return;
 				}
 				else {
-					return edge->GetRange(kMer, iCurrentK, iMinK, iMaxLevel);
+					edge->GetRange(kMer, iCurrentK, iMinK, iMaxLevel, move(start), move(range));
 				}
 			}
 			else {
@@ -151,20 +152,21 @@ public:
 				//cout << TrieSnG::LISTOFAA[tempVal] << endl;
 				Leaf5* edge = static_cast<Leaf5*>(_Edges[tempVal]);
 				if (edge == nullptr) {
-					return std::tuple<uint64_t, uint32_t>(numeric_limits<uint64_t>::max(), 0);
+					start = numeric_limits<uint64_t>::max();
+					return;
 				}
 				else {
 					const uint8_t& lastVal = (uint8_t)((kMer >> (_iLevelDiff - 2) * 5) & 31);
 					//cout << TrieSnG::LISTOFAA[lastVal] << endl;
-					return make_tuple(edge->_vRanges1[lastVal], edge->_vRanges2[lastVal]);
+					start = edge->_vRanges1[lastVal];
+					range = edge->_vRanges2[lastVal];
 				}
 			}
 		}
 		else {
-			std::tuple<uint64_t, uint32_t> outTuple(numeric_limits<uint64_t>::max(),0);
-			get<0>(outTuple) = GetRangeAfterMinK(iMaxLevel, true);
-			get<1>(outTuple) = static_cast<uint32_t>(GetRangeAfterMinK(iMaxLevel, false) - get<0>(outTuple));
-			return outTuple;
+			start = GetRangeAfterMinK(iMaxLevel, true);
+			range = static_cast<uint32_t>(GetRangeAfterMinK(iMaxLevel, false) - start);
+			return;
 		}
 	}
 
@@ -263,14 +265,13 @@ private:
 	uint64_t _Bitmask = 31;
 	unique_ptr<std::tuple<uint64_t, uint32_t>[]> _tempTuple;
 
-	uint32_t _iMaxRange = 0;
-
 	// this counts the size of the trie in bytes to substract it later from the available memory in RAM
 	uint64_t iSizeOfTrie = 0;
 
 	unique_ptr<Node> _root;
 
-	vector<packedBigPair> _prefixLookuptable;
+	unique_ptr<packedBigPair[]> _prefixLookuptable;
+	const uint64_t pow30Array[6] = {1,30,900,27000,810000,24300000};
 	vector<tuple<uint32_t,uint64_t,uint32_t>> _prefixArray;
 
 public:
@@ -288,8 +289,9 @@ public:
 		}
 
 		if (bShitLoadOfRAM) {
-			_prefixLookuptable.resize(kASA::kASA::aminoacidTokMer("]^^^^^"), packedBigPair(numeric_limits<uint64_t>::max(),0));
-			iSizeOfTrie = _prefixLookuptable.size() * sizeof(packedBigPair);
+			_prefixLookuptable.reset(new packedBigPair[754137931]);
+			fill(_prefixLookuptable.get(), _prefixLookuptable.get() + 754137931, packedBigPair(numeric_limits<uint64_t>::max(), 0)); // 754137930 = 30+30*30+30*30^2+30*30^3+30*30^4+30*30^5 = "]^^^^^" as integer without spaces
+			iSizeOfTrie = 754137931 * sizeof(packedBigPair);
 		}
 		else {
 			if (bUseArray) {
@@ -306,12 +308,8 @@ public:
 		return iSizeOfTrie;
 	}
 
-	inline uint32_t GetMaxRange() const {
-		return _iMaxRange;
-	}
-
 	inline void GetIfVecIsUsed() {
-		if (_prefixLookuptable.size()) {
+		if (_prefixLookuptable) {
 			cout << "OUT: Lookup table (faster) will be used for prefix matching..." << endl;
 		}
 		else {
@@ -414,6 +412,7 @@ public:
 			const trieVector trieVec(&trieFile, iSizeOfTrieVec);
 			uint64_t iStart = 0, iEnd = 0, iCount = 0;
 			uint32_t iReducedkMer;
+
 			//ofstream smallAA("D:/tmp/paper/trie.txt");
 			//uint64_t iMaxRange = 0, iSumOfRanges = 0, iNumOfRanges = 0;
 			//vector<uint32_t> vRanges;
@@ -429,12 +428,15 @@ public:
 				//cout << kASA::kASA::kMerToAminoacid(iReducedkMer, 6) << " " << iCount << endl;
 				const uint64_t& iSum = iCount + iEnd;
 				const int32_t iDiff = static_cast<int32_t>(int64_t(iSum) - 1 - iStart);
+
 				assert(iDiff >= 0);
-				if (static_cast<uint32_t>(iDiff) > _iMaxRange) {
-					_iMaxRange = iDiff;
-				}
-				if (_prefixLookuptable.size() > 0) {
-					_prefixLookuptable[iReducedkMer] = packedBigPair(iStart, iDiff);
+				if (_prefixLookuptable) {
+					int64_t iIndexInTable = 0;
+					for (int8_t i = 0; i < 6; ++i) {
+						iIndexInTable += (iReducedkMer & 31) * pow30Array[i];
+						iReducedkMer >>= 5;
+					}
+					_prefixLookuptable[iIndexInTable] = packedBigPair(iStart, iDiff);
 				}
 				else {
 					if (_prefixArray.size() > 0) {
@@ -447,6 +449,7 @@ public:
 				iStart = iSum;
 				iEnd += iCount;
 			}
+
 
 			if (_prefixArray.size() > 0) {
 				iSizeOfTrie = iSizeOfTrieVec * sizeof(tuple<uint32_t, uint64_t, uint32_t>);
@@ -493,47 +496,30 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Access
-	inline std::tuple<uint64_t, uint32_t> GetIndexRange(const uint64_t& kMer, const int8_t& iCurrentK, const uint64_t& iLatestStartIndex, const int32_t& iShift, const int32_t& iThreadID = 1) const {
-		//cout << "tempmr: " << kASA::kASA::kMerToAminoacid(tempMer, 12) << endl;
-		const uint64_t& iShiftedkMer = kMer << iShift;
-		if (iShiftedkMer != _iTempKMer[iThreadID]) {
-			_iTempKMer[iThreadID] = iShiftedkMer;
-			_tempTuple[iThreadID] = _root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel);
-			if (get<0>(_tempTuple[iThreadID]) < iLatestStartIndex && iLatestStartIndex <= get<0>(_tempTuple[iThreadID]) + get<1>(_tempTuple[iThreadID])) {
-				get<0>(_tempTuple[iThreadID]) = iLatestStartIndex;
+	inline void GetIndexRange(const uint64_t& kMer, const int8_t& iCurrentK, uint64_t&& start, uint32_t&& range) const {
+		if (_prefixLookuptable) {
+			int64_t iIndexInTable = 0;
+			uint64_t kMerCopy = kMer;
+			for (int8_t i = 0; i < 6; ++i) {
+				iIndexInTable += (kMerCopy & 31) * pow30Array[i];;
+				kMerCopy >>= 5;
 			}
-			else {
-				if (iLatestStartIndex > get<0>(_tempTuple[iThreadID]) + get<1>(_tempTuple[iThreadID])) {
-					_tempTuple[iThreadID] = make_tuple(numeric_limits<uint64_t>::max(), 0);
-				}
-			}
-			return _tempTuple[iThreadID];
-		}
-		else {
-			// This class can't know where the last search stopped so it must be given that information to save redundant calls if necessary
-			if (iLatestStartIndex > get<0>(_tempTuple[iThreadID]) + get<1>(_tempTuple[iThreadID])) {
-				_tempTuple[iThreadID] = make_tuple(numeric_limits<uint64_t>::max(), 0);
-			}
-			return std::tuple<uint64_t, uint32_t>(iLatestStartIndex, std::get<1>(_tempTuple[iThreadID]));
-		}
-	}
-
-	inline std::tuple<uint64_t, uint32_t> GetIndexRange(const uint64_t& kMer, const int8_t& iCurrentK) const {
-		if (_prefixLookuptable.size() > 0) {
-			return make_tuple(_prefixLookuptable[kMer].first, _prefixLookuptable[kMer].second);
+			start = _prefixLookuptable[iIndexInTable].first;
+			range = _prefixLookuptable[iIndexInTable].second;
 		}
 		else {
 			if (_prefixArray.size() > 0) {
 				auto res = lower_bound(_prefixArray.cbegin(), _prefixArray.cend(), kMer, [](const tuple<uint32_t, uint64_t, uint32_t>& a, const uint64_t& val) { return get<0>(a) < val; });
 				if (res != _prefixArray.cend() && get<0>(*res) == kMer) {
-					return make_tuple(get<1>(*res), get<2>(*res));
+					start = get<1>(*res);
+					range = get<2>(*res);
 				}
 				else {
-					return make_tuple(numeric_limits<uint64_t>::max(), 0);
+					start = numeric_limits<uint64_t>::max();
 				}
 			}
 			else {
-				return _root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel);
+				_root->GetRange(kMer, iCurrentK, _iMinK, _iMaxLevel, move(start), move(range));
 			}
 		}
 	}

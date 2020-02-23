@@ -26,7 +26,7 @@ namespace kASA {
 		// test for garbage to correctly count matchable k-mers
 		const uint64_t _tails[12] = { 0x1E, 0x3C0, 0x7800, 0xF0000, 0x1E00000, 0x3C000000, 0x780000000, 0xF00000000, 0x1E000000000, 0x3C0000000000, 0x7800000000000, 0xF000000000000 }; // ^, ^@, ^@@, ...
 
-		inline void convert_dnaTokMer(const string& sDna, const readIDType& iID, const int32_t& iMaxKTimes3, const Trie& T, unordered_map<uint64_t, Utilities::rangeContainer>& resultsVec, int64_t& iCurrentkMerCounter, vector<uint64_t>& vCountGarbagekMerPerK) {
+		inline void convert_dnaTokMer(const string& sDna, const readIDType& iID, const int32_t& iMaxKTimes3, const Trie&, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec, int64_t& iCurrentkMerCounter, vector<uint64_t>& vCountGarbagekMerPerK) {
 			// This value gives the remaining length of the read which is the number of kMers created
 			const int32_t& iMaxRange = int32_t(sDna.length() - iMaxKTimes3 + 1);
 			if (iMaxRange >= 1) {
@@ -61,33 +61,20 @@ namespace kASA {
 					}
 
 
-					//cout << kMerToAminoacid(sAAFrames[j], 12) << endl;
-					const auto& range = T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
-					if (get<0>(range) != numeric_limits<uint64_t>::max()) {
-						// if a character is 'illegal' then don't save the kMer containing it
-						//const auto& iPosOfU = sTempFrame.find_last_of('U');
-						//if (iPosOfU == string::npos) {
+					//cout << kMerToAminoacid(sAAFrames[j], 12) << endl;uint64_t start = 0, range = 0;
+					//uint64_t start = 0;
+					//uint32_t range = 0;
+					//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+					//if (start != numeric_limits<uint64_t>::max()) {
 
 						for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
 							vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 						}
 						
+						resultsVec.push_back(make_tuple(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID)));
 
-						auto& tempEntry = resultsVec[get<0>(range)];
-						tempEntry.range = get<1>(range);
-						//cout << kMerToAminoacid(sAAFrames[j], 12) << " " << kMerToAminoacid(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), 12) << endl;
-						if (_iMinK <= 6) {
-							tempEntry.kMers_ST6.push_back(make_pair(sAAFrames[j], static_cast<uint32_t>(iID)));
-						}
-						else {
-							tempEntry.kMers_GT6.push_back(make_pair(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), static_cast<uint32_t>(iID)));
-						}
 						++iCurrentkMerCounter;
-						//}
-						//else {
-							//aDeletekMerCounter[j] = uint32_t(iPosOfU);
-						//}
-					}
+					//}
 				}
 
 				ikMerCounter += iNumFrames;
@@ -117,35 +104,18 @@ namespace kASA {
 								kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 							}
 
-							const auto& range = T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
-							if (get<0>(range) != numeric_limits<uint64_t>::max()) {
-								//string sDEBUG = kMerToAminoacid(sAAFrames[k], 12);
-								//if (sTempAA != 'U' && aDeletekMerCounter[k] == 0) {
+							//uint64_t start = 0;
+							//uint32_t range = 0;
+							//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+							//if (start != numeric_limits<uint64_t>::max()) {
 
 								for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
 									vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 								}
 
-								auto& tempEntry = resultsVec[get<0>(range)];
-								tempEntry.range = get<1>(range);
-								//cout << kMerToAminoacid(static_cast<uint32_t>(sAAFrames[k] & 1073741823ULL), 12) << endl;
-								if (_iMinK <= 6) {
-									tempEntry.kMers_ST6.push_back(make_pair(sAAFrames[k], static_cast<uint32_t>(iID)));
-								}
-								else {
-									tempEntry.kMers_GT6.push_back(make_pair(static_cast<uint32_t>(sAAFrames[k] & 1073741823ULL), static_cast<uint32_t>(iID)));
-								}
+								resultsVec.push_back(make_tuple(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID)));
 								++iCurrentkMerCounter;
-								//}
-								//else {
-								//	if (aDeletekMerCounter[k] != 0 && sTempAA != 'U') {
-								//		--aDeletekMerCounter[k];
-								//	}
-								//	else {
-								//		aDeletekMerCounter[k] = _iHighestK - 1;
-								//	}
-								//}
-							}
+							//}
 						}
 						ikMerCounter += 3;
 					}
@@ -167,40 +137,24 @@ namespace kASA {
 							kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 						}
 
-						const auto& range = T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
-						if (get<0>(range) != numeric_limits<uint64_t>::max()) {
+						//uint64_t start = 0;
+						//uint32_t range = 0;
+						//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						//if (start != numeric_limits<uint64_t>::max()) {
 
 							for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
 								vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 							}
 
-							//if (sTempAA != 'U' && aDeletekMerCounter[j] == 0) {
-							auto& tempEntry = resultsVec[get<0>(range)];
-							tempEntry.range = get<1>(range);
-							//cout << kMerToAminoacid(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), 12) << endl;
-							if (_iMinK <= 6) {
-								tempEntry.kMers_ST6.push_back(make_pair(sAAFrames[j], static_cast<uint32_t>(iID)));
-							}
-							else {
-								tempEntry.kMers_GT6.push_back(make_pair(static_cast<uint32_t>(sAAFrames[j] & 1073741823ULL), static_cast<uint32_t>(iID)));
-							}
+							resultsVec.push_back(make_tuple(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID)));
 							++iCurrentkMerCounter;
-							//}
-							//else {
-							//	if (aDeletekMerCounter[j] != 0 && sTempAA != 'U') {
-							//		--aDeletekMerCounter[j];
-							//	}
-							//	else {
-							//		aDeletekMerCounter[j] = _iHighestK - 1;
-							//	}
-							//}
-						}
+						//}
 					}
 				}
 			}
 		}
 
-		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const Trie& T, unordered_map<uint64_t, Utilities::rangeContainer>& resultsVec, int64_t& iCurrentkMerCounter) {
+		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const Trie&, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec, int64_t& iCurrentkMerCounter) {
 			const size_t& iLengthOfSequence = sProteinSequence.size();
 			const int32_t& iMaxRange = int32_t(iLengthOfSequence - _iHighestK + 1);
 			if (iMaxRange > 0) {
@@ -214,116 +168,34 @@ namespace kASA {
 						kMer = aminoAcidsToAminoAcid(kMer);;
 					}
 					
-					
-					const auto& range = T.GetIndexRange(kMer >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK));
-					if (get<0>(range) != numeric_limits<uint64_t>::max()) {
-
-						auto& tempEntry = resultsVec[get<0>(range)];
-						tempEntry.range = get<1>(range);
-						if (_iMinK <= 6) {
-							tempEntry.kMers_ST6.push_back(make_pair(kMer, static_cast<uint32_t>(iReadID)));
-						}
-						else {
-							tempEntry.kMers_GT6.push_back(make_pair(static_cast<uint32_t>(kMer & 1073741823ULL), static_cast<uint32_t>(iReadID)));
-						}
-
-					}
+					//uint64_t start = 0;
+					//uint32_t range = 0;
+					//T.GetIndexRange(kMer >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+					//if (start != numeric_limits<uint64_t>::max()) {
+						resultsVec.push_back(make_tuple(0, kMer, 0, iReadID));
+					//}
 				}
 			}
 		}
 
-		inline uint64_t convert_(unordered_map<uint64_t, Utilities::rangeContainer>& resultsVec, const vector<pair<string, readIDType>>& vLines, const int64_t& iActualLines, const Trie& T, vector<uint64_t>& vCountGarbagekMerPerK) {
-			//int64_t iNumOfResultsPerThread = (iActualLines == 1) ? 0 : iActualLines / _iNumOfThreads;
-			//int32_t iNumOfRemainingResults = (iActualLines == 1) ? 1 : iActualLines % _iNumOfThreads;
+		inline uint64_t convertLinesTokMers_(const int32_t& iActualLines, const vector<pair<string, readIDType>>& vLines, const vector<pair<string, readIDType>>& vRCLines, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& kMerVecOut, const Trie& T, const bool&, vector<uint64_t>& vCountGarbagekMerPerK) {
 
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
-			int64_t iCurrentkMerCounter = 0;
-			//uint64_t iSizeOfResultsBefore = resultsVec[iProcIt].size();
+			int64_t iNumOfkMers = 0;
 
-			/*int64_t iReserveSize = 0;
-
-			for (int64_t i = 0; i < iActualLines; ++i) {
-				int32_t iMaxRange = 0;
-				if (_bInputAreAAs) {
-					iMaxRange = int32_t(vLines[i].first.length() - _iHighestK + 1);
-				}
-				else {
-					iMaxRange = int32_t(vLines[i].first.length() - iMaxKTimes3 + 1);
-				}
-				iReserveSize += iMaxRange;
-			}
-
-			if (iReserveSize > 0 && (iSizeOfResultsBefore + iCurrentkMerCounter + iReserveSize) > resultsVec[iProcIt].capacity()) {
-				resultsVec[iProcIt].reserve(iSizeOfResultsBefore + iCurrentkMerCounter + iReserveSize);
-			}*/
-
-			//cout << iProcIt << " " << resultsVec[iProcIt].capacity() << " " << resultsVec[iProcIt].capacity() - resultsVec[iProcIt].size() << endl;
-
-//#pragma omp parallel for
-			//for (; iProcIt < _iNumOfThreads;) {
-
-				//for (int64_t i = iProcIt * (iNumOfResultsPerThread); i < (iProcIt + 1)*iNumOfResultsPerThread; ++i) {
 			for (int64_t i = 0; i < iActualLines; ++i) {
 				if (vLines[i].first != "") {
 					if (_bInputAreAAs) {
-						convert_alreadyTranslatedTokMers(vLines[i].first, vLines[i].second, T, resultsVec, iCurrentkMerCounter);
+						convert_alreadyTranslatedTokMers(vLines[i].first, vLines[i].second, T, kMerVecOut, iNumOfkMers);
 					}
 					else {
-						convert_dnaTokMer(vLines[i].first, vLines[i].second, iMaxKTimes3, T, resultsVec, iCurrentkMerCounter, vCountGarbagekMerPerK);
+						convert_dnaTokMer(vLines[i].first, vLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
+						convert_dnaTokMer(vRCLines[i].first, vRCLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
 					}
 				}
 			}
 
-			// last part that could not be equally divided amongst the cpus
-			//iSizeOfResultsBefore += iCurrentkMerCounter;
-			//iCurrentkMerCounter = 0;
-			/*if (iProcIt < iNumOfRemainingResults) {
-				const string& sDna = vLines[iActualLines - iNumOfRemainingResults + iProcIt].first;
-				const uint64_t& iID = vLines[iActualLines - iNumOfRemainingResults + iProcIt].second;
-				convert_dnaTokMer(sDna, iID, iMaxKTimes3, resultsVec, iProcIt, iCurrentkMerCounter, iSizeOfResultsBefore);
-				iSizeOfResultsBefore += iCurrentkMerCounter;
-			}*/
-			/*if (iSizeOfResultsBefore >= iSoftMaxSize) {
-			resultsVec[iProcIt].reserve(iSizeOfResultsBefore);
-			}*/
-			//resultsVec[iProcIt].resize(iSizeOfResultsBefore);
-		//}
-			return iCurrentkMerCounter;
-		}
-
-
-		inline uint64_t convertLinesTokMers_(const int32_t& iActualLines, const vector<pair<string, readIDType>>& vLines, const vector<pair<string, readIDType>>& vRCLines, unordered_map<uint64_t, Utilities::rangeContainer>& kMerVecOut, const Trie& T, const bool& bSpaced, vector<uint64_t>& vCountGarbagekMerPerK) {
-
-			/*for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-				kMerVecOut[i].reserve(static_cast<uint64_t>(iSoftMaxSize));
-			}*/
-
-			//const uint64_t& iSoftSizeWithCopyBuffer = static_cast<uint64_t>(iSoftMaxSize);
-			/*
-			uint64_t iSumBefore = 0;
-			for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-				iSumBefore += kMerVecOut[i].size();
-			}*/
-
-			uint64_t iNumOfkMers = 0;
-
-			if (bSpaced) {
-				//convert_spaced(kMerVecOut, vLines, iActualLines, false);
-				//convert_spaced(kMerVecOut, vRCLines, iActualLines, true);
-			}
-			else {
-				iNumOfkMers += convert_(kMerVecOut, vLines, iActualLines, T, vCountGarbagekMerPerK);
-				if (!_bInputAreAAs) {
-					iNumOfkMers += convert_(kMerVecOut, vRCLines, iActualLines, T, vCountGarbagekMerPerK);
-				}
-			}
-			/*
-			uint64_t outVal = 0;
-			for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-				outVal += kMerVecOut[i].size();
-			}*/
-
-			return iNumOfkMers;//outVal - iSumBefore;
+			return iNumOfkMers;
 		}
 
 
@@ -344,7 +216,7 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fastq as input for comparison
 		template<typename T>
-		inline uint64_t readFastq_partialSort(T& input, unordered_map<uint64_t, Utilities::rangeContainer>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr, vector<uint64_t>& vCountGarbagekMerPerK) {
+		inline uint64_t readFastq_partialSort(T& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr, vector<uint64_t>& vCountGarbagekMerPerK) {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
@@ -378,7 +250,8 @@ namespace kASA {
 				while (input && bNotFull) {
 					while (input && iActualLines < iLinesPerRun) {
 						uint64_t iNumOfChars = 0;
-						pair<std::string, bool> resultChunkPair = Utilities::getChunk(input, move(iNumOfChars));
+						pair<std::string, bool> resultChunkPair;
+						Utilities::getChunk(input, move(resultChunkPair), move(iNumOfChars));
 
 						if (_bVerbose && iFileLength != 0) {
 							transfer->iNumOfCharsRead += iNumOfChars;
@@ -543,13 +416,9 @@ namespace kASA {
 					iSumOfkMers += iNumOfkMers;
 					iProcID = (iProcID + 1) % _iNumOfThreads;
 					//iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(uint64_t));
-					if (_iMinK <= 6) {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint64_t, uint64_t>) + sizeof(Utilities::rangeContainer));
-					}
-					else {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(Utilities::rangeContainer));
-					}
-					//cout << iSoftMaxSize << endl;
+					
+					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+
 					if (iSoftMaxSize <= 0) {
 						bNotFull = false;
 					}
@@ -585,7 +454,7 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta as input for comparison, no parallelization possible due to the unknown length of a contig/genome
 		template<typename T>
-		inline uint64_t readFasta_partialSort(T& input, unordered_map<uint64_t, Utilities::rangeContainer>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr, vector<uint64_t>& vCountGarbagekMerPerK) {
+		inline uint64_t readFasta_partialSort(T& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr, vector<uint64_t>& vCountGarbagekMerPerK) {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
@@ -612,8 +481,7 @@ namespace kASA {
 				size_t iDNALength = transfer->lengthOfDNA;
 				bool bNewRead = transfer->finished, bAddTail = transfer->addTail;
 
-				size_t iLinesPerRun = 2;
-				int32_t iProcID = 0;
+				size_t iLinesPerRun = 2;//2;
 
 				vector<pair<string, readIDType>> vLines(iLinesPerRun), vRCLines(iLinesPerRun);
 				size_t iActualLines = 1;
@@ -622,7 +490,8 @@ namespace kASA {
 				while (input && bNotFull) {
 					while (input && iActualLines < iLinesPerRun) {
 						uint64_t iNumOfChars = 0;
-						pair<std::string, bool> resultChunkPair = Utilities::getChunk(input, move(iNumOfChars));
+						pair<std::string, bool> resultChunkPair;
+						Utilities::getChunk(input, move(resultChunkPair), move(iNumOfChars));
 
 						if (_bVerbose && iFileLength != 0) {
 							transfer->iNumOfCharsRead += iNumOfChars;
@@ -762,13 +631,9 @@ namespace kASA {
 
 					const auto& iNumOfkMers = convertLinesTokMers_(int32_t(iActualLines - 1), vLines, vRCLines, vOut, Tr, bSpaced, vCountGarbagekMerPerK);
 					iSumOfkMers += iNumOfkMers;
-					iProcID = (iProcID + 1) % _iNumOfThreads;
-					if (_iMinK <= 6) {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint64_t, uint64_t>) + sizeof(Utilities::rangeContainer));
-					}
-					else {
-						iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(Utilities::rangeContainer));
-					}
+					
+					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+
 					
 					if (iSoftMaxSize <= 0) {
 						bNotFull = false;
@@ -1391,7 +1256,7 @@ namespace kASA {
 					}
 				}
 
-				Build brick(_sTemporaryPath, _iNumOfCall, iMem / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
+				Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMem / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
 
 				size_t overallCharsRead = 0;
 				unique_ptr<contentVecType_32p> dummy;

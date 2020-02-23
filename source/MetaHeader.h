@@ -119,7 +119,7 @@ struct packedBigPairTrie {
 #endif
 
 // Check GCC
-#if __GNUC__ && !defined(__llvm__)
+#if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
 #include <parallel/algorithm>
 #endif
 

@@ -202,7 +202,7 @@ namespace Utilities {
 
 	///////////////////////////////////////////////////////
 	template<typename T>
-	inline pair<string,bool> getChunk(T&& input, uint64_t&& iNumOfChars = 0) {
+	inline void getChunk(T&& input, pair<std::string, bool>&& outPair, uint64_t&& iNumOfChars = 0) {
 		char sTempCArr[100000]; //100000
 		input.get(sTempCArr, 100000);
 		iNumOfChars = input.gcount();
@@ -218,7 +218,8 @@ namespace Utilities {
 				getline(input, sTempString);
 			}
 		}
-		return make_pair(sTempString, bLineFinished);
+		outPair.first = sTempString;
+		outPair.second = bLineFinished;
 	}
 
 	///////////////////////////////////////////////////////
