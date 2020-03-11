@@ -903,6 +903,7 @@ namespace kASA {
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		inline void scoringFunc(const unique_ptr<float[]>& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const unique_ptr<uint64_t[]>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, ofstream&& fOut) {
 			try {
+
 				const size_t& iAmountOfSpecies = mIdxToTax.size();
 				vector<tuple<size_t, float, double>> resultVec(iAmountOfSpecies);
 
@@ -940,7 +941,7 @@ namespace kASA {
 							fOut << iRealReadIDStart + readIdx << "\t" << currentReadLengthAndName.first << "\t-\t-\t-" << "\n";
 						}
 						else {
-							if (readIdx == 0) {
+							if (iRealReadIDStart + readIdx == 0) {
 								fOut << "{" << "\n";
 							}
 							else {
