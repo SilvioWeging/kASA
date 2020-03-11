@@ -365,6 +365,14 @@ public:
 			trieVector trieVec(&trieFile, 0);
 			uint64_t iCount = 1;
 			uint64_t iKnownShortMer = vKMerVec->at(0).first & _Bitmask;
+			if (!mContent.empty()) {
+				const auto& idx = Utilities::checkIfInMap(mContent, vKMerVec->cbegin()->second)->second * 12;
+				for (uint8_t k = 0; k < 12; ++k) {
+					if (((vKMerVec->cbegin()->first >> 5 * k) & 31) != 30) {
+						(*arrOfFreqs)[idx + k]++;
+					}
+				}
+			}
 			stxxl::vector_bufreader<typename T::const_iterator> bufferedReader(vKMerVec->cbegin() + 1, vKMerVec->cend(), 0);
 			for (; !bufferedReader.empty(); ++bufferedReader) {
 				const auto& entry = *bufferedReader;

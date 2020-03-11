@@ -19,7 +19,7 @@ namespace kASA {
 		const bool bUnfunny;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode), _bInputAreAAs(bTranslated), bUnfunny(bUnfunny) {}
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bUnfunny = false, const bool& bOnlyThreeFrames = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bOnlyThreeFrames), _bInputAreAAs(bTranslated), bUnfunny(bUnfunny) {}
 
 	protected:
 
@@ -184,13 +184,15 @@ namespace kASA {
 			int64_t iNumOfkMers = 0;
 
 			for (int64_t i = 0; i < iActualLines; ++i) {
-				if (vLines[i].first != "") {
+				if (vLines[i].first != "" || vRCLines[i].first != "") {
 					if (_bInputAreAAs) {
 						convert_alreadyTranslatedTokMers(vLines[i].first, vLines[i].second, T, kMerVecOut, iNumOfkMers);
 					}
 					else {
 						convert_dnaTokMer(vLines[i].first, vLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
-						convert_dnaTokMer(vRCLines[i].first, vRCLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
+						if (!_bOnlyThreeFrames) {
+							convert_dnaTokMer(vRCLines[i].first, vRCLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
+						}
 					}
 				}
 			}
@@ -1004,7 +1006,7 @@ namespace kASA {
 
 
 
-				bool bAddFalseMarker = false,  bNextIdx = false; //bAddFalseRCMarker = true,
+				bool bAddFalseMarker = false, bNextIdx = false, bAddFalseRCMarker = true;
 
 				const int32_t& iConcurrentLines = 20;
 				string sOverhang = "", sDNA = "";
@@ -1016,7 +1018,7 @@ namespace kASA {
 
 					if (bNextIdx) {
 						bAddFalseMarker = false;
-						//bAddFalseRCMarker = true;
+						bAddFalseRCMarker = true;
 					}
 
 					bool bCreateOverhang = true;
@@ -1105,7 +1107,7 @@ namespace kASA {
 
 								bCreateOverhang = false;
 								bAddFalseMarker = true;
-								//bAddFalseRCMarker = true;
+								bAddFalseRCMarker = true;
 								break;
 							}
 							else {
@@ -1126,7 +1128,7 @@ namespace kASA {
 							// EOF
 							bCreateOverhang = false;
 							bAddFalseMarker = true;
-							//bAddFalseRCMarker = false;
+							bAddFalseRCMarker = false;
 							break;
 						}
 					}
@@ -1165,12 +1167,12 @@ namespace kASA {
 							}
 						}
 					}
-					//string sRCDNA = reverseComplement(sDNA);
+					string sRCDNA = reverseComplement(sDNA);
 
-					//if (bAddFalseRCMarker && !sRCDNA.empty()) {
-					//	sRCDNA += sFalsekMerMarker;
-					//	bAddFalseRCMarker = false;
-					//}
+					if (bAddFalseRCMarker && !sRCDNA.empty()) {
+						sRCDNA += sFalsekMerMarker;
+						bAddFalseRCMarker = false;
+					}
 					if (bAddFalseMarker && !sDNA.empty()) {
 						sDNA += sFalsekMerMarker;
 						bAddFalseMarker = false;
@@ -1181,6 +1183,9 @@ namespace kASA {
 					}
 					else {
 						dnaTokMers(sDNA, iIdx, vOut, vBricks, fShrinkPercentage);
+						if (!_bOnlyThreeFrames) {
+							dnaTokMers(sRCDNA, iIdx, vOut, vBricks, fShrinkPercentage);
+						}
 					}
 
 					if (bNextIdx) {
