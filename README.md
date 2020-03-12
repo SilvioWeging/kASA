@@ -191,8 +191,7 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Currently in BETA.
-* `--three`: Use only three reading frames instead of six. Halves index size. Default: off.
-##### Example call
+* `--six`: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
 e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
@@ -244,7 +243,6 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `-b (--beasts) <number>`: Number of hit taxa shown for each read. Default: 3.
 * `-h (--human)`: Changes the output of the profile so that only necessary information is provided, see below.
 * `-e (--unique)`: Ignores duplicates of `k`-mers in every read. This helps removing bias from repeats but messes with error scores, so consider it BETA.
-* `--three`: Use only three reading frames instead of six. Improves performance but may reduce accuracy. Default: off.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -329,7 +327,7 @@ If you've created the content file together with the index, this default content
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids. Currently in BETA.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
-* `--three`: Use only three reading frames instead of six. Halves index size. Default: off.
+--six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>

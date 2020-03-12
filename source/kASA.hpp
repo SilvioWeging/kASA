@@ -162,11 +162,11 @@ namespace kASA {
 
 	public:
 		const bool _bVerbose;
-		const bool _bOnlyThreeFrames;
+		const bool _bSixFrames;
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Standard Constructor
-		kASA() : _bVerbose(false), _bOnlyThreeFrames(false) {
+		kASA() : _bVerbose(false), _bSixFrames(false) {
 			_sTemporaryPath = "";
 			_iNumOfThreads = 1;
 			_iNumOfCall = 1;
@@ -182,7 +182,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Constructor with paths e.g. "derp/"
-		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bOnlyThreeFrames = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _sMaxKBlank(12, ' '), _bVerbose(bVerbose), _bOnlyThreeFrames(bOnlyThreeFrames) {
+		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _sMaxKBlank(12, ' '), _bVerbose(bVerbose), _bSixFrames(bSixFrames) {
 #ifdef ENVIRONMENT32
 			_iMaxMemUsePerThread = (1024 / _iNumOfThreads) * 1024 * 1024;
 #else

@@ -19,7 +19,7 @@ namespace kASA {
 		const bool bUnfunny;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bUnfunny = false, const bool& bOnlyThreeFrames = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bOnlyThreeFrames), _bInputAreAAs(bTranslated), bUnfunny(bUnfunny) {}
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bUnfunny = false, const bool& bSixFrames = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bInputAreAAs(bTranslated), bUnfunny(bUnfunny) {}
 
 	protected:
 
@@ -190,9 +190,7 @@ namespace kASA {
 					}
 					else {
 						convert_dnaTokMer(vLines[i].first, vLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
-						if (!_bOnlyThreeFrames) {
-							convert_dnaTokMer(vRCLines[i].first, vRCLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
-						}
+						convert_dnaTokMer(vRCLines[i].first, vRCLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
 					}
 				}
 			}
@@ -1183,7 +1181,7 @@ namespace kASA {
 					}
 					else {
 						dnaTokMers(sDNA, iIdx, vOut, vBricks, fShrinkPercentage);
-						if (!_bOnlyThreeFrames) {
+						if (_bSixFrames) {
 							dnaTokMers(sRCDNA, iIdx, vOut, vBricks, fShrinkPercentage);
 						}
 					}

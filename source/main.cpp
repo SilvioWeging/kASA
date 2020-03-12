@@ -57,7 +57,7 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
---three: Use only three reading frames instead of six. Halves index size. Default: off.\n\
+--six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ";
 		}
 		else if (m == "identify") {
@@ -85,7 +85,6 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
---three: Use only three reading frames instead of six. Improves performance. Default: off.\n\
 ";
 		}
 		else if (m == "update") {
@@ -108,7 +107,7 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
---three: Use only three reading frames instead of six. Halves index size. Default: off.\n\
+--six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ";
 		}
 		else if (m == "shrink") {
@@ -196,7 +195,7 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false, bUnfunny = false, bUseArry = false, bOnlyThreeFrames = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false, bUnfunny = false, bUseArry = false, bSixFrames = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
@@ -401,7 +400,7 @@ int main(int argc, char* argv[]) {
 				bUseArry = true;
 			}
 			else if (sParameter == "--three") {
-				bOnlyThreeFrames = true;
+				bSixFrames = true;
 			}
 			else {
 				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
@@ -416,7 +415,7 @@ int main(int argc, char* argv[]) {
 
 
 		if (cMode == "build") {
-			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode, bUnfunny, bOnlyThreeFrames);
+			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode, bUnfunny, bSixFrames);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
@@ -454,7 +453,7 @@ int main(int argc, char* argv[]) {
 			kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel);
 		}
 		else if (cMode == "update") {
-			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode, bOnlyThreeFrames);
+			kASA::Update kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode, bSixFrames);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
@@ -514,7 +513,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		else if (cMode == "identify") {
-			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bUnfunny, bOnlyThreeFrames);
+			kASA::Compare kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bUnfunny, bSixFrames);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
