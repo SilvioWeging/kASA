@@ -24,11 +24,35 @@ namespace kASA {
 		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const bool& bProtein = false, const string& stxxl_mode = "", const bool& bUnfunny = false, const bool& bSixFrames = false) : Read(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bProtein, stxxl_mode, bUnfunny, bSixFrames), _bTranslated(bProtein), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
 
 		// for output
-		bool bHumanReadable = false;
 		int32_t iNumOfBeasts = 3;
+
+		enum OutputFormat
+		{
+			Kraken,
+			Json,
+			JsonL,
+			tsv
+		} format;
 
 	private:
 
+		string outputFormatFileEnding() {
+			if (format == OutputFormat::Kraken) {
+				return ".ktsv";
+			}
+			if (format == OutputFormat::Json) {
+				return ".json";
+			}
+			if (format == OutputFormat::JsonL) {
+				return ".jsonl";
+			}
+			if (format == OutputFormat::tsv) {
+				return ".tsv";
+			}
+			return ".rtt";
+		}
+
+		///////////////////////////////////////////////////////
 		const float arrWeightingFactors[12] = { 1, 121.f / 144.f , 100.f / 144.f , 81.f / 144.f , 64.f / 144.f , 49.f / 144.f , 36.f / 144.f , 25.f / 144.f , 16.f / 144.f , 9.f / 144.f , 4.f / 144.f , 1.f / 144.f };
 		//const float arrWeightingFactors[12] = { 1, 1331.f / 1728.f , 1000.f / 1728.f , 729.f / 1728.f , 512.f / 1728.f , 343.f / 1728.f , 216.f / 1728.f , 125.f / 1728.f , 64.f / 1728.f , 27.f / 1728.f , 8.f / 1728.f , 1.f / 1728.f };
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -937,18 +961,30 @@ namespace kASA {
 					}
 					
 					if (iCountOfHits == 0) {
-						if (bHumanReadable) {
+						switch (format) {
+						case OutputFormat::tsv:
 							fOut << iRealReadIDStart + readIdx << "\t" << currentReadLengthAndName.first << "\t-\t-\t-" << "\n";
-						}
-						else {
+							break;
+
+						case OutputFormat::Json:
 							if (iRealReadIDStart + readIdx == 0) {
 								fOut << "{" << "\n";
 							}
 							else {
 								fOut << "," << "\n" << "{" << "\n";
 							}
-							fOut << "\t\"Read number\": " << readIdx << "," << "\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << "\n" << "\t\"Top hits\": [" << "\n" << "\t]," << "\n" <<"\t\"Further hits\": [" << "\n" << "\t]" << "\n" << "}";
-						}
+							fOut << "\t\"Read number\": " << iRealReadIDStart + readIdx << ",\n\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\",\n\t\"Top hits\": [\n\t],\n\t\"Further hits\": [\n\t]\n}";
+							break;
+
+						case OutputFormat::JsonL:
+							fOut << "{ \"Read number\": " << iRealReadIDStart + readIdx << "," << " \"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << "\"Top hits\": [], \"Further hits\": [] }\n";
+							break;
+
+						case OutputFormat::Kraken:
+							fOut << "U\t" << currentReadLengthAndName.first << "\t0\t" << currentReadLengthAndName.second << "\tA:00\n";
+							break;
+						};
+
 					}
 					else {
 
@@ -976,13 +1012,16 @@ namespace kASA {
 						}
 
 						//cout << iRealReadIDStart + readIdx << endl;
+						string sOut = "", sOut2 = "", sOut3 = "";
+						ostringstream sOutStr;
+						auto it = resultVec.begin();
+						float iValueBefore = 0;
 
-						if (bHumanReadable) {
-							string sOut = "", sOut2 = "", sOut3 = "";
-
+						switch (format) {
+						case OutputFormat::tsv:
+							// tsv
 							sOut += to_string(iRealReadIDStart + readIdx) + "\t" + currentReadLengthAndName.first + "\t";
-							auto it = resultVec.begin();
-							float iValueBefore = 0;
+							
 							for (int16_t j = 0, i = 0; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								sOut += to_string(mIdxToTax[get<0>(*it)]) + ";";
 								ostringstream e_value;
@@ -1009,10 +1048,11 @@ namespace kASA {
 							if (sOut2.length()) {
 								fOut << sOut + "\t" + sOut2 + "\t" + sOut3 + "\t" << (bestScore - get<1>(resultVec[0])) / bestScore << "\n";
 							}
-						}
-						else {
+							break;
+
+						case OutputFormat::Json:
 							// json
-							ostringstream sOutStr;
+							
 							if (iRealReadIDStart + readIdx == 0) {
 								sOutStr << "{" << "\n";
 							}
@@ -1021,8 +1061,7 @@ namespace kASA {
 							}
 
 							sOutStr << "\t\"Read number\": " << iRealReadIDStart + readIdx << ",\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\",\n" << "\t\"Top hits\": [\n";
-							auto it = resultVec.begin();
-
+							
 							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
 								if (i == 0) {
 									sOutStr << "\t{\n";
@@ -1041,7 +1080,6 @@ namespace kASA {
 
 							sOutStr << "\n\t],\n\t\"Further hits\": [\n";
 
-							float iValueBefore = 0;
 							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								if (j == iTopHitCounter) {
 									sOutStr << "\t{\n";
@@ -1065,7 +1103,75 @@ namespace kASA {
 
 							sOutStr << "\n\t]\n}";
 							fOut << sOutStr.str();
-						}
+							break;
+
+						case OutputFormat::JsonL:
+							// json lines
+							sOutStr << "{ \"Read number\": " << iRealReadIDStart + readIdx << "," << " \"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << " \"Top hits\": [";
+
+							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+								if (i == 0) {
+									sOutStr << "{";
+								}
+								else {
+									sOutStr << ",{";
+								}
+
+								sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
+									<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
+									<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
+									<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
+									<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
+									<< "}";
+							}
+
+							sOutStr << "], \"Further hits\": [";
+
+							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+								if (j == iTopHitCounter) {
+									sOutStr << "{";
+								}
+								else {
+									sOutStr << ", {";
+								}
+
+								sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
+									<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
+									<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
+									<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
+									<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
+									<< "}";
+
+								if (iValueBefore != get<1>(*it)) {
+									iValueBefore = get<1>(*it);
+									++j;
+								}
+							}
+
+							sOutStr << "] }\n";
+							fOut << sOutStr.str();
+							break;
+
+						case OutputFormat::Kraken:
+							// Kraken
+							sOutStr << "C\t" << currentReadLengthAndName.first << "\t" << mIdxToTax[get<0>(*it)] << "\t" << currentReadLengthAndName.second << "\t";
+
+							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+								sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+							}
+
+							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+								sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+								if (iValueBefore != get<1>(*it)) {
+									iValueBefore = get<1>(*it);
+									++j;
+								}
+							}
+
+							fOut << sOutStr.str() << "\n";
+							break;
+						};
+
 
 						for (auto& entry : resultVec) {
 							get<0>(entry) = 0;
@@ -1102,18 +1208,29 @@ namespace kASA {
 				}
 
 				if (vTempResultVec.size() == 0) {
-					if (bHumanReadable) {
+					switch (format) {
+					case OutputFormat::tsv:
 						fOut << iReadNum << "\t" << vReadNameAndLength.first << "\t-\t-\t-" << "\n";
-					}
-					else {
+						break;
+
+					case OutputFormat::Json:
 						if (iReadNum == 0) {
 							fOut << "{" << "\n";
 						}
 						else {
 							fOut << "," << "\n" << "{" << "\n";
 						}
-						fOut << "\t\"Read number\": " << iReadNum << "," << "\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << "\n" << "\t\"Top hits\": [" << "\n" << "\t]," << "\n" << "\t\"Further hits\": [" << "\n" << "\t]" << "\n" << "}";
-					}
+						fOut << "\t\"Read number\": " << iReadNum << ",\n\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n\t\"Top hits\": [\n\t],\n\t\"Further hits\": [\n\t]\n}";
+						break;
+
+					case OutputFormat::JsonL:
+						fOut << "{ \"Read number\": " << iReadNum << "," << " \"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << "\"Top hits\": [], \"Further hits\": [] }\n";
+						break;
+
+					case OutputFormat::Kraken:
+						fOut << "U\t" << vReadNameAndLength.first << "\t0\t" << vReadNameAndLength.second << "\tA:00\n";
+						break;
+					};
 				}
 				else {
 
@@ -1137,13 +1254,16 @@ namespace kASA {
 							break;
 						}
 					}
+					string sOut = "", sOut2 = "", sOut3 = "";
+					ostringstream sOutStr;
+					auto it = vTempResultVec.begin();
+					float iValueBefore = 0;
 
-					if (bHumanReadable) {
-						string sOut = "", sOut2 = "", sOut3 = "";
-
+					switch (format) {
+					case OutputFormat::tsv:
+						// tsv
 						sOut += to_string(iReadNum) + "\t" + vReadNameAndLength.first + "\t";
-						auto it = vTempResultVec.begin();
-						float iValueBefore = 0;
+
 						for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
 							sOut += to_string(mIdxToTax[get<0>(*it)]) + ";";
 							ostringstream e_value;
@@ -1170,10 +1290,9 @@ namespace kASA {
 						if (sOut2.length()) {
 							fOut << sOut + "\t" + sOut2 + "\t" + sOut3 + "\t" << (bestScore - get<1>(vTempResultVec[0])) / bestScore << "\n";
 						}
-					}
-					else {
-						// json
-						ostringstream sOutStr;
+						break;
+
+					case OutputFormat::Json:
 						if (iReadNum == 0) {
 							sOutStr << "{" << "\n";
 						}
@@ -1182,7 +1301,6 @@ namespace kASA {
 						}
 
 						sOutStr << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Top hits\": [\n";
-						auto it = vTempResultVec.begin();
 
 						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
 							if (i == 0) {
@@ -1202,7 +1320,6 @@ namespace kASA {
 
 						sOutStr << "\n\t],\n\t\"Further hits\": [\n";
 
-						float iValueBefore = 0;
 						for (int32_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
 							if (j == iTopHitCounter) {
 								sOutStr << "\t{\n";
@@ -1226,7 +1343,73 @@ namespace kASA {
 
 						sOutStr << "\n\t]\n}";
 						fOut << sOutStr.str();
-					}
+						break;
+
+					case OutputFormat::JsonL:
+						// json lines
+						sOutStr << "{ \"Read number\": " << iReadNum << "," << " \"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << " \"Top hits\": [";
+
+						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+							if (i == 0) {
+								sOutStr << "{";
+							}
+							else {
+								sOutStr << ",{";
+							}
+
+							sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
+								<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
+								<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
+								<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
+								<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
+								<< "}";
+						}
+
+						sOutStr << "], \"Further hits\": [";
+
+						for (int32_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
+							if (j == iTopHitCounter) {
+								sOutStr << "{";
+							}
+							else {
+								sOutStr << ", {";
+							}
+
+							sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
+								<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
+								<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
+								<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
+								<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
+								<< "}";
+
+							if (iValueBefore != get<1>(*it)) {
+								iValueBefore = get<1>(*it);
+								++j;
+							}
+						}
+
+						sOutStr << "] }\n}";
+						fOut << sOutStr.str();
+						break;
+
+					case OutputFormat::Kraken:
+						sOutStr << "C\t" << vReadNameAndLength.first << "\t" << mIdxToTax[get<0>(*it)] << "\t" << vReadNameAndLength.second << "\t";
+
+						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+							sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+						}
+
+						for (int32_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
+							sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+							if (iValueBefore != get<1>(*it)) {
+								iValueBefore = get<1>(*it);
+								++j;
+							}
+						}
+
+						fOut << sOutStr.str() << "\n";
+						break;
+					};
 				}
 			}
 			catch (...) {
@@ -1576,13 +1759,15 @@ namespace kASA {
 					fOut.rdbuf()->pubsetbuf(&mybuffer[0], 16777216);
 					//fOut.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					if (bReadIDsAreInteresting) {
-						fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + ((bHumanReadable) ? ".rtt" : ".json") : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
+						fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + outputFormatFileEnding() : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
 						if (fOut) {
-							if (bHumanReadable) {
+							if (format == OutputFormat::tsv) {
 								fOut << "#Read number\tSpecifier from input file\tMatched taxa\tNames\tScores{relative,k-mer}\tError" << "\n";
 							}
 							else {
-								fOut << "[" << "\n";
+								if (format == OutputFormat::Json) {
+									fOut << "[" << "\n";
+								}
 							}
 						}
 						else {
@@ -2019,7 +2204,7 @@ namespace kASA {
 					///////////////////////////////////////////////////////////////////////////////////////////////
 
 					// if json is the output format for readToTaxa, end it with a ]
-					if (bReadIDsAreInteresting && !bHumanReadable) {
+					if (bReadIDsAreInteresting && format == OutputFormat::Json) {
 						fOut << "\n" << "]";
 					}
 					fOut.flush(); // empty the buffer to avoid memory leak
@@ -2045,7 +2230,7 @@ namespace kASA {
 							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx + ikMerlength * iAmountOfSpecies];
 							vTemp[ikMerlength] = make_pair(vCount_all[iSpecIdx + ikMerlength * iAmountOfSpecies], iTempScore);
 						}
-						vOut[iSpecIdx] = make_tuple(mOrganisms[iSpecIdx], vTemp, mIdxToTax[iSpecIdx]);
+						vOut[iSpecIdx] = make_tuple(Utilities::replaceCharacter(mOrganisms[iSpecIdx], ',', ' '), vTemp, mIdxToTax[iSpecIdx]);
 					}
 					sort(vOut.begin(), vOut.end(), [](const tuple<string, vector<pair<double, uint64_t>>, uint32_t>& a, const tuple<string, vector<pair<double, uint64_t>>, uint32_t>& b) {
 						for (uint64_t i = 0; i < get<1>(a).size(); ++i) {
@@ -2068,7 +2253,7 @@ namespace kASA {
 						//cout.rdbuf(tableFileStream.rdbuf());
 						tableFileStream.open((vInputFiles.size() > 1) ? fTableFile + fileName + ".csv" : fTableFile);
 
-						if (bHumanReadable) {
+						/*if (bHumanReadable) {
 							// short version: taxID,Name,Unique Percentage of highest k,Non-unique Percentage of highest k\n
 							bool bBreakOut = false;
 							double dSumOfIdentified = 0;
@@ -2103,7 +2288,7 @@ namespace kASA {
 							tableFileStream << "\n" << sOutStr.str();
 							allSumOfIdentified = dSumOfIdentified;
 						}
-						else {
+						else {*/
 							ostringstream sOutStr;
 							// long version: taxID,Name,Unique Counts,Unique rel. freq. x in 0.x,Non-unique Counts,Non-unique rel. freq. x in 0.x\n
 							tableFileStream << "#taxID,Name";
@@ -2122,9 +2307,12 @@ namespace kASA {
 							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
 								tableFileStream << "," << "Overall rel. freq. k=" << _iMaxK - ikMerlength;
 							}
+							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								tableFileStream << "," << "Overall unique rel. freq. k=" << _iMaxK - ikMerlength;
+							}
 							tableFileStream << "\n";
 
-							vector<double> vSumOfIdentified(_iNumOfK, 0);
+							vector<double> vSumOfIdentified(_iNumOfK, 0), vSumOfUniqueIdentified(_iNumOfK, 0);
 							for (const auto& entry : vOut) {
 								if (get<1>(entry)[_iNumOfK - 1].first > 0) {
 									// unique count
@@ -2160,6 +2348,12 @@ namespace kASA {
 										vSumOfIdentified[ikMerlength] += get<1>(entry)[ikMerlength].first;
 										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
 									}
+
+									// Overall unique rel freq
+									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+										vSumOfUniqueIdentified[ikMerlength] += get<1>(entry)[ikMerlength].second;
+										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
+									}
 									sOutStr << "\n";
 								}
 							}
@@ -2174,10 +2368,13 @@ namespace kASA {
 								//cout << iNumberOfkMersInInput << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << vSumOfIdentified[ikMerlength] << endl;
 								tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 							}
+							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfUniqueIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
+							}
 							tableFileStream << "\n" << sOutStr.str();
 
 							allSumOfIdentified = vSumOfIdentified[0];
-						}
+						//}
 					}
 					/*if (fTableFile != "") {
 						cout.rdbuf(orgBuf);

@@ -462,7 +462,7 @@ namespace kASA {
 								if (acc != "") {
 									vAccessions.insert(make_pair(acc, false));
 									if (sTaxonomicLevel == "lowest") {
-										vNamesFromFasta.insert(make_pair(acc,Utilities::removeCharFromString(sDummy, ',')));
+										vNamesFromFasta.insert(make_pair(acc,Utilities::replaceCharacter(sDummy, ',', ' ')));
 									}
 								}
 								else {

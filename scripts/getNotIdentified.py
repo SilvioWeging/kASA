@@ -21,7 +21,7 @@ def jsonGetNotIDd(argv):
 	resultSet = set()
 	
 	for read in kASAOutput:
-		taxa = read["Matched taxa"]
+		taxa = read["Top hits"]
 		
 		if len(taxa) == 0:
 			resultSet.add(read["Specifier from input file"])

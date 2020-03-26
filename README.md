@@ -214,15 +214,15 @@ If your read length is smaller than ![equation](http://www.sciweavers.org/tex2im
 
 If you want to optimise precision over sensitivity, you could use `k 12 12` and/or filter out low scoring reads (e.g. by ignoring everything below 0.5 (Relative Score)).
 
-Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
-But because too much information isn't always nice, you can specify how much taxa shall be shown for each read (e.g. `-b 5` shows best 5 hits) or if the outputs should be human readable (see below). 
+Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, by default in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
+But because too much information isn't always nice, you can specify how much taxa with different score shall be shown for each read (e.g. `-b 5` shows best 5 hits). 
 
-The per read error score ranges from -1 to 1. A 1 means that the best score deviates as far as possible from the optimal score, 0 means a perfect match and -1 means that the reverse complement also fits perfectly. In human readable format, only the error of the best score is printed.
+The per read error score ranges from -1 to 1. A 1 means that the best score deviates as far as possible from the optimal score, 0 means a perfect match and -1 means that the reverse complement also fits perfectly. In tsv format, only the error of the best score is printed.
 
 Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p example/work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
 
-If a read cannot be identified, the array "Top hits" in json format is empty, and in human readable format "-" is printed in every column instead of taxa, names and scores. 
-The "Top hits" array will only contain multiple entries, if their k-mer Score is identical. Otherwise it contains the entry with the highest relative Score and all other hits are saved into the "Further hits" array.
+If a read cannot be identified, the array "Top hits" in json format is empty, and in tsv format "-" is printed in every column instead of taxa, names and scores. 
+The "Top hits" array can contain multiple entries, especially if a k-mer Score is "close enough" to the highest score (all scores are normalized to [0,1] and everything with a score of more than 0.8 is considered a "Top hit"). Otherwise it contains the entry with the highest relative Score and all other hits are saved into the "Further hits" array.
 
 Should you provide more than 9 GB of RAM and a lower `k` of at least 7 (default), a much faster lookup table instead of a prefix trie is used.
 
@@ -241,8 +241,11 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--kH <upper>`: Set only the upper bound
 * `--kL <lower>`: Set only the lower bound
 * `-b (--beasts) <number>`: Number of hit taxa shown for each read. Default: 3.
-* `-h (--human)`: Changes the output of the profile so that only necessary information is provided, see below.
 * `-e (--unique)`: Ignores duplicates of `k`-mers in every read. This helps removing bias from repeats but messes with error scores, so consider it BETA.
+* `--json`: Sets the output format to json. Default.
+* `--jsonl`: Sets the output format to json lines.
+* `--tsv`: Sets the output format to a tab separated, per line format.
+* `--kraken`: Sets the output format to a kraken like tsv format.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -286,25 +289,14 @@ e.g.: [weging@example:/kASA$] build/kASA identify -c example/work/content.txt -d
 ```
 
 ###### Profile
-|#tax ID|Name|Unique counts k=12|Unique counts k=11|...|Unique rel. freq. k=12|...|Non-unique counts k=12|...|Non-unique rel. freq. k=12|...|Overall rel. freq. k=12| ... |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|9606,|Homo sapiens,|121252166,|111556464,|...|0.87,|...|2001658992,|...|0.79,|...|0.65,|...|
-
-##### Human readable:
-###### Identification (tab-separated)
-|#Read number|Specifier from input file|Matched taxa|Names|Scores{relative,k-mer}|Error|
-|:---:|:---:|:---:|:---:|:---:|:---:|
-|0 | Dummy-line | 9606;147711 | Homo sapiens;Rhinovirus A | 1.332e+01,220.12;1.0221e+00,212.04 | -0.001 |
-
-###### Profile
-|#tax ID|Name|Unique rel. freq. in %|Non-unique rel. freq. in %|Overall rel. freq. in %|
-|:---:|:---:|:---:|:---:|:---:|
-|9606,|Homo sapiens,|87,|79,|65|
+|#tax ID|Name|Unique counts k=12|Unique counts k=11|...|Unique rel. freq. k=12|...|Non-unique counts k=12|...|Non-unique rel. freq. k=12|...|Overall rel. freq. k=12| ... | Overall unique rel. freq. k=12| ... |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|9606,|Homo sapiens,|121252166,|111556464,|...|0.87,|...|2001658992,|...|0.79,|...|0.65,|...|0.83|...|
 
 There are two relative frequencies because your index may be very ambigious (e.g. it only consists of E. Coli species) and thus has only few unique hits. 
 To get a hint which one would be more relevant to you, check your index with a call to `redundancy` in the [Miscellaneous](#miscellaneous) section.
 
-Relative frequencies in the human readable profile are given for the largest k. The "Overall relative frequency" is calculated by dividing the non-unique counts by the total number of k-mers from the input.
+Relative frequencies in the human readable profile are given for the largest k. The "Overall (unique) relative frequency" is calculated by dividing the (non-)unique counts by the total number of k-mers from the input.
 This is also printed in the verbose mode like: "OUT: Number of k-mers in input: ... of which ... % were identified." for the largest k.
 
 ### Update
@@ -382,14 +374,18 @@ This gives you a hint whether you should look at the unique relative frequencies
 
 ## Useful scripts
 - jsonToFrequencies.py: Creates a profile based on the most prominent taxa per read. Usage: `-i <kASA output> -o <result> (-t <threshold for rel. score>)`. Consumes a lot of memory because the json file is loaded into memory.
-- hrToFrequencies.py: Same as above but for human readable output.
+- jsonLToFrequencies.py: Same as above but with json lines as input format. Identification with kASA needs to be run with `--jsonl` in order to use this script. Much more lightweight on memory.
+- tsvToFrequencies.py: Same as above but for `--tsv`.
+- sumFreqsOnTaxLvl.py: Takes the output of any of the above scripts and sums them up on a specified level. Needs the NCBI taxonomy. Usage: `-i <kASA output> -o <result> -n <nodes.dmp> -m <names.dmp> -r <rank, e.g. species or genus>`.
 - csvToCAMI.py: Converts a profiling output into the CAMI profile format. Needs the NCBI 'nodes.dmp' and 'names.dmp' file for upwards traversing of the taxonomic tree. Usage: `-i <kASA output> -o <result> -n <nodes.dmp> -m <names.dmp> -k <k value> -u <u: unique, o: overall, n: non-unique> (-t <threshold>)`.
 - camiToKrona.py: Converts the CAMI profile to a file format readable by [Krona](https://github.com/marbl/Krona/wiki). Usage: `-i <cami file> -o <krona file>`.
 - jsonToCAMIBin.py: Converts the json output file into the CAMI binning format. Usage: `-i <json file> -o <cami file>`.
-
+- jsonToJsonL.py: Converts a json file to a json line formated file. Usage: `<json file> <json line file>`.
+- getNotIdentified.py: Returns all reads which were not identified. Useful for further studies or bugfixing. Usage: `-i <json> -f <fastq or fasta> -o <output> -t <threshold>`.
+- reconstructDNA.py: Algorithmic proof of our method. See supplemental file 1 from our paper. Usage: `<DNA sequence>`.
 
 ## Todos and upcoming
-- A python script that creates Kraken-like output out of kASAs identification file
+- ~~Kraken-like output out of kASAs identification file~~
 - ~~Reworked building algorithm~~
 - Join two built indices
 - Profiles normalized to genome length, for now you could hack that with the frequency file

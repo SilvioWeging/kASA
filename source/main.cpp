@@ -19,7 +19,7 @@ namespace kASA_help {
 	inline string getHelp(const string& m) {
 		string out = "";
 		if (m == "") {
-			out = "Hello and welcome to kASA.\nYou did not specify any parameters.\nPlease read the README file on our Github https://github.com/SilvioWeging/kASA or select a mode and call <mode> --help to get a list of parameters for the selected mode.\nPossible modes are: generateCF, build, identify, shrink, update, delete, getFrequency, redundancy, trie.\nGood luck and have a nice day!";
+			out = "Hello and welcome to kASA.\nYou did not specify any parameters.\nPlease read the README file on our Github https://github.com/SilvioWeging/kASA or select a mode and call <mode> -h or --help to get a list of parameters for the selected mode.\nPossible modes are: generateCF, build, identify, shrink, update, delete, getFrequency, redundancy, trie.\nGood luck and have a nice day!";
 		}
 		else if (m == "generateCF") {
 			out = "This mode creates a content file out of genomic data with the help of the NCBI taxonomy.\n\
@@ -75,7 +75,10 @@ Optional parameters:\n\
 --kH <upper>: Set only the upper bound.\n\
 --kL <lower>: Set only the lower bound.\n\
 -b (--beasts) <number>: Number of hit taxa shown for each read. Default: 3.\n\
--h (--human): Changes the output of the profile so that only necessary information is provided, see below.\n\
+--json: Sets the output format to json. Default.\n\
+--jsonl: Sets the output format to json lines.\n\
+--tsv: Sets the output format to a tab separated, per line format.\n\
+--kraken: Sets the output format to a kraken like tsv format.\n\
 -e (--unique): Ignores duplicates of k-mers in every read.This helps removing bias from repeats but messes with error scores, so consider it BETA.\n\
 -a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
 -z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
@@ -85,6 +88,7 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
+--six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ";
 		}
 		else if (m == "update") {
@@ -107,7 +111,7 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
---six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+--three: Use only three reading frames instead of six. Halves index size. Default: off.\n\
 ";
 		}
 		else if (m == "shrink") {
@@ -195,8 +199,9 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bHumanReadable = false, bRAM = false, bUnique = false, bUnfunny = false, bUseArry = false, bSixFrames = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bUseArry = false, bSixFrames = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+		kASA::Compare::OutputFormat eOutputFormat = kASA::Compare::OutputFormat::Json;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
 		float fPercentageOfThrowAway = 0.f;
@@ -241,7 +246,7 @@ int main(int argc, char* argv[]) {
 
 		for (int32_t i = 2; i < argc; ++i) {
 			string sParameter = vParameters[i];
-			if (sParameter == "--help") {
+			if (sParameter == "-h" || sParameter == "--help") {
 				cout << "OUT: HELP CALLED FOR MODE " << cMode << "\n\n" << kASA_help::getHelp(cMode) << endl;
 				return 0;
 			}
@@ -390,8 +395,17 @@ int main(int argc, char* argv[]) {
 					throw runtime_error("Deleted nodes file not found");
 				}
 			}
-			else if (sParameter == "-h" || sParameter == "--human") {
-				bHumanReadable = true;
+			else if (sParameter == "--json") {
+				eOutputFormat = kASA::Compare::OutputFormat::Json;
+			}
+			else if (sParameter == "--jsonl") {
+				eOutputFormat = kASA::Compare::OutputFormat::JsonL;
+			}
+			else if (sParameter == "--tsv") {
+				eOutputFormat = kASA::Compare::OutputFormat::tsv;
+			}
+			else if (sParameter == "--kraken") {
+				eOutputFormat = kASA::Compare::OutputFormat::Kraken;
 			}
 			else if (sParameter == "--stxxl") {
 				sStxxlMode = vParameters[++i];
@@ -399,7 +413,7 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "--array") {
 				bUseArry = true;
 			}
-			else if (sParameter == "--three") {
+			else if (sParameter == "--six") {
 				bSixFrames = true;
 			}
 			else {
@@ -523,7 +537,7 @@ int main(int argc, char* argv[]) {
 				contentFileIn = indexFile + "_content.txt";
 			}
 
-			kASAObj.bHumanReadable = bHumanReadable;
+			kASAObj.format = eOutputFormat;
 			auto start = std::chrono::high_resolution_clock::now();
 			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, bUseArry);
 			auto end = std::chrono::high_resolution_clock::now();

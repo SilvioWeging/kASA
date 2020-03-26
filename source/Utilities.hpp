@@ -58,6 +58,13 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	inline string replaceCharacter(const string& sIn, const char& c, const char& rep) {
+		string sOut = sIn;
+		std::replace(sOut.begin(), sOut.end(), c, rep);
+		return sOut;
+	}
+
+	///////////////////////////////////////////////////////
 	inline string lstrip(const string& sIn) {
 		string sOut = sIn;
 		auto it = sOut.begin();
