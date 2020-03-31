@@ -389,7 +389,7 @@ namespace kASA {
 									++(transfer->iCurrentReadID);
 									++iLocalReadID;
 									vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
-									iSoftMaxSize -= sName.size() * sizeof(char) + sizeof(uint32_t);
+									iSoftMaxSize -= sizeof(pair<string,uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
 								}
 								bAddTail = false;
 							}
@@ -419,7 +419,7 @@ namespace kASA {
 					
 					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
-					if (iSoftMaxSize <= 0) {
+					if (iSoftMaxSize <= 14399776 + 4 * iAmountOfSpecies) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
 
@@ -542,7 +542,7 @@ namespace kASA {
 									++(transfer->iCurrentReadID);
 									++iLocalReadID;
 									vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
-									iSoftMaxSize -= sName.size() * sizeof(char) + sizeof(uint32_t);
+									iSoftMaxSize -= sizeof(pair<string, uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
 								}
 								bAddTail = false;
 							}
@@ -635,7 +635,7 @@ namespace kASA {
 					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
 					
-					if (iSoftMaxSize <= 0) {
+					if (iSoftMaxSize <= 14399776 + 4 * iAmountOfSpecies) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
 

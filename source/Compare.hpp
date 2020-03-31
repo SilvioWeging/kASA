@@ -1636,20 +1636,23 @@ namespace kASA {
 				}
 
 				vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>> vInputVec;
-				try {
-					vInputVec.reserve(iSoftMaxSizeOfInputVecs / sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>));
-				}
-				catch (const bad_alloc&) {
-					vInputVec.shrink_to_fit();
-					if (iSoftMaxSizeOfInputVecs > 1024ull * 1024ull * 1024ull) {
-						iSoftMaxSizeOfInputVecs -= 1024ull * 1024ull * 1024ull;
+				while (true) {
+					try {
 						vInputVec.reserve(iSoftMaxSizeOfInputVecs / sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>));
+						break;
 					}
-					else {
-						cerr << "ERROR: Not enough memory available.Please try again with a lower number after - m" << endl;
-						throw;
+					catch (const bad_alloc&) {
+						vInputVec.shrink_to_fit();
+						if (iSoftMaxSizeOfInputVecs > 1073741824ull) { // 1073741824 == 1024^3 == 1GB
+							iSoftMaxSizeOfInputVecs -= 1073741824ull;
+						}
+						else {
+							cerr << "ERROR: Not enough memory available. Please try again with a lower number after - m" << endl;
+							throw;
+						}
 					}
 				}
+
 
 				const bool& bReadIDsAreInteresting = fOutFile != "";
 
