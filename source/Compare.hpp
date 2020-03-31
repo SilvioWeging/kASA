@@ -1705,7 +1705,20 @@ namespace kASA {
 					}
 					
 					// see if input is gziped or not and if it's a fasta or fastq file
-					bool isGzipped = (inFile[inFile.length() - 3] == '.' && inFile[inFile.length() - 2] == 'g' && inFile[inFile.length() - 1] == 'z');
+					// get first two bytes and check for magic number
+
+					ifstream prelimFile(inFile);
+					char firstByte;
+					prelimFile.read(&firstByte, 1);
+					prelimFile.close();
+
+					bool isGzipped = false; //= (inFile[inFile.length() - 3] == '.' && inFile[inFile.length() - 2] == 'g' && inFile[inFile.length() - 1] == 'z');
+					if ((firstByte == 0x1f)) { //&& (firstByte[1] == 0x8b)) {
+						isGzipped = true;
+					}
+					if (firstByte == 0x42) {
+						throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the momenty, sorry.");
+					}
 					bool bIsGood = false, bIsFasta = false;
 
 					unique_ptr<ifstream> fast_q_a_File;

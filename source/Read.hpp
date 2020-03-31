@@ -419,7 +419,7 @@ namespace kASA {
 					
 					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
-					if (iSoftMaxSize <= 14399776 + 4 * iAmountOfSpecies) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+					if (iSoftMaxSize <= static_cast<int64_t>(14399776 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
 
@@ -635,7 +635,7 @@ namespace kASA {
 					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
 					
-					if (iSoftMaxSize <= 14399776 + 4 * iAmountOfSpecies) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+					if (iSoftMaxSize <= static_cast<int64_t>(14399776 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
 
