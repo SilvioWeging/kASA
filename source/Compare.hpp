@@ -669,7 +669,7 @@ namespace kASA {
 											const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
 											const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
 											if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
-												++vMemoryCounterOnly[ikLengthCounter];
+												++vMemoryCounterOnly[ik];
 											}
 											else {
 												break;
@@ -696,7 +696,7 @@ namespace kASA {
 											it.SetNumOfEntries(numOfEntries);
 											for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
 												const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLengthCounter + (*it);
-												const auto& numOfHits = ++vMemoryCounterOnly[ikLengthCounter];
+												const auto& numOfHits = vMemoryCounterOnly[ikLengthCounter];
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
 												if (numOfEntries == 1) {
@@ -704,7 +704,7 @@ namespace kASA {
 												}
 											}
 
-											++vMemoryCounterOnly[ikLengthCounter] = 1;
+											vMemoryCounterOnly[ikLengthCounter] = 1;
 
 											vMemoryOfTaxIDs[ikLengthCounter].clear();
 											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
@@ -799,7 +799,7 @@ namespace kASA {
 						it.SetNumOfEntries(numOfEntries);
 						for (; it != vMemoryOfTaxIDs[ikLC].end() && numOfEntries != 0; ++it) {
 							const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLC + (*it);
-							const auto& numOfHits = ++vMemoryCounterOnly[ikLC];
+							const auto& numOfHits = vMemoryCounterOnly[ikLC];
 							vCount[tempIndex] += float(numOfHits) / numOfEntries;
 
 							if (numOfEntries == 1) {
@@ -1678,7 +1678,7 @@ namespace kASA {
 				vector<uint64_t> vNumberOfGarbagekMersPerK(_iNumOfK, 0);
 
 				auto pathAndSize = Utilities::gatherFilesFromPath(fInFile);
-				vector<string> vInputFiles = pathAndSize.first;
+				const auto& vInputFiles = pathAndSize.first;
 				size_t overallFileSize = pathAndSize.second, allFilesProgress = 0, charsReadOverall = 0;
 
 				
@@ -1686,13 +1686,13 @@ namespace kASA {
 				for (const auto& inFile : vInputFiles) {
 
 					if (_bVerbose) {
-						cout << "OUT: Current file: " << inFile << endl;
+						cout << "OUT: Current file: " << inFile.first << endl;
 					}
 
 					
 					string fileName = "";
 					if (vInputFiles.size() > 1) { // get file name without path and ending
-						const auto& vRawNameSplit = Utilities::split(inFile.substr(fInFile.size(), inFile.size()), '.');
+						const auto& vRawNameSplit = Utilities::split(inFile.first.substr(fInFile.size(), inFile.first.size()), '.');
 						if (vRawNameSplit.size() == 1) {
 							fileName = vRawNameSplit[0];
 						}
@@ -1705,20 +1705,8 @@ namespace kASA {
 					}
 					
 					// see if input is gziped or not and if it's a fasta or fastq file
-					// get first two bytes and check for magic number
+					bool isGzipped = inFile.second; //= (inFile[inFile.length() - 3] == '.' && inFile[inFile.length() - 2] == 'g' && inFile[inFile.length() - 1] == 'z');
 
-					ifstream prelimFile(inFile);
-					char firstByte;
-					prelimFile.read(&firstByte, 1);
-					prelimFile.close();
-
-					bool isGzipped = false; //= (inFile[inFile.length() - 3] == '.' && inFile[inFile.length() - 2] == 'g' && inFile[inFile.length() - 1] == 'z');
-					if ((firstByte == 0x1f)) { //&& (firstByte[1] == 0x8b)) {
-						isGzipped = true;
-					}
-					if (firstByte == 0x42) {
-						throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the momenty, sorry.");
-					}
 					bool bIsGood = false, bIsFasta = false;
 
 					unique_ptr<ifstream> fast_q_a_File;
@@ -1730,7 +1718,7 @@ namespace kASA {
 							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
 						}
 
-						fast_q_a_File_gz.reset(new igzstream(inFile.c_str()));
+						fast_q_a_File_gz.reset(new igzstream(inFile.first.c_str()));
 						bIsGood = fast_q_a_File_gz->good();
 						char cLessOrAt = static_cast<char>(fast_q_a_File_gz->peek());
 						if (cLessOrAt == '>') {
@@ -1748,7 +1736,7 @@ namespace kASA {
 						fast_q_a_File_gz->exceptions(std::ios_base::badbit);
 					}
 					else {
-						fast_q_a_File.reset(new ifstream(inFile));
+						fast_q_a_File.reset(new ifstream(inFile.first));
 						bIsGood = fast_q_a_File->good();
 
 						char cLessOrAt = static_cast<char>(fast_q_a_File->peek());

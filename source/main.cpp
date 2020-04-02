@@ -24,7 +24,7 @@ namespace kASA_help {
 		else if (m == "generateCF") {
 			out = "This mode creates a content file out of genomic data with the help of the NCBI taxonomy.\n\
 Necessary parameters:\n\
--i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-i (--input) <file/folder>: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
 -u (--level) <level>: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose \"lowest\" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' \"sequence\" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.\n\
 -f (--acc2tax) <folder or file>: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.\n\
 -y (--taxonomy) <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.\n\
@@ -41,7 +41,7 @@ Optional parameters:\n\
 		else if (m == "build") {
 			out = "This mode creates a content file (if it doesn't already exist) and an index out of genomic data with the help of the NCBI taxonomy.\n\
 Necessary parameters:\n\
--i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-i (--input) <file/folder>: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
 -d (--database) <file>: Actually path and name of the index but let's call it database since `-i` was already taken...\n\
 -c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
 If -c is not specified:\n\
@@ -63,7 +63,7 @@ Optional parameters:\n\
 		else if (m == "identify") {
 			out = "This mode analyzes genomic data for similarities with an index which was built with build.\n\
 Necessary parameters:\n\
--i (--input) <file/folder>: Fastq or fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-i (--input) <file/folder>: Fastq or fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
 -d (--database) <file>: Actually path and name of the index but let's call it database since `-i` was already taken...\n\
 -c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
 -p (--profile) <file>: Path and name of the profile that is put out.\n\
@@ -94,7 +94,7 @@ Optional parameters:\n\
 		else if (m == "update") {
 			out = "This mode updates an existing index with new genomic data.\n\
 Necessary parameters:\n\
--i (--input) <file/folder>: Fasta file(s). Can be gzipped (but must end with .gz). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
+-i (--input) <file/folder>: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.\n\
 -d (--database) <file>: Current index. No default.\n\
 -c (--content) <file>: Path and name of the content file either downloaded or created from genomic data.\n\
 -u (--level) <level>: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose \"lowest\" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' \"sequence\" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number.\n\

@@ -434,7 +434,7 @@ namespace kASA {
 				Utilities::createFile(sOutput);
 				
 
-				vector<string> files = Utilities::gatherFilesFromPath(sInput).first;
+				auto files = Utilities::gatherFilesFromPath(sInput).first;
 
 				if (_bVerbose) {
 					cout << "OUT: Going through fasta(s), gathering accession number(s)..." << endl;
@@ -445,9 +445,18 @@ namespace kASA {
 				unordered_map<string, uint32_t> vEntriesWithoutAccNr;
 				unordered_map<string, string> vNamesFromFasta;
 				for (const auto& file : files) {
-					ifstream fastaFile(file);
+					ifstream fastaFile;
+					igzstream fastaFileGZ;
+
+					if (file.second) {
+						fastaFileGZ.open(file.first.c_str());
+					}
+					else {
+						fastaFile.open(file.first);
+					}
+
 					string sDummy = "";
-					while (getline(fastaFile, sDummy)) {
+					while ((file.second) ? getline(fastaFileGZ, sDummy) : getline(fastaFile, sDummy)) {
 						if (sDummy != "") {
 							if (sDummy.front() == '>') {
 								sDummy.erase(sDummy.begin());
@@ -509,14 +518,14 @@ namespace kASA {
 					////////////////////
 					
 					for (const auto& file : files) {
-						bool isGzipped = (file[file.length() - 3] == '.' && file[file.length() - 2] == 'g' && file[file.length() - 1] == 'z');
+						bool isGzipped = file.second;
 						ifstream acc2Tax;
 						igzstream acc2TaxGZ;
 						if (isGzipped) {
-							acc2TaxGZ.open(file.c_str());
+							acc2TaxGZ.open(file.first.c_str());
 						}
 						else {
-							acc2Tax.open(file);
+							acc2Tax.open(file.first);
 						}
 
 						string sDummy = "";

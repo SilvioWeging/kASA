@@ -106,23 +106,38 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
-	inline pair<vector<string>, size_t> gatherFilesFromPath(const string& sPath) {
+	inline pair<vector<pair<string,int8_t>>, size_t> gatherFilesFromPath(const string& sPath) {
 		try {
-			vector<string> files;
+			vector<pair<string, int8_t>> files; // 0: not zipped; 1: gzipped; 2: bzip2'ed
 			size_t overallFileSize = 0;
 #if _WIN32 || _WIN64 
 			if (sPath.back() == '/') {
 				for (auto& fsPath : filesystem::directory_iterator(sPath)) {
 					const string& fileName = (fsPath.path()).string();
-					files.push_back(fileName);
+					
+					// read magic numbers at the beginning
+					ifstream prelimFile(fileName);
+					char firstByte;
+					prelimFile.read(&firstByte, 1);
+					prelimFile.close();
+					bool isGzipped = false;
+					if ((firstByte == 0x1f)) {
+						isGzipped = true;
+					}
+					if (firstByte == 0x42) {
+						throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the moment, sorry.");
+					}
 
-					bool isGzipped = (fileName[fileName.length() - 3] == '.' && fileName[fileName.length() - 2] == 'g' && fileName[fileName.length() - 1] == 'z');
 					if (!isGzipped) {
 						ifstream fast_q_a_File;
 						//fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 						fast_q_a_File.open(fileName);
 						fast_q_a_File.seekg(0, fast_q_a_File.end);
 						overallFileSize += fast_q_a_File.tellg();
+						files.push_back(make_pair(fileName,int8_t(0)));
+					}
+					else {
+						files.push_back(make_pair(fileName, int8_t(1)));
 					}
 				}
 			}
@@ -139,16 +154,30 @@ namespace Utilities {
 						const string fName(directory->d_name);
 						if (fName != "." && fName != "..") {
 							const string& fileName = sPath + fName;
-							files.push_back(fileName);
 
-							bool isGzipped = (fileName[fileName.length() - 3] == '.' && fileName[fileName.length() - 2] == 'g' && fileName[fileName.length() - 1] == 'z');
+							ifstream prelimFile(fileName);
+							char firstByte;
+							prelimFile.read(&firstByte, 1);
+							prelimFile.close();
+							bool isGzipped = false;
+							if ((firstByte == 0x1f)) {
+								isGzipped = true;
+							}
+							if (firstByte == 0x42) {
+								throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the moment, sorry.");
+							}
+
 							if (!isGzipped) {
 								ifstream fast_q_a_File;
 								//fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 								fast_q_a_File.open(fileName);
 								fast_q_a_File.seekg(0, fast_q_a_File.end);
 								overallFileSize += fast_q_a_File.tellg();
-		}
+								files.push_back(make_pair(fileName, int8_t(0)));
+							}
+							else {
+								files.push_back(make_pair(fileName, int8_t(1)));
+							}
 						}
 					}
 
@@ -158,15 +187,28 @@ namespace Utilities {
 #endif
 #endif
 			else {
-				bool isGzipped = (sPath[sPath.length() - 3] == '.' && sPath[sPath.length() - 2] == 'g' && sPath[sPath.length() - 1] == 'z');
+				ifstream prelimFile(sPath);
+				char firstByte;
+				prelimFile.read(&firstByte, 1);
+				prelimFile.close();
+				bool isGzipped = false;
+				if ((firstByte == 0x1f)) {
+					isGzipped = true;
+				}
+				if (firstByte == 0x42) {
+					throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the moment, sorry.");
+				}
 				if (!isGzipped) {
 					ifstream fast_q_a_File;
 					//fast_q_a_File.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					fast_q_a_File.open(sPath);
 					fast_q_a_File.seekg(0, fast_q_a_File.end);
 					overallFileSize += fast_q_a_File.tellg();
+					files.push_back(make_pair(sPath, int8_t(0)));
 				}
-				files.push_back(sPath);
+				else {
+					files.push_back(make_pair(sPath, int8_t(1)));
+				}
 			}
 
 			return make_pair(files,overallFileSize);

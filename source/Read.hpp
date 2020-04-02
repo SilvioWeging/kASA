@@ -941,7 +941,8 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta and create a kMer-Vec, used in BuildAll(...)
-		inline void readFasta(ifstream& input, const unordered_map<string, uint32_t>& mAccToID, Build& vBricks, unique_ptr<contentVecType_32p>& vOut, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
+		template<typename T>
+		inline void readFasta(T& input, const unordered_map<string, uint32_t>& mAccToID, Build& vBricks, unique_ptr<contentVecType_32p>& vOut, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
 			try {
 				if (!input.good()) {
 					throw runtime_error("No input found!");
@@ -1263,31 +1264,32 @@ namespace kASA {
 
 				size_t overallCharsRead = 0;
 				unique_ptr<contentVecType_32p> dummy;
-				if (sDirectory.back() == '/') {
-					auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
-					for (auto& fileName : filesAndSize.first) {
+
+				auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
+				for (auto& fileName : filesAndSize.first) {
+					if (_bVerbose) {
+						cout << "OUT: Current file: " << fileName.first << endl;
+					}
+
+					// check if gzipped
+					bool isGzipped = fileName.second;
+
+					if (isGzipped) {
 						if (_bVerbose) {
-							cout << "OUT: Current file: " << fileName << endl;
+							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
 						}
-						ifstream fastaFile(fileName);
+						igzstream fastaFile_gz(fileName.first.c_str());
+						readFasta(fastaFile_gz, mAccToID, brick, dummy, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+					}
+					else {
+						ifstream fastaFile(fileName.first);
 						fastaFile.seekg(0, fastaFile.end);
 						const uint64_t& iFileLength = fastaFile.tellg();
 						fastaFile.seekg(0, fastaFile.beg);
 						readFasta(fastaFile, mAccToID, brick, dummy, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage);
 					}
 				}
-				else {
-					ifstream fastaFile;
-					//fastaFile.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-					fastaFile.open(sDirectory);
-					if (_bVerbose) {
-						cout << "OUT: Current file: " << sDirectory << endl;
-					}
-					fastaFile.seekg(0, fastaFile.end);
-					const uint64_t& iFileLength = fastaFile.tellg();
-					fastaFile.seekg(0, fastaFile.beg);
-					readFasta(fastaFile, mAccToID, brick, dummy, iFileLength, overallCharsRead, iFileLength, fShrinkPercentage);
-				}
+
 				
 				// Finalize
 				brick.IntToExtPart();

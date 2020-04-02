@@ -165,7 +165,7 @@ Hyphomicrobium denitrificans	53399	582899;670307	NC_014313.1;NC_021172.1
 The taxids are required to be integers and no header line is necessary. This file can be given to `build` via the `-c` parameter.
 
 ##### Necessary parameters
-* `-i (--input) <file/folder>`: Fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
+* `-i (--input) <file/folder>`: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
 * `-u (--level) <level>`: Taxonomic level at which you want to operate. All levels used in the NCBI taxonomy are available as well. To name a few: subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom. Choose "lowest" if you want no linkage at a higher node in the taxonomic tree, this corresponds to other tools' "sequence" level. That means that no real taxid will be given and the name will be the line from the fasta containing the accession number. Default: species.
 * `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.
 * `-y (--taxonomy)` <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.
@@ -185,7 +185,7 @@ This step can take much space and time, depending on the complexity and size of 
 The content file from the previous mode is given to kASA via the `-c` parameter or can be created together with the index.
 
 ##### Necessary parameters
-* `-i (--input) <file/folder>`: Fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
+* `-i (--input) <file/folder>`: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
 * `-d (--database) <file>`: Actually path and name of the index but let's call it database since `-i` was already taken...
 ##### Optional paramameters
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
@@ -204,7 +204,7 @@ Create content file and index:
 ##### Context
 This mode compares sequencing data with the built index. 
 
-You can input fasta or fastq files, gzipped or not. It all depends on whether your file ends with `.gz` and if the first symbol is a `>` or `@`. If you want to put in multiple files, move them to a folder and place the path next to `-i`. The string given in `-p` and `-q` will then serve as a prefix concatenated with `"_<filename without path>.<csv or json>"`.
+You can input fasta or fastq files (depending on whether the first symbol is a `>` or `@`), gzipped or not. If you want to put in multiple files, move them to a folder and place the path next to `-i`. The string given in `-p` and `-q` will then serve as a prefix concatenated with `"_<filename without path>.<csv or json>"`.
 
 To input translated sequences, add the `-z` flag. If you've used a custom alphabet for conversion, just use the same here by copying the `-a <file> <number>` part of your `build` call.
 
@@ -229,7 +229,7 @@ Should you provide more than 9 GB of RAM and a lower `k` of at least 7 (default)
 The first line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
 
 ##### Necessary paramameters
-* `-i (--input) <file/folder>`: Fastq or fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
+* `-i (--input) <file/folder>`: Fastq or fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
 * `-p (--profile) <file>`: Path and name of the profile that is put out.
 * `-q (--rtt) <file>`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
 ##### Optional paramameters
@@ -312,7 +312,7 @@ It's not necessary to change the content file in this case although you should a
 If you've created the content file together with the index, this default content file will be used.
 
 ##### Necessary paramameters
-* `-i (--input) <file/folder>`: Fasta file(s). Can be gzipped (but must end with `.gz`). If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
+* `-i (--input) <file/folder>`: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
 * `-o (--outgoing) <file>`: Either the existing index or a new file name, depending on whether you want to keep the old file or not. Default: overwrite.
 * `-l (--deleted) <file>`: delete taxa via the NCBI taxonomy file.
 ##### Optional paramameters
