@@ -95,6 +95,9 @@ namespace kASA {
 		static inline void setAAToAATable(const string& file) {
 			string sDummy = "";
 			ifstream mappings(file); // C:/Users/Silvio/Desktop/out.csv
+			if (!mappings) {
+				throw runtime_error("Mapping file couldn't be opened for reading!");
+			}
 			while (getline(mappings, sDummy)) {
 				if (sDummy != "") {
 					auto spl = Utilities::split(Utilities::removeSpaceAndEndline(sDummy), ',');
@@ -369,6 +372,9 @@ namespace kASA {
 
 			// Write to file
 			ofstream outFile(sOutFile);
+			if (!outFile) {
+				throw runtime_error("Frequency file couldn't be opened for writing!");
+			}
 			for (uint32_t j = 0; j < iIdxCounter; ++j) {
 				outFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
 				outFile << aFrequencyArray[j*iMaxNumK];
@@ -685,6 +691,9 @@ namespace kASA {
 				}
 
 				ofstream contentFile(sOutput);
+				if (!contentFile) {
+					throw runtime_error("Content file couldn't be opened for writing!");
+				}
 				uint32_t iUnnamedCounter = 0;
 				for (const auto& elem : taxToTaxWAccs) {
 					string taxa = "", accnrs = "";
@@ -851,9 +860,10 @@ namespace kASA {
 				}
 
 				// write content file
-				ofstream fContentOS;
-				//fContentOS.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-				fContentOS.open(contentFile);
+				ofstream fContentOS(contentFile);
+				if (!fContentOS) {
+					throw runtime_error("Content file couldn't be opened for writing!");
+				}
 				for (const auto& entry : mOrganisms) {
 					fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << endl;
 				}

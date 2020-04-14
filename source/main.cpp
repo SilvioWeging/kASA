@@ -199,13 +199,13 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bUseArry = false, bSixFrames = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		kASA::Compare::OutputFormat eOutputFormat = kASA::Compare::OutputFormat::Json;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
 		float fPercentageOfThrowAway = 0.f;
-		uint8_t iTrieDepth = 6;
+		uint8_t iTrieDepth = 6, iPrefixCheckMode = 0;
 
 		auto timeRightNow = chrono::system_clock::to_time_t(chrono::system_clock::now());
 		cout << "OUT: " << "kASA version " << kASA_VERSION << " ran on " <<
@@ -411,7 +411,13 @@ int main(int argc, char* argv[]) {
 				sStxxlMode = vParameters[++i];
 			}
 			else if (sParameter == "--array") {
-				bUseArry = true;
+				iPrefixCheckMode = 2;
+			}
+			else if (sParameter == "--trie") {
+				iPrefixCheckMode = 1;
+			}
+			else if (sParameter == "--table") {
+				iPrefixCheckMode = 3;
 			}
 			else if (sParameter == "--six") {
 				bSixFrames = true;
@@ -523,6 +529,9 @@ int main(int argc, char* argv[]) {
 				// Copy file so that both indices can be used by default parameters for -c
 				ifstream CFile(contentFileIn, std::ios::binary);
 				ofstream SCFile(sDBPathOut + "_content.txt", std::ios::binary);
+				if (!SCFile || !CFile) {
+					throw runtime_error("Content file couldn't be opened for reading/writing!");
+				}
 				SCFile << CFile.rdbuf();
 			}
 		}
@@ -539,7 +548,7 @@ int main(int argc, char* argv[]) {
 
 			kASAObj.format = eOutputFormat;
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, bUseArry);
+			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode);
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 #if _WIN32 || _WIN64

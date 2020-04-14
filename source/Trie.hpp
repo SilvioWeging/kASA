@@ -277,7 +277,7 @@ private:
 public:
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const bool& bShitLoadOfRAM = false, const bool& bUseArray = false) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
+	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const bool& bShitLoadOfRAM = false, const uint8_t& iPrefixCheckMode = 0) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
 		for (uint8_t i = 1; i < iMaxLevel; ++i) {
 			_Bitmask |= 31ULL << (5 * i);
 		}
@@ -288,16 +288,25 @@ public:
 			_iTempKMer[i] = 0;
 		}
 
-		if (bShitLoadOfRAM) {
+		switch (iPrefixCheckMode) {
+		case 1:
+			// use trie
+			break;
+		case 2:
+			_prefixArray.resize(1);
+			break;
+		case 3:
 			_prefixLookuptable.reset(new packedBigPair[754137931]);
 			fill(_prefixLookuptable.get(), _prefixLookuptable.get() + 754137931, packedBigPair(numeric_limits<uint64_t>::max(), 0)); // 754137930 = 30+30*30+30*30^2+30*30^3+30*30^4+30*30^5 = "]^^^^^" as integer without spaces
 			iSizeOfTrie = 754137931 * sizeof(packedBigPair);
-		}
-		else {
-			if (bUseArray) {
-				_prefixArray.resize(1);
-			}
-		}
+			break;
+		default:
+			if (bShitLoadOfRAM) {
+				_prefixLookuptable.reset(new packedBigPair[754137931]);
+				fill(_prefixLookuptable.get(), _prefixLookuptable.get() + 754137931, packedBigPair(numeric_limits<uint64_t>::max(), 0)); // 754137930 = 30+30*30+30*30^2+30*30^3+30*30^4+30*30^5 = "]^^^^^" as integer without spaces
+				iSizeOfTrie = 754137931 * sizeof(packedBigPair);
+			} // else: use trie
+		};
 	}
 
 	inline void SetForIsInTrie(const uint8_t& val) {
