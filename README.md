@@ -206,6 +206,8 @@ This mode compares sequencing data with the built index.
 
 You can input fasta or fastq files (depending on whether the first symbol is a `>` or `@`), gzipped or not. If you want to put in multiple files, move them to a folder and place the path next to `-i`. The string given in `-p` and `-q` will then serve as a prefix concatenated with `"_<filename without path>.<csv or json>"`.
 
+Currently, kASA does NOT support paired-end reads.
+
 To input translated sequences, add the `-z` flag. If you've used a custom alphabet for conversion, just use the same here by copying the `-a <file> <number>` part of your `build` call.
 
 Since kASA uses k-mers, a `k` can be given to influence accuracy. You can set these bounds by yourself with the `-k` parameter, the default lower bound is 7, the upper 12 (highest possible).

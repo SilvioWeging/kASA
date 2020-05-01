@@ -113,18 +113,27 @@ namespace kASA {
 			return vec;
 		}
 
+		inline void addToMatchedReadID(vector<uint64_t>& vReadIDs, uint64_t& position, const uint64_t& value) {
+			if (vReadIDs.size() <= position) {
+				vReadIDs.resize(position + 100);
+			}
+
+			vReadIDs[position] = value;
+			position++;
+		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const int32_t& iThreadID, const vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const int32_t& iThreadID, const vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 
 				//const uint64_t iReadIDTODEBUG = 0;//424734
 
 				unique_ptr<vector<uint64_t>[]> vReadIDs(new vector<uint64_t>[_iNumOfK]);
+				vector<uint64_t> vPositions(_iNumOfK);
 				//unique_ptr<uint32_t[]> vReadIDs_(new uint32_t[_iNumOfK * (mReadIDToArrayIdx.size() + 1)]);
 				vector<uint64_t> vMemoryOfSeenkMers(_iNumOfK);
 				//vector<uint32_t> vMemoryCounterOnly(_iNumOfK, 0);
@@ -167,7 +176,8 @@ namespace kASA {
 
 					// reset stuff
 					for (int32_t i = 0; i < _iNumOfK; ++i) {
-						vReadIDs[i].clear();
+						//vReadIDs[i].clear();
+						vPositions[i] = 0;
 						vMemoryOfSeenkMers[i] = 0;
 						vMemoryOfTaxIDs[i].clear();
 					}
@@ -261,7 +271,9 @@ namespace kASA {
 								const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
 								const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
 								if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
-									vReadIDs[ik].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+									//vReadIDs[ik].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+									//addToMatchedReadID(vReadIDs[ik], vPositions[ik], mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+									addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
 								}
 							}
 							continue;
@@ -301,7 +313,9 @@ namespace kASA {
 											const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
 											const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
 											if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
-												vReadIDs[ik].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+												//vReadIDs[ik].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+												//addToMatchedReadID(vReadIDs[ik], vPositions[ik], mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+												addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
 											}
 											else {
 												break;
@@ -325,7 +339,9 @@ namespace kASA {
 											// We've seen that already, just add it. 
 											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
 											if (bInputIterated) {
-												vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+												//vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+												//addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+												addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], get<1>(iCurrentkMer));
 											}
 										}
 										else {
@@ -337,7 +353,7 @@ namespace kASA {
 											it.SetNumOfEntries(numOfEntries);
 											for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
 												const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLengthCounter + (*it);
-												const auto& numOfHits = vReadIDs[ikLengthCounter].size();
+												const auto& numOfHits = vPositions[ikLengthCounter];//vReadIDs[ikLengthCounter].size();
 												//#pragma omp atomic
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
@@ -350,8 +366,11 @@ namespace kASA {
 												const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
 												const auto& score = weight * (1.f / numOfEntries);
 
-												for (const auto& readID : vReadIDs[ikLengthCounter]) {
+												/*for (const auto& readID : vReadIDs[ikLengthCounter]) {
 													vReadIDtoGenID[readID * iSpecIDRange + entry] += score;
+												}*/
+												for (uint64_t pos = 0; pos < numOfHits; ++pos) {
+													vReadIDtoGenID[vReadIDs[ikLengthCounter][pos] * iSpecIDRange + entry] += score;
 												}
 											}
 
@@ -365,8 +384,11 @@ namespace kASA {
 												}*/
 												//}
 
-											vReadIDs[ikLengthCounter].clear();
-											vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+											//vReadIDs[ikLengthCounter].clear();
+											//vReadIDs[ikLengthCounter].push_back(mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+											vPositions[ikLengthCounter] = 0;
+											//addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], mReadIDToArrayIdx.find(get<1>(iCurrentkMer))->second);
+											addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], get<1>(iCurrentkMer));
 
 											vMemoryOfTaxIDs[ikLengthCounter].clear();
 											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
@@ -454,7 +476,7 @@ namespace kASA {
 						it.SetNumOfEntries(numOfEntries);
 						for (; it != vMemoryOfTaxIDs[ikLC].end() && numOfEntries != 0; ++it) {
 							const auto& tempIndex = iSpecIDRange * _iNumOfK * iThreadID + iSpecIDRange * ikLC + (*it);
-							const auto& numOfHits = vReadIDs[ikLC].size();
+							const auto& numOfHits = vPositions[ikLC];//vReadIDs[ikLC].size();
 							//#pragma omp atomic
 							vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
@@ -466,9 +488,15 @@ namespace kASA {
 							const auto& entry = *it;
 							const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLC];
 							const auto& score = weight * (1.f / numOfEntries);
+							for (uint64_t pos = 0; pos < numOfHits; ++pos) {
+								vReadIDtoGenID[vReadIDs[ikLC][pos] * iSpecIDRange + entry] += score;
+							}
+
+							/*
 							for (const auto& readID : vReadIDs[ikLC]) {
 								vReadIDtoGenID[readID * iSpecIDRange + entry] += score;
 							}
+							*/
 						}
 
 						//auto valAfter = vReadIDtoGenID[iReadIDTODEBUG * iSpecIDRange + 1];
@@ -520,7 +548,7 @@ namespace kASA {
 
 		//#define DEBUGOUT
 #ifdef DEBUGOUT
-		int64_t amountArr[5] = {0,0,0,0,0};
+		int64_t amountArr[5] = { 0,0,0,0,0 };
 		int64_t amountTaxArr[5] = { 0,0,0,0,0 };
 #endif
 
@@ -602,7 +630,7 @@ namespace kASA {
 						auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
 						bInputIterated = true;
 #ifdef DEBUGOUT
-						cout << "Input: " << kMerToAminoacid(get<0>(iCurrentkMer),12) << " " << get<1>(iCurrentkMer) << endl;
+						cout << "Input: " << kMerToAminoacid(get<0>(iCurrentkMer), 12) << " " << get<1>(iCurrentkMer) << endl;
 #endif
 						// determine first occurence inside index to save matching time
 						if ((get<0>(iSeenInput) != get<0>(iCurrentkMer)) && (shiftVal(seenResultIt->first) != iCurrentkMerShifted) && bDetermineBeginForMatching) {
@@ -817,10 +845,10 @@ namespace kASA {
 									const auto& iNextLibIdx = (seenResultIt + 1)->second;
 #ifdef DEBUGOUT
 									cout << kMerToAminoacid(iNextLibSuffix, 12) << endl;
-#endif					
+#endif
 									if ((iCurrentLibSuffix >> 5 * (_iHighestK - _aOfK[0])) == (iNextLibSuffix >> 5 * (_iHighestK - _aOfK[0]))) {
 										for (int16_t ikLengthCounter_ = static_cast<int16_t>(_iNumOfK - 1); ikLengthCounter_ > -1; --ikLengthCounter_) {
-											markTaxIDs(iNextLibIdx, vMemoryOfTaxIDs[ikLengthCounter_], mTaxToIdx, getVec(vLib, iThreadID)); // to identify multiple hits 
+											markTaxIDs(iNextLibIdx, vMemoryOfTaxIDs[ikLengthCounter_], mTaxToIdx, getVec(vLib, iThreadID)); // to identify multiple hits
 											if (ikLengthCounter_ == _iNumOfK - 1) {
 												amountTaxArr[3]++;
 											}
@@ -1040,12 +1068,12 @@ namespace kASA {
 								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - _iHighestK * 3 + 1)));
 							}
 							get<0>(resultVec[iSpecIdx]) = iSpecIdx;
-							get<1>(resultVec[iSpecIdx]) = kMerScore; 
+							get<1>(resultVec[iSpecIdx]) = kMerScore;
 							get<2>(resultVec[iSpecIdx]) = relativeScore;
 							++iCountOfHits;
 						}
 					}
-					
+
 					if (iCountOfHits == 0) {
 						switch (format) {
 						case OutputFormat::tsv:
@@ -1063,7 +1091,7 @@ namespace kASA {
 							break;
 
 						case OutputFormat::JsonL:
-							fOut << "{ \"Read number\": " << iRealReadIDStart + readIdx << "," << " \"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << "\"Top hits\": [], \"Further hits\": [] }\n";
+							fOut << "{ \"Read number\": " << iRealReadIDStart + readIdx << "," << " \"Specifier from input file\": \"" + currentReadLengthAndName.first + "\", " << "\"Top hits\": [], \"Further hits\": [] }\n";
 							break;
 
 						case OutputFormat::Kraken:
@@ -1089,7 +1117,7 @@ namespace kASA {
 						auto maxValue = get<1>(*(max_element(resultVec.begin(), resultVec.end(), [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<1>(a) < get<1>(b); })));
 						int16_t iTopHitCounter = 1;
 						for (int16_t i = 1; i < iCountOfHits && i < iNumOfBeasts; ++i) {
-							if ((get<1>(resultVec[i]))/(maxValue) > 0.8f) { // determine "close enough" with normalization relative to the highest score
+							if ((get<1>(resultVec[i])) / (maxValue) > 0.8f) { // determine "close enough" with normalization relative to the highest score
 								++iTopHitCounter;
 							}
 							else {
@@ -1099,23 +1127,28 @@ namespace kASA {
 
 						//cout << iRealReadIDStart + readIdx << endl;
 						string sOut = "", sOut2 = "", sOut3 = "";
-						ostringstream sOutStr;
 						auto it = resultVec.begin();
 						float iValueBefore = 0;
 
 						switch (format) {
 						case OutputFormat::tsv:
 							// tsv
-							sOut += to_string(iRealReadIDStart + readIdx) + "\t" + currentReadLengthAndName.first + "\t";
-							
-							for (int16_t j = 0, i = 0; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
-								sOut += to_string(mIdxToTax[get<0>(*it)]) + ";";
-								ostringstream e_value;
-								e_value.precision(5);
-								e_value << std::scientific << get<2>(*it) << "," << std::defaultfloat << get<1>(*it);
+							// += is faster than () + ()
+							sOut += to_string(iRealReadIDStart + readIdx);
+							sOut += "\t";
+							sOut += currentReadLengthAndName.first + "\t";
 
-								sOut2 += mOrganisms[get<0>(*it)] + ";";
-								sOut3 += e_value.str() + ";";
+							for (int16_t j = 0, i = 0; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += ";";
+								sOut2 += mOrganisms[get<0>(*it)];
+								sOut2 += ";";
+
+
+								sOut3 += to_string(get<2>(*it));
+								sOut3 += ",";
+								sOut3 += to_string(get<1>(*it));
+								sOut3 += ";";
 
 								if (iValueBefore != get<1>(*it)) {
 									iValueBefore = get<1>(*it);
@@ -1138,48 +1171,70 @@ namespace kASA {
 
 						case OutputFormat::Json:
 							// json
-							
+					 
 							if (iRealReadIDStart + readIdx == 0) {
-								sOutStr << "{" << "\n";
+								sOut += "{\n";
 							}
 							else {
-								sOutStr << "," << "\n" << "{" << "\n";
+								sOut += ",\n{\n";
 							}
 
-							sOutStr << "\t\"Read number\": " << iRealReadIDStart + readIdx << ",\n" << "\t\"Specifier from input file\": \"" + currentReadLengthAndName.first + "\",\n" << "\t\"Top hits\": [\n";
-							
+							sOut += "\t\"Read number\": ";
+							sOut += to_string(iRealReadIDStart + readIdx);
+							sOut += ",\n\t\"Specifier from input file\": \"";
+							sOut += currentReadLengthAndName.first;
+							sOut += "\",\n\t\"Top hits\": [\n";
+
 							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
 								if (i == 0) {
-									sOutStr << "\t{\n";
+									sOut += "\t{\n";
 								}
 								else {
-									sOutStr << ",\n\t{\n";
+									sOut += ",\n\t{\n";
 								}
 
-								sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
-									<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
-									<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
-									<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
-									<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
-									<< "\t}";
+								sOut += "\t\t\"tax ID\": \"";
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += "\",\n";
+								sOut += "\t\t\"Name\": \"";
+								sOut += mOrganisms[get<0>(*it)];
+								sOut += "\",\n";
+								sOut += "\t\t\"k-mer Score\": ";
+								sOut += to_string(get<1>(*it));
+								sOut += ",\n";
+								sOut += "\t\t\"Relative Score\": ";
+								sOut += to_string(get<2>(*it));
+								sOut += ",\n";
+								sOut += "\t\t\"Error\": ";
+								sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+								sOut += "\n\t}";
 							}
 
-							sOutStr << "\n\t],\n\t\"Further hits\": [\n";
+							sOut += "\n\t],\n\t\"Further hits\": [\n";
 
 							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								if (j == iTopHitCounter) {
-									sOutStr << "\t{\n";
+									sOut += "\t{\n";
 								}
 								else {
-									sOutStr << ",\n\t{\n";
+									sOut += ",\n\t{\n";
 								}
 
-								sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
-									<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
-									<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
-									<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
-									<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
-									<< "\t}";
+								sOut += "\t\t\"tax ID\": \"";
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += "\",\n";
+								sOut += "\t\t\"Name\": \"";
+								sOut += mOrganisms[get<0>(*it)];
+								sOut += "\",\n";
+								sOut += "\t\t\"k-mer Score\": ";
+								sOut += to_string(get<1>(*it));
+								sOut += ",\n";
+								sOut += "\t\t\"Relative Score\": ";
+								sOut += to_string(get<2>(*it));
+								sOut += ",\n";
+								sOut += "\t\t\"Error\": ";
+								sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+								sOut += "\n\t}";
 
 								if (iValueBefore != get<1>(*it)) {
 									iValueBefore = get<1>(*it);
@@ -1187,46 +1242,68 @@ namespace kASA {
 								}
 							}
 
-							sOutStr << "\n\t]\n}";
-							fOut << sOutStr.str();
+							sOut += "\n\t]\n}";
+							fOut << sOut;
 							break;
 
 						case OutputFormat::JsonL:
 							// json lines
-							sOutStr << "{ \"Read number\": " << iRealReadIDStart + readIdx << "," << " \"Specifier from input file\": \"" + currentReadLengthAndName.first + "\"," << " \"Top hits\": [";
+							sOut += "{ \"Read number\": ";
+							sOut += to_string(iRealReadIDStart + readIdx);
+							sOut += ", \"Specifier from input file\": \"";
+							sOut += currentReadLengthAndName.first;
+							sOut += "\", \"Top hits\": [";
 
 							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
 								if (i == 0) {
-									sOutStr << "{";
+									sOut += "{";
 								}
 								else {
-									sOutStr << ",{";
+									sOut += ",{";
 								}
 
-								sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
-									<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
-									<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
-									<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
-									<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
-									<< "}";
+								sOut += " \"tax ID\": \"";
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += "\",";
+								sOut += " \"Name\": \"";
+								sOut += mOrganisms[get<0>(*it)];
+								sOut += "\",";
+								sOut += " \"k-mer Score\": ";
+								sOut += to_string(get<1>(*it));
+								sOut += ",";
+								sOut += " \"Relative Score\": ";
+								sOut += to_string(get<2>(*it));
+								sOut += ",";
+								sOut += " \"Error\": ";
+								sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+								sOut += "}";
 							}
 
-							sOutStr << "], \"Further hits\": [";
+							sOut += "], \"Further hits\": [";
 
 							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								if (j == iTopHitCounter) {
-									sOutStr << "{";
+									sOut += "{";
 								}
 								else {
-									sOutStr << ", {";
+									sOut += ", {";
 								}
 
-								sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
-									<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
-									<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
-									<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
-									<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
-									<< "}";
+								sOut += " \"tax ID\": \"";
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += "\",";
+								sOut += " \"Name\": \"";
+								sOut += mOrganisms[get<0>(*it)];
+								sOut += "\",";
+								sOut += " \"k-mer Score\": "; 
+								sOut += to_string(get<1>(*it));
+								sOut += ",";
+								sOut += " \"Relative Score\": "; 
+								sOut += to_string(get<2>(*it));
+								sOut += ",";
+								sOut += " \"Error\": ";
+								sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+								sOut += "}";
 
 								if (iValueBefore != get<1>(*it)) {
 									iValueBefore = get<1>(*it);
@@ -1234,27 +1311,39 @@ namespace kASA {
 								}
 							}
 
-							sOutStr << "] }\n";
-							fOut << sOutStr.str();
+							sOut += "] }\n";
+							fOut << sOut;
 							break;
 
 						case OutputFormat::Kraken:
 							// Kraken
-							sOutStr << "C\t" << currentReadLengthAndName.first << "\t" << mIdxToTax[get<0>(*it)] << "\t" << currentReadLengthAndName.second << "\t";
+							sOut += "C\t";
+							sOut += currentReadLengthAndName.first;
+							sOut += "\t";
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += "\t";
+							sOut += to_string(currentReadLengthAndName.second);
+							sOut += "\t";
 
 							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
-								sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += ":";
+								sOut += to_string(get<1>(*it));
+								sOut += " ";
 							}
 
 							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
-								sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+								sOut += to_string(mIdxToTax[get<0>(*it)]);
+								sOut += ":";
+								sOut += to_string(get<1>(*it));
+								sOut += " ";
 								if (iValueBefore != get<1>(*it)) {
 									iValueBefore = get<1>(*it);
 									++j;
 								}
 							}
 
-							fOut << sOutStr.str() << "\n";
+							fOut << sOut << "\n";
 							break;
 						};
 
@@ -1284,7 +1373,7 @@ namespace kASA {
 					//cout << (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[_iHighestK - i] << " " << vReadNameAndLength.second << " " << i << " " << vReadNameAndLength.second - i * 3 + 1 <<" " << arrWeightingFactors[_iHighestK - i] << endl;
 				}
 
-				for (auto it = vTempResultVec.begin(); it != vTempResultVec.end();  ++it) {
+				for (auto it = vTempResultVec.begin(); it != vTempResultVec.end(); ++it) {
 					if (_bTranslated) {
 						get<2>(*it) = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - _iHighestK + 1)));
 					}
@@ -1310,7 +1399,7 @@ namespace kASA {
 						break;
 
 					case OutputFormat::JsonL:
-						fOut << "{ \"Read number\": " << iReadNum << "," << " \"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << "\"Top hits\": [], \"Further hits\": [] }\n";
+						fOut << "{ \"Read number\": " << iReadNum << "," << " \"Specifier from input file\": \"" + vReadNameAndLength.first + "\", " << "\"Top hits\": [], \"Further hits\": [] }\n";
 						break;
 
 					case OutputFormat::Kraken:
@@ -1341,23 +1430,29 @@ namespace kASA {
 						}
 					}
 					string sOut = "", sOut2 = "", sOut3 = "";
-					ostringstream sOutStr;
 					auto it = vTempResultVec.begin();
 					float iValueBefore = 0;
 
 					switch (format) {
 					case OutputFormat::tsv:
 						// tsv
-						sOut += to_string(iReadNum) + "\t" + vReadNameAndLength.first + "\t";
+
+						// += is faster than () + ()
+						sOut += to_string(iReadNum);
+						sOut += "\t";
+						sOut += vReadNameAndLength.first;
+						sOut += "\t";
 
 						for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
-							sOut += to_string(mIdxToTax[get<0>(*it)]) + ";";
-							ostringstream e_value;
-							e_value.precision(5);
-							e_value << std::scientific << get<2>(*it) << "," << std::defaultfloat << get<1>(*it);
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += ";";
+							sOut2 += mOrganisms[get<0>(*it)];
+							sOut2 += ";";
 
-							sOut2 += mOrganisms[get<0>(*it)] + ";";
-							sOut3 += e_value.str() + ";";
+							sOut3 += to_string(get<2>(*it));
+							sOut3 += ",";
+							sOut3 += to_string(get<1>(*it));
+							sOut3 += ";";
 
 							if (iValueBefore != get<1>(*it)) {
 								iValueBefore = get<1>(*it);
@@ -1380,46 +1475,69 @@ namespace kASA {
 
 					case OutputFormat::Json:
 						if (iReadNum == 0) {
-							sOutStr << "{" << "\n";
+							sOut += "{\n";
 						}
 						else {
-							sOutStr << "," << "\n" << "{" << "\n";
+							sOut += ",\n{\n";
 						}
 
-						sOutStr << "\t\"Read number\": " << iReadNum << ",\n" << "\t\"Specifier from input file\": \"" + vReadNameAndLength.first + "\",\n" << "\t\"Top hits\": [\n";
+						sOut += "\t\"Read number\": ";
+						sOut += to_string(iReadNum);
+						sOut += ",\n";
+						sOut += "\t\"Specifier from input file\": \"";
+						sOut += vReadNameAndLength.first;
+						sOut += "\",\n\t\"Top hits\": [\n";
 
 						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
 							if (i == 0) {
-								sOutStr << "\t{\n";
+								sOut += "\t{\n";
 							}
 							else {
-								sOutStr << ",\n\t{\n";
+								sOut += ",\n\t{\n";
 							}
 
-							sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
-								<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
-								<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
-								<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
-								<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
-								<< "\t}";
+							sOut += "\t\t\"tax ID\": \"";
+							sOut += to_string(mIdxToTax[get<0>(*it)]); 
+							sOut += "\",\n";
+							sOut += "\t\t\"Name\": \"";
+							sOut += mOrganisms[get<0>(*it)];
+							sOut += "\",\n";
+							sOut += "\t\t\"k-mer Score\": ";
+							sOut += to_string(get<1>(*it));
+							sOut += ",\n";
+							sOut += "\t\t\"Relative Score\": ";
+							sOut += to_string(get<2>(*it));
+							sOut += ",\n";
+							sOut += "\t\t\"Error\": ";
+							sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+							sOut += "\n\t}";
 						}
 
-						sOutStr << "\n\t],\n\t\"Further hits\": [\n";
+						sOut += "\n\t],\n\t\"Further hits\": [\n";
 
 						for (int32_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
 							if (j == iTopHitCounter) {
-								sOutStr << "\t{\n";
+								sOut += "\t{\n";
 							}
 							else {
-								sOutStr << ",\n\t{\n";
+								sOut += ",\n\t{\n";
 							}
 
-							sOutStr << "\t\t\"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\",\n"
-								<< "\t\t\"Name\": \"" << mOrganisms[get<0>(*it)] << "\",\n"
-								<< "\t\t\"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ",\n"
-								<< "\t\t\"Relative Score\": " << std::scientific << get<2>(*it) << ",\n"
-								<< "\t\t\"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore << "\n"
-								<< "\t}";
+							sOut += "\t\t\"tax ID\": \"";
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += "\",\n";
+							sOut += "\t\t\"Name\": \"";
+							sOut += mOrganisms[get<0>(*it)];
+							sOut += "\",\n";
+							sOut += "\t\t\"k-mer Score\": ";
+							sOut += to_string(get<1>(*it));
+							sOut += ",\n";
+							sOut += "\t\t\"Relative Score\": ";
+							sOut += to_string(get<2>(*it));
+							sOut += ",\n";
+							sOut += "\t\t\"Error\": ";
+							sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+							sOut += "\n\t}";
 
 							if (iValueBefore != get<1>(*it)) {
 								iValueBefore = get<1>(*it);
@@ -1427,46 +1545,69 @@ namespace kASA {
 							}
 						}
 
-						sOutStr << "\n\t]\n}";
-						fOut << sOutStr.str();
+						sOut += "\n\t]\n}";
+						fOut << sOut;
 						break;
 
 					case OutputFormat::JsonL:
 						// json lines
-						sOutStr << "{ \"Read number\": " << iReadNum << "," << " \"Specifier from input file\": \"" + vReadNameAndLength.first + "\"," << " \"Top hits\": [";
+						sOut += "{ \"Read number\": ";
+						sOut += to_string(iReadNum);
+						sOut += ",";
+						sOut += " \"Specifier from input file\": \"";
+						sOut += vReadNameAndLength.first;
+						sOut += "\", \"Top hits\": [";
 
 						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
 							if (i == 0) {
-								sOutStr << "{";
+								sOut += "{";
 							}
 							else {
-								sOutStr << ",{";
+								sOut += ",{";
 							}
 
-							sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
-								<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
-								<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
-								<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
-								<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
-								<< "}";
+							sOut += " \"tax ID\": \"";
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += "\",";
+							sOut += " \"Name\": \"";
+							sOut += mOrganisms[get<0>(*it)];
+							sOut += "\",";
+							sOut += " \"k-mer Score\": ";
+							sOut += to_string(get<1>(*it));
+							sOut += ",";
+							sOut += " \"Relative Score\": ";
+							sOut += to_string(get<2>(*it));
+							sOut += ",";
+							sOut += " \"Error\": ";
+							sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+							sOut += "}";
 						}
 
-						sOutStr << "], \"Further hits\": [";
+						sOut += "], \"Further hits\": [";
 
 						for (int32_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
 							if (j == iTopHitCounter) {
-								sOutStr << "{";
+								sOut += "{";
 							}
 							else {
-								sOutStr << ", {";
+								sOut += ", {";
 							}
 
-							sOutStr << " \"tax ID\": \"" << mIdxToTax[get<0>(*it)] << "\","
-								<< " \"Name\": \"" << mOrganisms[get<0>(*it)] << "\","
-								<< " \"k-mer Score\": " << std::defaultfloat << get<1>(*it) << ","
-								<< " \"Relative Score\": " << std::scientific << get<2>(*it) << ","
-								<< " \"Error\": " << std::defaultfloat << (bestScore - get<1>(*it)) / bestScore
-								<< "}";
+							sOut += " \"tax ID\": \"";
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += "\",";
+							sOut += " \"Name\": \"";
+							sOut += mOrganisms[get<0>(*it)];
+							sOut += "\",";
+							sOut += " \"k-mer Score\": ";
+							sOut += to_string(get<1>(*it));
+							sOut += ",";
+							sOut += " \"Relative Score\": ";
+							sOut += to_string(get<2>(*it));
+							sOut += ",";
+							sOut += " \"Error\": ";
+							sOut += to_string((bestScore - get<1>(*it)) / bestScore);
+							sOut += "}";
 
 							if (iValueBefore != get<1>(*it)) {
 								iValueBefore = get<1>(*it);
@@ -1474,26 +1615,38 @@ namespace kASA {
 							}
 						}
 
-						sOutStr << "] }\n}";
-						fOut << sOutStr.str();
+						sOut += "] }\n";
+						fOut << sOut;
 						break;
 
 					case OutputFormat::Kraken:
-						sOutStr << "C\t" << vReadNameAndLength.first << "\t" << mIdxToTax[get<0>(*it)] << "\t" << vReadNameAndLength.second << "\t";
+						sOut += "C\t";
+						sOut += vReadNameAndLength.first;
+						sOut += "\t";
+						sOut += to_string(mIdxToTax[get<0>(*it)]);
+						sOut += "\t";
+						sOut += to_string(vReadNameAndLength.second);
+						sOut += "\t";
 
 						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
-							sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += ":";
+							sOut += to_string(get<1>(*it));
+							sOut += " ";
 						}
 
 						for (int32_t j = iTopHitCounter; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
-							sOutStr << mIdxToTax[get<0>(*it)] << ":" << std::defaultfloat << get<1>(*it) << " ";
+							sOut += to_string(mIdxToTax[get<0>(*it)]);
+							sOut += ":";
+							sOut += to_string(get<1>(*it));
+							sOut += " ";
 							if (iValueBefore != get<1>(*it)) {
 								iValueBefore = get<1>(*it);
 								++j;
 							}
 						}
 
-						fOut << sOutStr.str() << "\n";
+						fOut << sOut << "\n";
 						break;
 					};
 				}
@@ -1507,12 +1660,16 @@ namespace kASA {
 	public:
 		/////////////////////////////////////////////////////////////////////////////////
 		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const uint64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode) {
-			
+
 			try {
 				// test if files exists
 				if (!ifstream(contentFile) || !ifstream(sLibFile) || !ifstream(sLibFile + "_f.txt") || !ifstream(sLibFile + "_trie.txt")) {
 					throw runtime_error("One of the files does not exist");
 				}
+//#define TIME
+#ifdef TIME
+				auto startTIME = std::chrono::high_resolution_clock::now();
+#endif
 
 				// get names of idxes
 				ifstream fContent(contentFile);
@@ -1612,22 +1769,38 @@ namespace kASA {
 
 				if (bRAM) {
 					try {
-						if (bPartitioned) {
+						if (bPartitioned || (_iMinK > 6 && iAmountOfSpecies <= 65535 && !bUnfunny)) {
 							if ((iSizeOfLib * sizeof(packedPair) + 2048ULL * 1024 * 1024) >= iMemory) {
 								cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
 								bRAM = false;
 							}
 							else {
 								vLib_RAM_Half.reserve(iSizeOfLib);
-								stxxl::vector_bufreader<index_t_p::const_iterator> bufferedReader(vLibParted_p[0]->cbegin(), vLibParted_p[0]->cend(), 0);
-								for (; !bufferedReader.empty(); ++bufferedReader) {
-									vLib_RAM_Half.push_back(*bufferedReader);
+
+								if (bPartitioned) {
+									stxxl::vector_bufreader<index_t_p::const_iterator> bufferedReader(vLibParted_p[0]->cbegin(), vLibParted_p[0]->cend(), 0);
+									for (; !bufferedReader.empty(); ++bufferedReader) {
+										vLib_RAM_Half.push_back(*bufferedReader);
+									}
+
+									for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+										vLibParted_p[i].reset();
+									}
+									vLibParted_p.reset();
+								}
+								else {
+									stxxl::vector_bufreader<contentVecType_32p::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
+									for (; !bufferedReader.empty(); ++bufferedReader) {
+										vLib_RAM_Half.push_back(packedPair(static_cast<uint32_t>(bufferedReader->first & 1073741823ULL), static_cast<uint16_t>(mTaxToIdx[bufferedReader->second])));
+									}
+
+									for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+										vLib[i].reset();
+									}
+									vLib.reset();
+									bPartitioned = true;
 								}
 
-								for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-									vLibParted_p[i].reset();
-								}
-								vLibParted_p.reset();
 								iBytesUsedByVectors = iSizeOfLib * sizeof(packedPair);
 							}
 						}
@@ -1686,17 +1859,29 @@ namespace kASA {
 				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
 					workerThreadPool[i].setID(i);
 				}
-				
+
+
+#ifdef TIME
+				auto endTIME = std::chrono::high_resolution_clock::now();
+				cout << "Initialization " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+				startTIME = std::chrono::high_resolution_clock::now();
+#endif
 
 				// load Trie
 				const uint8_t& iTD = iTrieDepth;
-				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK >= 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > 754137931 * sizeof(packedBigPair)+1024ULL*1024ULL*1024ULL, iPrefixCheckMode);
+				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, (_iMinK >= 6) && (iMemory - (_iNumOfK * uint64_t(iAmountOfSpecies) * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes())) > 754137931 * sizeof(packedBigPair) + 1024ULL * 1024ULL * 1024ULL, iPrefixCheckMode);
 				T.LoadFromStxxlVec(sLibFile);
-				T.SetForIsInTrie( (_iMinK < 6) ? static_cast<uint8_t>(_iMinK) : static_cast<uint8_t>(6));
+				T.SetForIsInTrie((_iMinK < 6) ? static_cast<uint8_t>(_iMinK) : static_cast<uint8_t>(6));
 
 				if (_bVerbose) {
 					T.GetIfVecIsUsed();
 				}
+
+#ifdef TIME
+				endTIME = std::chrono::high_resolution_clock::now();
+				cout << "Trie load " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+				startTIME = std::chrono::high_resolution_clock::now();
+#endif
 
 				// This holds the hits for each organism
 
@@ -1710,7 +1895,7 @@ namespace kASA {
 				}
 
 				uint64_t iTimeFastq = 0, iTimeCompare = 0, iNumOfReads = 0, iNumOfReadsOld = 0, iNumOfReadsSum = 0, iSoftMaxSizeOfInputVecs = 0;
-				
+
 				// Set memory boundaries
 				if (iMemory > T.GetSize() + iMult * 8 + iBytesUsedByVectors + _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes()) {
 					iSoftMaxSizeOfInputVecs = static_cast<uint64_t>((iMemory - T.GetSize() - iMult * sizeof(double) - iMult * sizeof(uint64_t) - iBytesUsedByVectors - _iNumOfThreads * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes()) - 1024ull * 1024ull * 1024ull);
@@ -1739,7 +1924,6 @@ namespace kASA {
 					}
 				}
 
-
 				const bool& bReadIDsAreInteresting = fOutFile != "";
 
 				unique_ptr<float[]> vReadIDtoTaxID; // Array of #species times #reads with scores as values
@@ -1767,7 +1951,12 @@ namespace kASA {
 				const auto& vInputFiles = pathAndSize.first;
 				size_t overallFileSize = pathAndSize.second, allFilesProgress = 0, charsReadOverall = 0;
 
-				
+#ifdef TIME
+				endTIME = std::chrono::high_resolution_clock::now();
+				cout << "Reserve memory " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+				startTIME = std::chrono::high_resolution_clock::now();
+#endif
+
 				// allow multiple input files
 				for (const auto& inFile : vInputFiles) {
 
@@ -1775,7 +1964,7 @@ namespace kASA {
 						cout << "OUT: Current file: " << inFile.first << endl;
 					}
 
-					
+
 					string fileName = "";
 					if (vInputFiles.size() > 1) { // get file name without path and ending
 						const auto& vRawNameSplit = Utilities::split(inFile.first.substr(fInFile.size(), inFile.first.size()), '.');
@@ -1789,7 +1978,7 @@ namespace kASA {
 							fileName.pop_back();
 						}
 					}
-					
+
 					// see if input is gziped or not and if it's a fasta or fastq file
 					bool isGzipped = inFile.second; //= (inFile[inFile.length() - 3] == '.' && inFile[inFile.length() - 2] == 'g' && inFile[inFile.length() - 1] == 'z');
 
@@ -1798,7 +1987,7 @@ namespace kASA {
 					unique_ptr<ifstream> fast_q_a_File;
 					unique_ptr<igzstream> fast_q_a_File_gz;
 					uint64_t iFileLength = 0;
-					
+
 					if (isGzipped) {
 						if (_bVerbose) {
 							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
@@ -1842,7 +2031,7 @@ namespace kASA {
 						iFileLength = fast_q_a_File->tellg();
 						fast_q_a_File->seekg(0, fast_q_a_File->beg);
 					}
-					
+
 					ofstream fOut;
 					// a larger buffer works better for SSDs or HPCCs
 					vector<char> mybuffer(16777216);
@@ -1871,12 +2060,18 @@ namespace kASA {
 							throw runtime_error("Profile file couldn't be opened for writing!");
 						}
 					}
-					
+
+#ifdef TIME
+					endTIME = std::chrono::high_resolution_clock::now();
+					cout << "Prepare input " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+					startTIME = std::chrono::high_resolution_clock::now();
+#endif
+
 					unique_ptr<strTransfer> transferBetweenRuns(new strTransfer);
 					transferBetweenRuns->iCurrentOverallPercentage = allFilesProgress;
 					transferBetweenRuns->iNumOfAllCharsRead = charsReadOverall;
 					vector<tuple<readIDType, float, double>> vSavedScores;
-					readIDType iReadIDofSavedScores = 0;
+					//readIDType iReadIDofSavedScores = 0;
 
 					// read input
 					while (bIsGood) {
@@ -1890,7 +2085,8 @@ namespace kASA {
 								iNumberOfkMersInInput += readFasta_partialSort(*fast_q_a_File, vInputVec, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T, vNumberOfGarbagekMersPerK);
 							}
 
-							iNumOfReads = transferBetweenRuns->vReadIDs.size();
+							//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
+							iNumOfReads = transferBetweenRuns->iNumOfNewReads;
 						}
 						else {
 
@@ -1903,8 +2099,15 @@ namespace kASA {
 								iNumberOfkMersInInput += readFastq_partialSort(*fast_q_a_File, vInputVec, vReadNameAndLength, iSoftMaxSizeOfInputVecs, iAmountOfSpecies, bSpaced, iFileLength, overallFileSize, bReadIDsAreInteresting, transferBetweenRuns, T, vNumberOfGarbagekMersPerK);
 							}
 
-							iNumOfReads = transferBetweenRuns->vReadIDs.size();
+							//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
+							iNumOfReads = transferBetweenRuns->iNumOfNewReads;
 						}
+
+#ifdef TIME
+						endTIME = std::chrono::high_resolution_clock::now();
+						cout << "Input " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+						startTIME = std::chrono::high_resolution_clock::now();
+#endif
 
 						// sort prefixes for each range in parallel
 # if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
@@ -1924,7 +2127,7 @@ namespace kASA {
 								}
 								else {
 									get<0>(a) = start;
-					}
+								}
 							});
 						}
 						else {
@@ -2014,7 +2217,11 @@ namespace kASA {
 #endif
 
 
-
+#ifdef TIME
+						endTIME = std::chrono::high_resolution_clock::now();
+						cout << "Elimination " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+						startTIME = std::chrono::high_resolution_clock::now();
+#endif
 
 						if (bUnique) {
 							auto newEnd = unique(vInputVec.begin(), vInputVec.end());
@@ -2055,27 +2262,27 @@ namespace kASA {
 						if (bReadIDsAreInteresting) {
 							if (bRAM) {
 								if (bPartitioned) {
-									foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
 									if (bUnfunny) {
 										//foo = bind(&Compare::compareWithDatabase_sloppy< vector<uint16_t>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 									else {
-										foo = bind(&Compare::compareWithDatabase< vector<packedBigPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+										foo = bind(&Compare::compareWithDatabase< vector<packedBigPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 								}
 							}
 							else {
 								if (bPartitioned) {
-									foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
 									if (bUnfunny) {
 										//foo = bind(&Compare::compareWithDatabase_sloppy<unique_ptr<unique_ptr<const taxaOnly>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib_taxaOnly), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 									else {
-										foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType_32p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx), ref(transferBetweenRuns->mReadIDToArrayIdx));
+										foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType_32p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 									}
 								}
 							}
@@ -2155,57 +2362,72 @@ namespace kASA {
 							iStart = iEnd;
 						}
 
+#ifdef TIME
+						endTIME = std::chrono::high_resolution_clock::now();
+						cout << "Divide for Compare " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+						startTIME = std::chrono::high_resolution_clock::now();
+#endif
+
 						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
 							workerThreadPool[iThreadID].startThread();
 						}
 						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
 							workerThreadPool[iThreadID].waitUntilFinished();
 						}
-					
+
 						if (someThingWentWrong) {
 							rethrow_exception(someThingWentWrong);
 						}
 
+#ifdef TIME
+						endTIME = std::chrono::high_resolution_clock::now();
+						cout << "Compare " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+						startTIME = std::chrono::high_resolution_clock::now();
+#endif
+
 						end = std::chrono::high_resolution_clock::now();
 						iTimeCompare += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-						
+
 						////////////////////////////////////////////////////////////////////////////////////////////////
 						// save results
 						if (bReadIDsAreInteresting) {
-							if (transferBetweenRuns->addTail) {
-								// last read is not yet finished
-								
-								uint64_t i = 0;
-								// check if there is still some unfinished read which is now complete
-								if (vSavedScores.size()) {
-									if (transferBetweenRuns->lastLine.second != iReadIDofSavedScores) {
-										auto lastScoreVec = getVecOfScored(vReadIDtoTaxID, Utilities::checkIfInMap(transferBetweenRuns->mReadIDToArrayIdx, iReadIDofSavedScores)->second);
-										vSavedScores.insert(vSavedScores.end(), lastScoreVec.cbegin(), lastScoreVec.cend());
-										lastScoreVec.clear();
-										sort(vSavedScores.begin(), vSavedScores.end(), [](const tuple<uint32_t, float, double>& p1, const tuple<uint32_t, float, double>& p2) { return get<0>(p1) < get<0>(p2); });
-										auto seen = vSavedScores[0];
-										for (auto it = vSavedScores.begin() + 1; it != vSavedScores.end(); ++it) {
-											if (get<0>(*it) != get<0>(seen)) {
-												lastScoreVec.push_back(seen);
-												seen = *it;
-											}
-											else {
-												get<1>(seen) += get<1>(*it);
-											}
-										}
-										lastScoreVec.push_back(seen);
-										vSavedScores.swap(lastScoreVec);
-										scoringFunc(move(vSavedScores), (i++) + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, move(fOut));
-										vSavedScores.clear();
 
-										transferBetweenRuns->vReadIDs.erase(find(transferBetweenRuns->vReadIDs.begin(), transferBetweenRuns->vReadIDs.end(), iReadIDofSavedScores));
-										transferBetweenRuns->mReadIDToArrayIdx.erase(iReadIDofSavedScores);
-										vReadNameAndLength.pop_front();
+							uint64_t iReadIDStart = 0;
+							// check if there is still some unfinished read which is now complete
+							if (vSavedScores.size() && transferBetweenRuns->finished) {
+								//if (transferBetweenRuns->lastLine.second != iReadIDofSavedScores) {
+									//auto lastScoreVec = getVecOfScored(vReadIDtoTaxID, Utilities::checkIfInMap(transferBetweenRuns->mReadIDToArrayIdx, iReadIDofSavedScores)->second);
+								auto lastScoreVec = getVecOfScored(vReadIDtoTaxID, 0);
+								vSavedScores.insert(vSavedScores.end(), lastScoreVec.cbegin(), lastScoreVec.cend());
+								lastScoreVec.clear();
+								sort(vSavedScores.begin(), vSavedScores.end(), [](const tuple<uint32_t, float, double>& p1, const tuple<uint32_t, float, double>& p2) { return get<0>(p1) < get<0>(p2); });
+								auto seen = vSavedScores[0];
+								for (auto it = vSavedScores.begin() + 1; it != vSavedScores.end(); ++it) {
+									if (get<0>(*it) != get<0>(seen)) {
+										lastScoreVec.push_back(seen);
+										seen = *it;
+									}
+									else {
+										get<1>(seen) += get<1>(*it);
 									}
 								}
-								
+								lastScoreVec.push_back(seen);
+								vSavedScores.swap(lastScoreVec);
+								scoringFunc(move(vSavedScores), (iReadIDStart++) + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, move(fOut));
+								vSavedScores.clear();
+
+								//transferBetweenRuns->vReadIDs.erase(find(transferBetweenRuns->vReadIDs.begin(), transferBetweenRuns->vReadIDs.end(), iReadIDofSavedScores));
+								//transferBetweenRuns->mReadIDToArrayIdx.erase(iReadIDofSavedScores);
+								vReadNameAndLength.pop_front();
+								//}
+							}
+
+							if (transferBetweenRuns->addTail) {
+								// last read is not yet finished
+
 								// save the score of the not yet finished
-								auto resultOfUnfinished = getVecOfScored(vReadIDtoTaxID, Utilities::checkIfInMap(transferBetweenRuns->mReadIDToArrayIdx, transferBetweenRuns->lastLine.second)->second);
+								//auto resultOfUnfinished = getVecOfScored(vReadIDtoTaxID, Utilities::checkIfInMap(transferBetweenRuns->mReadIDToArrayIdx, transferBetweenRuns->lastLine.second)->second);
+								auto resultOfUnfinished = getVecOfScored(vReadIDtoTaxID, transferBetweenRuns->lastLine.second);
 								if (resultOfUnfinished.size()) {
 									vSavedScores.insert(vSavedScores.end(), resultOfUnfinished.cbegin(), resultOfUnfinished.cend());
 									resultOfUnfinished.clear();
@@ -2223,71 +2445,71 @@ namespace kASA {
 									resultOfUnfinished.push_back(seen);
 									vSavedScores.swap(resultOfUnfinished);
 								}
-								
+
 								// save the finished ones
-								scoringFunc(vReadIDtoTaxID, i, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, mFrequencies, mIdxToTax, mOrganisms, move(fOut));
+								scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, mFrequencies, mIdxToTax, mOrganisms, move(fOut));
 
-								for (; i < iNumOfReads - 1; ++i) {
-									auto tempID = transferBetweenRuns->vReadIDs.front();
-									transferBetweenRuns->vReadIDs.pop_front();
-									transferBetweenRuns->mReadIDToArrayIdx.erase(tempID);
+								//for (; i < iNumOfReads - 1; ++i) {
+									//auto tempID = transferBetweenRuns->vReadIDs.front();
+									//transferBetweenRuns->vReadIDs.pop_front();
+									//transferBetweenRuns->mReadIDToArrayIdx.erase(tempID);
 									//vReadNameAndLength.pop_front();
-								}
-								
+								//}
 
-								iReadIDofSavedScores = transferBetweenRuns->iCurrentReadID;
-								transferBetweenRuns->mReadIDToArrayIdx[iReadIDofSavedScores] = 0;
+
+								//iReadIDofSavedScores = transferBetweenRuns->iCurrentReadID;
+								//transferBetweenRuns->mReadIDToArrayIdx[iReadIDofSavedScores] = 0;
 
 								iNumOfReadsSum += iNumOfReads - 1;
 								iNumOfReadsOld = (iNumOfReads - 1 < iNumOfReadsOld) ? iNumOfReadsOld : iNumOfReads - 1;
 							}
 							else {
 								// reads finished
-								
-								// write down the saved one
-								uint64_t i = 0;
-								if (vSavedScores.size()) {
-									auto resultOfFinished = getVecOfScored(vReadIDtoTaxID, 0);
-									vSavedScores.insert(vSavedScores.end(), resultOfFinished.cbegin(), resultOfFinished.cend());
-									resultOfFinished.clear();
-									sort(vSavedScores.begin(), vSavedScores.end(), [](const tuple<uint32_t, float, double>& p1, const tuple<uint32_t, float, double>& p2) { return get<0>(p1) < get<0>(p2); });
-									auto seen = vSavedScores[0];
-									for (auto it = vSavedScores.begin() + 1; it != vSavedScores.end(); ++it) {
-										if (get<0>(*it) != get<0>(seen)) {
-											resultOfFinished.push_back(seen);
-											seen = *it;
-										}
-										else {
-											get<1>(seen) += get<1>(*it);
-										}
-									}
-									resultOfFinished.push_back(seen);
-									vSavedScores.swap(resultOfFinished);
 
-									scoringFunc(move(vSavedScores), iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, move(fOut));
-									i = 1;
-									transferBetweenRuns->vReadIDs.erase(find(transferBetweenRuns->vReadIDs.begin(), transferBetweenRuns->vReadIDs.end(), iReadIDofSavedScores));
-									transferBetweenRuns->mReadIDToArrayIdx.erase(iReadIDofSavedScores);
-									vReadNameAndLength.pop_front();
-									vSavedScores.clear();
-								}
-								
+								// write down the saved one
+								//uint64_t IReadIDStart = 0;
+								//if (vSavedScores.size()) {
+								//	auto resultOfFinished = getVecOfScored(vReadIDtoTaxID, 0);
+								//	vSavedScores.insert(vSavedScores.end(), resultOfFinished.cbegin(), resultOfFinished.cend());
+								//	resultOfFinished.clear();
+								//	sort(vSavedScores.begin(), vSavedScores.end(), [](const tuple<uint32_t, float, double>& p1, const tuple<uint32_t, float, double>& p2) { return get<0>(p1) < get<0>(p2); });
+								//	auto seen = vSavedScores[0];
+								//	for (auto it = vSavedScores.begin() + 1; it != vSavedScores.end(); ++it) {
+								//		if (get<0>(*it) != get<0>(seen)) {
+								//			resultOfFinished.push_back(seen);
+								//			seen = *it;
+								//		}
+								//		else {
+								//			get<1>(seen) += get<1>(*it);
+								//		}
+								//	}
+								//	resultOfFinished.push_back(seen);
+								//	vSavedScores.swap(resultOfFinished);
+
+								//	scoringFunc(move(vSavedScores), iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, move(fOut));
+								//	IReadIDStart = 1;
+								//	//transferBetweenRuns->vReadIDs.erase(find(transferBetweenRuns->vReadIDs.begin(), transferBetweenRuns->vReadIDs.end(), iReadIDofSavedScores));
+								//	//transferBetweenRuns->mReadIDToArrayIdx.erase(iReadIDofSavedScores);
+								//	vReadNameAndLength.pop_front();
+								//	vSavedScores.clear();
+								//}
+
 								// and now the regular ones
-								scoringFunc(vReadIDtoTaxID, i, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, mFrequencies, mIdxToTax, mOrganisms, move(fOut));
-								for (; i < iNumOfReads; ++i) {
-									auto tempID = transferBetweenRuns->vReadIDs.front();
-									transferBetweenRuns->vReadIDs.pop_front();
-									transferBetweenRuns->mReadIDToArrayIdx.erase(tempID);
+								scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, mFrequencies, mIdxToTax, mOrganisms, move(fOut));
+								//for (; i < iNumOfReads; ++i) {
+								//	auto tempID = transferBetweenRuns->vReadIDs.front();
+								//	transferBetweenRuns->vReadIDs.pop_front();
+								//	transferBetweenRuns->mReadIDToArrayIdx.erase(tempID);
 									//vReadNameAndLength.pop_front();
-								}
-								
+								//}
+
 								iNumOfReadsSum += iNumOfReads;
 								iNumOfReadsOld = iNumOfReads;
 								vReadNameAndLength.clear();
 							}
 						}
 
-						
+
 						vInputVec.clear();
 
 						if (isGzipped) {
@@ -2297,6 +2519,12 @@ namespace kASA {
 							bIsGood = fast_q_a_File->good();
 						}
 						charsReadOverall = transferBetweenRuns->iNumOfAllCharsRead;
+
+#ifdef TIME
+						endTIME = std::chrono::high_resolution_clock::now();
+						cout << "Saving results " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+						startTIME = std::chrono::high_resolution_clock::now();
+#endif
 
 						//iterate until no dna is left
 					}
@@ -2333,7 +2561,7 @@ namespace kASA {
 					for (uint32_t iSpecIdx = 1; iSpecIdx < iAmountOfSpecies; ++iSpecIdx) {
 						vector<pair<double, uint64_t>> vTemp(_iNumOfK);
 						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							const uint64_t& iTempScore = vCount_unique[iSpecIdx + ikMerlength*iAmountOfSpecies];
+							const uint64_t& iTempScore = vCount_unique[iSpecIdx + ikMerlength * iAmountOfSpecies];
 							vSumOfUniquekMers[ikMerlength] += iTempScore;
 							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx + ikMerlength * iAmountOfSpecies];
 							vTemp[ikMerlength] = make_pair(vCount_all[iSpecIdx + ikMerlength * iAmountOfSpecies], iTempScore);
@@ -2399,98 +2627,105 @@ namespace kASA {
 							allSumOfIdentified = dSumOfIdentified;
 						}
 						else {*/
-							ostringstream sOutStr;
-							// long version: taxID,Name,Unique Counts,Unique rel. freq. x in 0.x,Non-unique Counts,Non-unique rel. freq. x in 0.x\n
-							tableFileStream << "#taxID,Name";
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << "Unique counts k=" << _iMaxK - ikMerlength;
-							}
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << "Unique rel. freq. k=" << _iMaxK - ikMerlength;
-							}
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << "Non-unique counts k=" << _iMaxK - ikMerlength;
-							}
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << "Non-unique rel. freq. k=" << _iMaxK - ikMerlength;
-							}
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << "Overall rel. freq. k=" << _iMaxK - ikMerlength;
-							}
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << "Overall unique rel. freq. k=" << _iMaxK - ikMerlength;
-							}
-							tableFileStream << "\n";
+						ostringstream sOutStr;
+						// long version: taxID,Name,Unique Counts,Unique rel. freq. x in 0.x,Non-unique Counts,Non-unique rel. freq. x in 0.x\n
+						tableFileStream << "#taxID,Name";
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Unique counts k=" << _iMaxK - ikMerlength;
+						}
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Unique rel. freq. k=" << _iMaxK - ikMerlength;
+						}
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Non-unique counts k=" << _iMaxK - ikMerlength;
+						}
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Non-unique rel. freq. k=" << _iMaxK - ikMerlength;
+						}
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Overall rel. freq. k=" << _iMaxK - ikMerlength;
+						}
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Overall unique rel. freq. k=" << _iMaxK - ikMerlength;
+						}
+						tableFileStream << "\n";
 
-							vector<double> vSumOfIdentified(_iNumOfK, 0), vSumOfUniqueIdentified(_iNumOfK, 0);
-							for (const auto& entry : vOut) {
-								if (get<1>(entry)[_iNumOfK - 1].first > 0) {
-									// unique count
-									sOutStr << get<2>(entry) << "," << get<0>(entry);
-									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										sOutStr << "," << get<1>(entry)[ikMerlength].second;
-									}
-									// unique rel freq
-									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										if (get<1>(entry)[ikMerlength].second == 0) {
-											sOutStr << "," << 0.0;
-										}
-										else {
-											sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / vSumOfUniquekMers[ikMerlength];
-										}
-									}
-									// non-unique count
-									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										sOutStr << "," << get<1>(entry)[ikMerlength].first;
-									}
-									// non-unique rel freq
-									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										if (bSpaced) {
-											sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
-										}
-										else {
-											//sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (_iMaxK - _iMinK - ikMerlength) * 6 * iNumOfReadsSum);
-											sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
-										}
-									}
-									// Overall rel freq
-									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										vSumOfIdentified[ikMerlength] += get<1>(entry)[ikMerlength].first;
-										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
-									}
-
-									// Overall unique rel freq
-									for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-										vSumOfUniqueIdentified[ikMerlength] += get<1>(entry)[ikMerlength].second;
-										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
-									}
-									sOutStr << "\n";
+						vector<double> vSumOfIdentified(_iNumOfK, 0), vSumOfUniqueIdentified(_iNumOfK, 0);
+						for (const auto& entry : vOut) {
+							if (get<1>(entry)[_iNumOfK - 1].first > 0) {
+								// unique count
+								sOutStr << get<2>(entry) << "," << get<0>(entry);
+								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+									sOutStr << "," << get<1>(entry)[ikMerlength].second;
 								}
-							}
-							// last entry
-							tableFileStream << "0,not identified";
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK * 4; ++ikMerlength) {
-								// all counts for unique and non-unique relate to the identified number of counts so no value other than 0 can be written here
-								tableFileStream << "," << 0.0;
-							}
-							
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								//cout << iNumberOfkMersInInput << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << vSumOfIdentified[ikMerlength] << endl;
-								tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
-							}
-							for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-								tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfUniqueIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
-							}
-							tableFileStream << "\n" << sOutStr.str();
+								// unique rel freq
+								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+									if (get<1>(entry)[ikMerlength].second == 0) {
+										sOutStr << "," << 0.0;
+									}
+									else {
+										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / vSumOfUniquekMers[ikMerlength];
+									}
+								}
+								// non-unique count
+								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+									sOutStr << "," << get<1>(entry)[ikMerlength].first;
+								}
+								// non-unique rel freq
+								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+									if (bSpaced) {
+										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
+									}
+									else {
+										//sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (_iMaxK - _iMinK - ikMerlength) * 6 * iNumOfReadsSum);
+										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
+									}
+								}
+								// Overall rel freq
+								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+									vSumOfIdentified[ikMerlength] += get<1>(entry)[ikMerlength].first;
+									sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
+								}
 
-							allSumOfIdentified = vSumOfIdentified[0];
+								// Overall unique rel freq
+								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+									vSumOfUniqueIdentified[ikMerlength] += get<1>(entry)[ikMerlength].second;
+									sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
+								}
+								sOutStr << "\n";
+							}
+						}
+						// last entry
+						tableFileStream << "0,not identified";
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK * 4; ++ikMerlength) {
+							// all counts for unique and non-unique relate to the identified number of counts so no value other than 0 can be written here
+							tableFileStream << "," << 0.0;
+						}
+
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							//cout << iNumberOfkMersInInput << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << vSumOfIdentified[ikMerlength] << endl;
+							tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
+						}
+						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfUniqueIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
+						}
+						tableFileStream << "\n" << sOutStr.str();
+
+						allSumOfIdentified = vSumOfIdentified[0];
 						//}
 					}
+
+#ifdef TIME
+					endTIME = std::chrono::high_resolution_clock::now();
+					cout << "Save profile " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+					startTIME = std::chrono::high_resolution_clock::now();
+#endif
+
 					/*if (fTableFile != "") {
 						cout.rdbuf(orgBuf);
 					}*/
 					if (_bVerbose) {
-						cout << "OUT: Number of k-mers in input: " << iNumberOfkMersInInput << " of which " << allSumOfIdentified/(iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[0]) * 100. << " % were identified." << endl;
+						cout << "OUT: Number of k-mers in input: " << iNumberOfkMersInInput << " of which " << allSumOfIdentified / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[0]) * 100. << " % were identified." << endl;
 						cout << "OUT: Number of uniques:";
 						for (int32_t j = 0; j < _iNumOfK; ++j) {
 							cout << " " << vSumOfUniquekMers[j];
@@ -2514,6 +2749,11 @@ namespace kASA {
 
 					allFilesProgress = transferBetweenRuns->iCurrentOverallPercentage;
 				}
+#ifdef TIME
+				endTIME = std::chrono::high_resolution_clock::now();
+				cout << "End " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+				startTIME = std::chrono::high_resolution_clock::now();
+#endif
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

@@ -64,7 +64,12 @@ using namespace std;
 #define _SILENCE_PARALLEL_ALGORITHMS_EXPERIMENTAL_WARNING
 
 #pragma pack(push, 1)
-struct packedPair { uint32_t first = 0; uint16_t second = 0; };
+struct packedPair { 
+	uint32_t first = 0; 
+	uint16_t second = 0;
+	packedPair() {}
+	packedPair(const uint32_t& a, const uint16_t& b) : first(a), second(b) {}
+};
 #pragma pack(pop)
 
 #pragma pack(push, 1)
@@ -72,7 +77,7 @@ struct packedBigPair {
 	uint64_t first = 0; uint32_t second = 0; 
 
 	packedBigPair() {}
-	packedBigPair(const uint64_t a, const uint32_t& b) : first(a), second(b) {}
+	packedBigPair(const uint64_t& a, const uint32_t& b) : first(a), second(b) {}
 
 	packedBigPair& operator=(const tuple<uint64_t, uint32_t>& a) { 
 		first = get<0>(a); 
@@ -130,13 +135,18 @@ struct packedBigPairTrie {
 #include <gzstream.hpp>
 
 
-struct __attribute__((packed)) packedPair { uint32_t first = 0; uint16_t second = 0; };
+struct __attribute__((packed)) packedPair { 
+	uint32_t first = 0; 
+	uint16_t second = 0; 
+	packedPair() {}
+	packedPair(const uint32_t& a, const uint16_t& b) : first(a), second(b) {}
+};
 
 struct __attribute__((packed)) packedBigPair {
 	uint64_t first = 0; uint32_t second = 0;
 
 	packedBigPair() {}
-	packedBigPair(const uint64_t a, const uint32_t& b) : first(a), second(b) {}
+	packedBigPair(const uint64_t& a, const uint32_t& b) : first(a), second(b) {}
 
 	packedBigPair& operator=(const tuple<uint64_t, uint32_t>& a) {
 		first = get<0>(a);

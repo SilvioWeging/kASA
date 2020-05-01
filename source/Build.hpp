@@ -15,7 +15,7 @@ namespace kASA {
 	class Build {
 	private:
 		unique_ptr<vector<packedBigPair>> vInternal;
-		uint64_t iInternalCounter = 0;
+		//uint64_t iInternalCounter = 0;
 		vector<uint64_t> vVectorSizes;
 
 		string _sTempPath = "";
@@ -24,14 +24,16 @@ namespace kASA {
 
 		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
 
+#if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
 		int32_t _iNumOfThreads_ = 1;
+#endif
 
 		unique_ptr<uint64_t[]> arrFrequencies;
 		unordered_map<uint32_t, uint32_t> _mContent;
 
 	public:
 
-		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _iNumOfThreads_(iNumOfThreads), _mContent(mContent) {
+		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
 			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
 			//ofstream derp;
 			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
@@ -53,6 +55,9 @@ namespace kASA {
 			for (uint64_t i = 0; i < iNumOfTaxa * 12; ++i) {
 				arrFrequencies[i] = 0;
 			}
+#if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
+			_iNumOfThreads_ = iNumOfThreads;
+#endif
 		}
 
 		Build() {}

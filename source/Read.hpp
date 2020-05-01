@@ -71,7 +71,7 @@ namespace kASA {
 							vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 						}
 						
-						resultsVec.push_back(make_tuple(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID)));
+						resultsVec.emplace_back(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID));
 
 						++iCurrentkMerCounter;
 					//}
@@ -85,39 +85,46 @@ namespace kASA {
 					// To map the 2 onto 1, ! is applied twice
 					const int32_t& iMaxRangeMod3 = iMaxRange % 3;
 					const int32_t& iMaxRangeMod3Neg = !(!iMaxRangeMod3);
+					//const int64_t& iSkipkMers = 10;
+					//int64_t iCurrentSkipCounter = 1;
 
-					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; ++j) {
+					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; j++) {
 						for (int32_t k = 0; k < 3; ++k) {
 							int8_t sTempAA = ' ';
 							dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
 							sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
 
 							//cout << kMerToAminoacid(sAAFrames[k], 12) << endl;
-
-							auto kmerForSearchInTrie = sAAFrames[k];
-							if (bUnfunny) {
-								/*uint64_t tVal = 0;
-								for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
-									tVal |= (sAAFrames[k] & (31ULL << iLeftStart)) << iShifted;
+							//if (iCurrentSkipCounter == iSkipkMers) {
+								auto kmerForSearchInTrie = sAAFrames[k];
+								if (bUnfunny) {
+									/*uint64_t tVal = 0;
+									for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
+										tVal |= (sAAFrames[k] & (31ULL << iLeftStart)) << iShifted;
+									}
+									sAAFrames[k] = tVal;*/
+									kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 								}
-								sAAFrames[k] = tVal;*/
-								kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
-							}
 
-							//uint64_t start = 0;
-							//uint32_t range = 0;
-							//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
-							//if (start != numeric_limits<uint64_t>::max()) {
+								//uint64_t start = 0;
+								//uint32_t range = 0;
+								//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+								//if (start != numeric_limits<uint64_t>::max()) {
 
 								for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
 									vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 								}
 
-								resultsVec.push_back(make_tuple(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID)));
+								resultsVec.emplace_back(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID));
 								++iCurrentkMerCounter;
+								//}
 							//}
 						}
-						ikMerCounter += 3;
+						//if (iCurrentSkipCounter == iSkipkMers) {
+							ikMerCounter += 3;
+						//	iCurrentSkipCounter = 0;
+						//}
+						//++iCurrentSkipCounter;
 					}
 
 					// compute frames of said tail
@@ -146,7 +153,7 @@ namespace kASA {
 								vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
 							}
 
-							resultsVec.push_back(make_tuple(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID)));
+							resultsVec.emplace_back(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID));
 							++iCurrentkMerCounter;
 						//}
 					}
@@ -204,12 +211,12 @@ namespace kASA {
 		struct strTransfer {
 			string name = "", overhang = "";
 			size_t lengthOfDNA = 0;
-			bool finished = true, addTail = false;
+			bool finished = true, addTail = false, bNewRead = true;
 			uint8_t iExpectedInput = 0;
 			pair<string, readIDType> lastLine;
-			list<readIDType> vReadIDs;
-			readIDType iCurrentReadID = 0;
-			unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
+			//list<readIDType> vReadIDs;
+			//readIDType iCurrentReadID = 0;
+			//unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
 			uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iNumOfAllCharsRead = 0, iCurrentOverallPercentage = 0, iNumOfNewReads = 0;
 		};
 
@@ -220,7 +227,7 @@ namespace kASA {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
-				uint64_t iLocalReadID = 0;
+				readIDType iLocalReadID = 0;
 
 				string sFalsekMerMarker = "";
 				if (_bInputAreAAs) {
@@ -237,7 +244,7 @@ namespace kASA {
 				uint8_t iExpectedInput = transfer->iExpectedInput; // 0 = name, 1 = sequence, 2 = + or quality
 				string sName = transfer->name, sDNA = "", sOverhang = transfer->overhang;
 				size_t iDNALength = transfer->lengthOfDNA, iQualityLength = 0;
-				bool bNewRead = transfer->finished, bAddTail = transfer->addTail;
+				bool bNewRead = transfer->bNewRead, bAddTail = transfer->addTail;
 
 				size_t iLinesPerRun = 2;
 				int32_t iProcID = 0;
@@ -245,7 +252,9 @@ namespace kASA {
 				vector<pair<string, readIDType>> vLines(iLinesPerRun), vRCLines(iLinesPerRun);
 				size_t iActualLines = 1;
 				vLines[0] = transfer->lastLine;
-				transfer->iNumOfNewReads = 0;
+				vLines[0].second = 0;
+				transfer->iNumOfNewReads = 0 + (transfer->addTail);
+				transfer->finished = false;
 
 				while (input && bNotFull) {
 					while (input && iActualLines < iLinesPerRun) {
@@ -298,12 +307,12 @@ namespace kASA {
 							//vReadNameAndLength.reserve(vReadNameAndLength.capacity() + 1);
 
 							if (bReadIDsAreInteresting) {
-								transfer->vReadIDs.push_back(transfer->iCurrentReadID);
-								transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
-
-								iSoftMaxSize -= iAmountOfSpecies * sizeof(float) + sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
+								//transfer->vReadIDs.push_back(transfer->iCurrentReadID);
+								//transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
+								transfer->iNumOfNewReads++;
+								iSoftMaxSize -= iAmountOfSpecies * sizeof(float);// + sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
 							}
-							transfer->iNumOfNewReads++;
+							
 							//cout << iSoftMaxSize << endl;
 
 							iExpectedInput = 1;
@@ -354,16 +363,19 @@ namespace kASA {
 									while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
 										tempDNA += 'X';
 									}
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, transfer->iCurrentReadID) : make_pair(tempDNA + sFalsekMerMarker, transfer->iCurrentReadID);
+									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, transfer->iCurrentReadID) : make_pair(tempDNA + sFalsekMerMarker, transfer->iCurrentReadID);
+									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, iLocalReadID) : make_pair(tempDNA + sFalsekMerMarker, iLocalReadID);
 								}
 							}
 							else {
 								if (!_bInputAreAAs) {
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), transfer->iCurrentReadID) : make_pair(reverseComplement(sDNA), transfer->iCurrentReadID);
+									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), transfer->iCurrentReadID) : make_pair(reverseComplement(sDNA), transfer->iCurrentReadID);
+									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), iLocalReadID) : make_pair(reverseComplement(sDNA), iLocalReadID);
 								}
 							}
 
-							vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, transfer->iCurrentReadID) : make_pair(sDNA, transfer->iCurrentReadID);
+							//vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, transfer->iCurrentReadID) : make_pair(sDNA, transfer->iCurrentReadID);
+							vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, iLocalReadID) : make_pair(sDNA, iLocalReadID);
 							++iActualLines;
 
 							bAddTail = true;
@@ -386,10 +398,11 @@ namespace kASA {
 
 								vLines[iActualLines - 1] = (bSpaced) ? vLines[iActualLines - 1] : make_pair(vLines[iActualLines - 1].first + sFalsekMerMarker, vLines[iActualLines - 1].second); // add false marker
 								if (bReadIDsAreInteresting) {
-									++(transfer->iCurrentReadID);
+									//++(transfer->iCurrentReadID);
 									++iLocalReadID;
 									vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
 									iSoftMaxSize -= sizeof(pair<string,uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
+									transfer->finished = true;
 								}
 								bAddTail = false;
 							}
@@ -419,7 +432,7 @@ namespace kASA {
 					
 					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
-					if (iSoftMaxSize <= static_cast<int64_t>(14399776 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+					if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
 
@@ -436,7 +449,7 @@ namespace kASA {
 				else {
 					transfer->lastLine = vLines[0];
 					transfer->addTail = bAddTail;
-					transfer->finished = bNewRead;
+					transfer->bNewRead = bNewRead;
 					transfer->iExpectedInput = iExpectedInput;
 					transfer->lengthOfDNA = iDNALength;
 					transfer->name = sName;
@@ -458,7 +471,7 @@ namespace kASA {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
-				uint64_t iLocalReadID = 0;
+				readIDType iLocalReadID = 0;
 
 				/*for (int16_t i = 0; i < _iNumOfThreads; ++i) {
 					vOut[i].reserve(static_cast<size_t>((iSoftMaxSize*1.1)/(sizeof(tuple<uint64_t, readIDType>) * (_iNumOfThreads))));
@@ -479,13 +492,18 @@ namespace kASA {
 				uint8_t iExpectedInput = transfer->iExpectedInput; // 0 = name, 1 = sequence, 2 = signal end
 				string sName = transfer->name, sDNA = "", sOverhang = transfer->overhang;
 				size_t iDNALength = transfer->lengthOfDNA;
-				bool bNewRead = transfer->finished, bAddTail = transfer->addTail;
+				bool bNewRead = transfer->bNewRead, bAddTail = transfer->addTail;
+
+
 
 				size_t iLinesPerRun = 2;//2;
 
 				vector<pair<string, readIDType>> vLines(iLinesPerRun), vRCLines(iLinesPerRun);
 				size_t iActualLines = 1;
 				vLines[0] = transfer->lastLine;
+				vLines[0].second = 0;
+				transfer->iNumOfNewReads = 0 + (transfer->addTail);
+				transfer->finished = false;
 
 				while (input && bNotFull) {
 					while (input && iActualLines < iLinesPerRun) {
@@ -539,7 +557,8 @@ namespace kASA {
 								}
 								vLines[iActualLines - 1] = (bSpaced) ? vLines[iActualLines - 1] : make_pair(vLines[iActualLines - 1].first + sFalsekMerMarker, vLines[iActualLines - 1].second); // add false marker
 								if (bReadIDsAreInteresting) {
-									++(transfer->iCurrentReadID);
+									//++(transfer->iCurrentReadID);
+									transfer->finished = true;
 									++iLocalReadID;
 									vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
 									iSoftMaxSize -= sizeof(pair<string, uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
@@ -555,10 +574,10 @@ namespace kASA {
 
 							//vReadNameAndLength.reserve(vReadNameAndLength.capacity() + 1);
 							if (bReadIDsAreInteresting) {
-								transfer->vReadIDs.push_back(transfer->iCurrentReadID);
-								transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
-
-								iSoftMaxSize -= iAmountOfSpecies * sizeof(float) + sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
+								//transfer->vReadIDs.push_back(transfer->iCurrentReadID);
+								//transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
+								transfer->iNumOfNewReads++;
+								iSoftMaxSize -= iAmountOfSpecies * sizeof(float); //+ sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
 							}
 
 							iExpectedInput = 1;
@@ -609,16 +628,19 @@ namespace kASA {
 									while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
 										tempDNA += 'X';
 									}
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, transfer->iCurrentReadID) : make_pair(tempDNA + sFalsekMerMarker, transfer->iCurrentReadID);
+									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, transfer->iCurrentReadID) : make_pair(tempDNA + sFalsekMerMarker, transfer->iCurrentReadID);
+									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, iLocalReadID) : make_pair(tempDNA + sFalsekMerMarker, iLocalReadID);
 								}
 							}
 							else {
 								if (!_bInputAreAAs) {
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), transfer->iCurrentReadID) : make_pair(reverseComplement(sDNA), transfer->iCurrentReadID);
+									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), transfer->iCurrentReadID) : make_pair(reverseComplement(sDNA), transfer->iCurrentReadID);
+									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), iLocalReadID) : make_pair(reverseComplement(sDNA), iLocalReadID);
 								}
 							}
 
-							vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, transfer->iCurrentReadID) : make_pair(sDNA, transfer->iCurrentReadID);
+							//vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, transfer->iCurrentReadID) : make_pair(sDNA, transfer->iCurrentReadID);
+							vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, iLocalReadID) : make_pair(sDNA, iLocalReadID);
 							++iActualLines;
 
 							bAddTail = true;
@@ -635,7 +657,7 @@ namespace kASA {
 					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
 					
-					if (iSoftMaxSize <= static_cast<int64_t>(14399776 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 20 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+					if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
 
@@ -672,7 +694,7 @@ namespace kASA {
 				else {
 					transfer->lastLine = vLines[0];
 					transfer->addTail = bAddTail;
-					transfer->finished = bNewRead;
+					transfer->bNewRead = bNewRead;
 					transfer->iExpectedInput = iExpectedInput;
 					transfer->lengthOfDNA = iDNALength;
 					transfer->name = sName;
