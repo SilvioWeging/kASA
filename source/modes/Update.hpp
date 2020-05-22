@@ -1,7 +1,7 @@
 /***************************************************************************
 *  Part of kASA: https://github.com/SilvioWeging/kASA
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at

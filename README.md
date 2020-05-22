@@ -31,6 +31,8 @@ This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</
 This tool is designed to read genomic sequences (also called Reads) and identify known parts by exactly matching k-mers to a reference database.
 In order to do this, you need to set kASA up locally (no admin account needed!), create an index out of the genomic reference (for now, we will not provide standard indices) and then put in a file containing Reads.
 
+If you can't find a feature, please take a look at the [TODOS](#Todos-and-upcoming) down below before opening an Issue. It may very well be, that I'm already working on it.
+
 Words like `<this>` are meant as placeholders to be filled with your specifics e.g. name, paths, ...
 
 Folders and paths are recognized as such by letting a parameter end with a "/". 
@@ -226,8 +228,6 @@ Note, that if you input a folder, file names are appended to your string given v
 If a read cannot be identified, the array "Top hits" in json format is empty, and in tsv format "-" is printed in every column instead of taxa, names and scores. 
 The "Top hits" array can contain multiple entries, especially if a k-mer Score is "close enough" to the highest score (all scores are normalized to [0,1] and everything with a score of more than 0.8 is considered a "Top hit"). Otherwise it contains the entry with the highest relative Score and all other hits are saved into the "Further hits" array.
 
-Should you provide more than 9 GB of RAM and a lower `k` of at least 7 (default), a much faster lookup table instead of a prefix trie is used.
-
 The first line of the profile is always "not identified" followed by zeroes for the unique and non-unique frequencies but with values for the overall frequencies describing the fracture of the k-mers from the input, which could not be identified.
 
 ##### Necessary paramameters
@@ -248,6 +248,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--jsonl`: Sets the output format to json lines.
 * `--tsv`: Sets the output format to a tab separated, per line format.
 * `--kraken`: Sets the output format to a kraken like tsv format.
+* `--threshold <float>:` Set a minimum relative score so that everything below it will not be included in the output. For not-so-noisy data and reads of length 100, we recommend a value of 0.4. Default: 0.0.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -321,7 +322,7 @@ If you've created the content file together with the index, this default content
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids. Currently in BETA.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
---six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+* `--six`: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>

@@ -2,7 +2,7 @@
 *  Part of kASA: https://github.com/SilvioWeging/kASA
 *  Inspired by https://github.com/log4cplus/ThreadPool/blob/master/ThreadPool.h
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -21,13 +21,14 @@ using namespace std;
 
 class WorkerThread {
 
-	vector<thread> T;
+	vector<thread> T; // is supposed to hold one thread
 	int32_t ID = 0;
 	vector<function<void(const int32_t&)>> tasks;
 	condition_variable cv_worker;
 	condition_variable cv_master;
 	mutex taskMutex;
-	bool stop = false;
+	bool stop = false, bStarted = false;
+
 
 	////////////////////////////////////////////////////////
 public:
@@ -61,7 +62,10 @@ public:
 
 	////////////////////////////////////////////////////////
 	inline void startThread() {
-		cv_worker.notify_one();
+		if (tasks.size()) {
+			bStarted = true;
+			cv_worker.notify_one();
+		}
 	}
 
 	////////////////////////////////////////////////////////
@@ -70,10 +74,17 @@ public:
 	}
 
 	////////////////////////////////////////////////////////
+	inline bool isEmpty() const {
+		return tasks.empty();
+	}
+
+	////////////////////////////////////////////////////////
 	inline void waitUntilFinished() {
-		unique_lock<std::mutex> lock(this->taskMutex);
-		this->cv_master.wait(lock,
-			[this] { return this->tasks.empty(); });
+		if (bStarted) {
+			unique_lock<std::mutex> lock(this->taskMutex);
+			this->cv_master.wait(lock,
+				[this] { return this->tasks.empty(); });
+		}
 	}
 
 
@@ -101,6 +112,8 @@ private:
 					}
 
 					tasks.clear();
+					bStarted = false;
+					std::unique_lock<std::mutex> lock(this->taskMutex);
 					cv_master.notify_one();
 				}
 			}

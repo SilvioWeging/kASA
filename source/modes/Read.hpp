@@ -1,7 +1,7 @@
 /***************************************************************************
 *  Part of kASA: https://github.com/SilvioWeging/kASA
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -9,9 +9,10 @@
 **************************************************************************/
 #pragma once
 
-#include "kASA.hpp"
+#include "../kASA.hpp"
 #include "Build.hpp"
 #include "Trie.hpp"
+#include "../utils/WorkerThread.hpp"
 
 namespace kASA {
 	class Read : public kASA {
@@ -26,25 +27,38 @@ namespace kASA {
 		// test for garbage to correctly count matchable k-mers
 		const uint64_t _tails[12] = { 0x1E, 0x3C0, 0x7800, 0xF0000, 0x1E00000, 0x3C000000, 0x780000000, 0xF00000000, 0x1E000000000, 0x3C0000000000, 0x7800000000000, 0xF000000000000 }; // ^, ^@, ^@@, ...
 
-		inline void convert_dnaTokMer(const string& sDna, const readIDType& iID, const int32_t& iMaxKTimes3, const Trie&, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec, int64_t& iCurrentkMerCounter, vector<uint64_t>& vCountGarbagekMerPerK) {
+		/////////////////////////////////
+		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec) {
+			const int32_t& iMaxRange = iNumberOfkMers;
+			if (iMaxRange > 0) {
+				for (int32_t iCurrentkMerCounter = 0; iCurrentkMerCounter < iMaxRange; ++iCurrentkMerCounter) {
+					auto kMer = aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12);
+					
+					if (bUnfunny) {
+						kMer = aminoAcidsToAminoAcid(kMer);
+					}
+
+					get<1>(resultsVec[iPositionForOut]) = kMer;
+					get<3>(resultsVec[iPositionForOut++]) = iReadID;
+				}
+			}
+		}
+
+		/////////////////////////////////
+		inline void convert_dnaTokMer(const string& sDna, const readIDType& iID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, const int32_t& iMaxKTimes3, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec, const int32_t& iThreadID, unique_ptr<uint64_t[]>& vCountGarbagekMerPerK) {
 			// This value gives the remaining length of the read which is the number of kMers created
-			const int32_t& iMaxRange = int32_t(sDna.length() - iMaxKTimes3 + 1);
+			const int32_t& iMaxRange = iNumberOfkMers;
+			const auto& garbageRangeCalc = iThreadID * _iNumOfK;
 			if (iMaxRange >= 1) {
 				// go through the dna, convert it framewise to an aminoacid kMer and then to its coded representation
 				const int32_t& iNumFrames = (iMaxRange >= 3) ? 3 : iMaxRange;
 
-				/*if (iSizeOfResultsBefore + iCurrentkMerCounter + iMaxRange >= iSoftMaxSize) {
-				resultsVec[iProcIt].reserve(iSizeOfResultsBefore + iMaxRange * ((iProcIt + 1)*iNumOfResultsPerThread - i));
-				}*/
-				//resultsVec[iProcIt].resize(iSizeOfResultsBefore + iCurrentkMerCounter + iMaxRange);
 				int32_t ikMerCounter = 0;
 
 				// Frameshifting, so that only one amino acid has to be computed
 				// Compute initial frames
-				//uint64_t sAAFrames[3] = { 0, 0, 0 };
-				//uint32_t aDeletekMerCounter[3] = { 0, 0, 0 };
 				AAFrames<uint64_t> sAAFrames;
-				//AAFrames<uint32_t> aDeletekMerCounter;
+
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
 					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
@@ -52,29 +66,16 @@ namespace kASA {
 
 					auto kmerForSearchInTrie = sAAFrames[j];
 					if (bUnfunny) {
-						/*uint64_t tVal = 0;
-						for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
-							tVal |= (sAAFrames[j] & (31ULL << iLeftStart)) << iShifted;
-						}
-						sAAFrames[j] = tVal;*/
 						kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 					}
 
+					for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
+						vCountGarbagekMerPerK[garbageRangeCalc + kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
+					}
 
-					//cout << kMerToAminoacid(sAAFrames[j], 12) << endl;uint64_t start = 0, range = 0;
-					//uint64_t start = 0;
-					//uint32_t range = 0;
-					//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
-					//if (start != numeric_limits<uint64_t>::max()) {
-
-						for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
-							vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
-						}
-						
-						resultsVec.emplace_back(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID));
-
-						++iCurrentkMerCounter;
-					//}
+					get<1>(resultsVec[iPositionForOut]) = kmerForSearchInTrie;
+					get<3>(resultsVec[iPositionForOut]) = static_cast<uint32_t>(iID);
+					++iPositionForOut;
 				}
 
 				ikMerCounter += iNumFrames;
@@ -85,8 +86,6 @@ namespace kASA {
 					// To map the 2 onto 1, ! is applied twice
 					const int32_t& iMaxRangeMod3 = iMaxRange % 3;
 					const int32_t& iMaxRangeMod3Neg = !(!iMaxRangeMod3);
-					//const int64_t& iSkipkMers = 10;
-					//int64_t iCurrentSkipCounter = 1;
 
 					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; j++) {
 						for (int32_t k = 0; k < 3; ++k) {
@@ -94,37 +93,20 @@ namespace kASA {
 							dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
 							sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
 
-							//cout << kMerToAminoacid(sAAFrames[k], 12) << endl;
-							//if (iCurrentSkipCounter == iSkipkMers) {
-								auto kmerForSearchInTrie = sAAFrames[k];
-								if (bUnfunny) {
-									/*uint64_t tVal = 0;
-									for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
-										tVal |= (sAAFrames[k] & (31ULL << iLeftStart)) << iShifted;
-									}
-									sAAFrames[k] = tVal;*/
-									kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
-								}
+							auto kmerForSearchInTrie = sAAFrames[k];
+							if (bUnfunny) {
+								kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
+							}
 
-								//uint64_t start = 0;
-								//uint32_t range = 0;
-								//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
-								//if (start != numeric_limits<uint64_t>::max()) {
+							for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
+								vCountGarbagekMerPerK[garbageRangeCalc + kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
+							}
 
-								for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
-									vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
-								}
-
-								resultsVec.emplace_back(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID));
-								++iCurrentkMerCounter;
-								//}
-							//}
+							get<1>(resultsVec[iPositionForOut]) = kmerForSearchInTrie;
+							get<3>(resultsVec[iPositionForOut]) = static_cast<uint32_t>(iID);
+							++iPositionForOut;
 						}
-						//if (iCurrentSkipCounter == iSkipkMers) {
-							ikMerCounter += 3;
-						//	iCurrentSkipCounter = 0;
-						//}
-						//++iCurrentSkipCounter;
+						ikMerCounter += 3;
 					}
 
 					// compute frames of said tail
@@ -133,76 +115,39 @@ namespace kASA {
 						dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
 						sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
 
-						//cout << kMerToAminoacid(sAAFrames[j], 12) << endl;
 						auto kmerForSearchInTrie = sAAFrames[j];
 						if (bUnfunny) {
-							/*uint64_t tVal = 0;
-							for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
-								tVal |= (sAAFrames[j] & (31ULL << iLeftStart)) << iShifted;
-							}
-							sAAFrames[j] = tVal;*/
 							kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 						}
 
-						//uint64_t start = 0;
-						//uint32_t range = 0;
-						//T.GetIndexRange(kmerForSearchInTrie >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
-						//if (start != numeric_limits<uint64_t>::max()) {
+						for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
+							vCountGarbagekMerPerK[garbageRangeCalc + kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
+						}
 
-							for (int32_t kVal = 12 - _iMaxK; kVal < _iMaxK - _iMinK; ++kVal) {
-								vCountGarbagekMerPerK[kVal] += (kmerForSearchInTrie & _tails[kVal]) == _tails[kVal];
-							}
-
-							resultsVec.emplace_back(0, kmerForSearchInTrie, 0, static_cast<uint32_t>(iID));
-							++iCurrentkMerCounter;
-						//}
+						get<1>(resultsVec[iPositionForOut]) = kmerForSearchInTrie;
+						get<3>(resultsVec[iPositionForOut]) = static_cast<uint32_t>(iID);
+						++iPositionForOut;
 					}
 				}
 			}
 		}
 
-		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const Trie&, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec, int64_t& iCurrentkMerCounter) {
-			const size_t& iLengthOfSequence = sProteinSequence.size();
-			const int32_t& iMaxRange = int32_t(iLengthOfSequence - _iHighestK + 1);
-			if (iMaxRange > 0) {
-				//resultsVec[iProcIt].resize(iSizeOfResultsBefore + iCurrentkMerCounter + iMaxRange);
-				for (; iCurrentkMerCounter < iMaxRange; ++iCurrentkMerCounter) {
-					//resultsVec[iProcIt][iSizeOfResultsBefore + iCurrentkMerCounter] = make_tuple(aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12), iReadID);
-
-					auto kMer = aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12);
-					
-					if (bUnfunny) {
-						kMer = aminoAcidsToAminoAcid(kMer);;
-					}
-					
-					//uint64_t start = 0;
-					//uint32_t range = 0;
-					//T.GetIndexRange(kMer >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
-					//if (start != numeric_limits<uint64_t>::max()) {
-						resultsVec.push_back(make_tuple(0, kMer, 0, iReadID));
-					//}
-				}
-			}
-		}
-
-		inline uint64_t convertLinesTokMers_(const int32_t& iActualLines, const vector<pair<string, readIDType>>& vLines, const vector<pair<string, readIDType>>& vRCLines, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& kMerVecOut, const Trie& T, const bool&, vector<uint64_t>& vCountGarbagekMerPerK) {
+		/////////////////////////////////
+		inline void convertLinesTokMers_new(const size_t& start, const size_t& end, uint64_t iPositionForOut, const vector<tuple<string, readIDType, int32_t>>& vLines, const vector<tuple<string, readIDType, int32_t>>& vRCLines, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& kMerVecOut, const int32_t& iThreadID, unique_ptr<uint64_t[]>& vCountGarbagekMerPerK) {
 
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
-			int64_t iNumOfkMers = 0;
 
-			for (int64_t i = 0; i < iActualLines; ++i) {
-				if (vLines[i].first != "" || vRCLines[i].first != "") {
+			for (uint64_t i = start; i < end; ++i) {
+				if (get<0>(vLines[i]) != "" || get<0>(vRCLines[i]) != "") {
 					if (_bInputAreAAs) {
-						convert_alreadyTranslatedTokMers(vLines[i].first, vLines[i].second, T, kMerVecOut, iNumOfkMers);
+						convert_alreadyTranslatedTokMers(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, kMerVecOut);
 					}
 					else {
-						convert_dnaTokMer(vLines[i].first, vLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
-						convert_dnaTokMer(vRCLines[i].first, vRCLines[i].second, iMaxKTimes3, T, kMerVecOut, iNumOfkMers, vCountGarbagekMerPerK);
+						convert_dnaTokMer(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut, iThreadID, vCountGarbagekMerPerK);
+						convert_dnaTokMer(get<0>(vRCLines[i]), get<1>(vRCLines[i]), get<2>(vRCLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut, iThreadID, vCountGarbagekMerPerK);
 					}
 				}
 			}
-
-			return iNumOfkMers;
 		}
 
 
@@ -213,7 +158,7 @@ namespace kASA {
 			size_t lengthOfDNA = 0;
 			bool finished = true, addTail = false, bNewRead = true;
 			uint8_t iExpectedInput = 0;
-			pair<string, readIDType> lastLine;
+			string lastLine;
 			//list<readIDType> vReadIDs;
 			//readIDType iCurrentReadID = 0;
 			//unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
@@ -223,11 +168,20 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fastq as input for comparison
 		template<typename T>
-		inline uint64_t readFastq_partialSort(T& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr, vector<uint64_t>& vCountGarbagekMerPerK) {
+		inline uint64_t readFastq_partialSort(T& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, vector<WorkerThread>& threadPool, vector<uint64_t>& vCountGarbagekMerPerK) {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
 				readIDType iLocalReadID = 0;
+
+				auto calculatekMerCount = [&,this](const string& str) {
+					if (_bInputAreAAs) {
+						return static_cast<int32_t>(str.length() - _iHighestK + 1);
+					}
+					else {
+						return static_cast<int32_t>(str.length() - 3*_iHighestK + 1);
+					}
+				};
 
 				string sFalsekMerMarker = "";
 				if (_bInputAreAAs) {
@@ -240,214 +194,272 @@ namespace kASA {
 						sFalsekMerMarker += "X";
 					}
 				}
+
 				////////////////////////////////////////////////////////
 				uint8_t iExpectedInput = transfer->iExpectedInput; // 0 = name, 1 = sequence, 2 = + or quality
 				string sName = transfer->name, sDNA = "", sOverhang = transfer->overhang;
 				size_t iDNALength = transfer->lengthOfDNA, iQualityLength = 0;
 				bool bNewRead = transfer->bNewRead, bAddTail = transfer->addTail;
 
-				size_t iLinesPerRun = 2;
-				int32_t iProcID = 0;
+				vector<tuple<string, readIDType, int32_t>> vLines, vRCLines;
+				if (transfer->lastLine != "") {
+					auto lastLineKmerSize = calculatekMerCount(transfer->lastLine);
+					vLines.emplace_back(transfer->lastLine, 0ul, lastLineKmerSize);
+					vRCLines.emplace_back("", 0ul, 0);
 
-				vector<pair<string, readIDType>> vLines(iLinesPerRun), vRCLines(iLinesPerRun);
-				size_t iActualLines = 1;
-				vLines[0] = transfer->lastLine;
-				vLines[0].second = 0;
-				transfer->iNumOfNewReads = 0 + (transfer->addTail);
-				transfer->finished = false;
-
-				while (input && bNotFull) {
-					while (input && iActualLines < iLinesPerRun) {
-						uint64_t iNumOfChars = 0;
-						pair<std::string, bool> resultChunkPair;
-						Utilities::getChunk(input, move(resultChunkPair), move(iNumOfChars));
-
-						if (_bVerbose && iFileLength != 0) {
-							transfer->iNumOfCharsRead += iNumOfChars;
-							transfer->iNumOfAllCharsRead += iNumOfChars;
-							double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
-							if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
-								transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-								cout << "OUT: Progress of current file " << transfer->iCurrentPercentage <<  "%" << endl;
-							}
-							if (iFileLength != overallFilesSize) {
-								dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
-								if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentOverallPercentage) {
-									transfer->iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-									cout << "OUT: Progress of all files " << transfer->iCurrentOverallPercentage << " %" << endl;
-								}
-							}
-						}
-
-						if (resultChunkPair.first.length() == 0) {
-							continue;
-						}
-
-						if (resultChunkPair.first.front() == '+' && iExpectedInput != 2) {
-							if (!resultChunkPair.second) {
-								input.ignore(numeric_limits<streamsize>::max(), '\n'); // discard the rest of the +
-							}
-							iExpectedInput = 2;
-							continue;
-						}
-
-						const uint8_t& iCurrentExpInput = iExpectedInput;
-						switch (iCurrentExpInput) {
-
-						case 0:
-							sName = Utilities::lstrip(resultChunkPair.first, '@');
-							if (!resultChunkPair.second) {
-								input.ignore(numeric_limits<streamsize>::max(), '\n'); // discard the rest of the name
-							}
-							bNewRead = true;
-							sOverhang = "";
-							iDNALength = 0;
-							iQualityLength = 0;
-
-							//vReadNameAndLength.reserve(vReadNameAndLength.capacity() + 1);
-
-							if (bReadIDsAreInteresting) {
-								//transfer->vReadIDs.push_back(transfer->iCurrentReadID);
-								//transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
-								transfer->iNumOfNewReads++;
-								iSoftMaxSize -= iAmountOfSpecies * sizeof(float);// + sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
-							}
-							
-							//cout << iSoftMaxSize << endl;
-
-							iExpectedInput = 1;
-							break;
-
-						case 1:
-							for (char& c : resultChunkPair.first) {
-								if (c == '\t' || c == ' ') {
-									throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:\n" + sName);
-								}
-								else {
-									if (_bInputAreAAs) {
-										if (c == '*') {
-											c = '[';
-										}
-									}
-									else {
-										if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
-											c = 'Z';
-										}
-									}
-								}
-							}
-
-							sDNA = sOverhang + resultChunkPair.first;
-							iDNALength += resultChunkPair.first.length();
-							if (_bInputAreAAs) {
-								if (sDNA.length() < size_t(_iHighestK)) {
-									sOverhang = sDNA;
-								}
-								else {
-									sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
-								}
-							}
-							else {
-								if (sDNA.length() < size_t(_iHighestK) * 3) {
-									sOverhang = sDNA;
-								}
-								else {
-									sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK * 3);
-								}
-							}
-
-							if (bNewRead) {
-								bNewRead = false;
-								if (!_bInputAreAAs) {
-									string tempDNA = reverseComplement(sDNA);
-									while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-										tempDNA += 'X';
-									}
-									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, transfer->iCurrentReadID) : make_pair(tempDNA + sFalsekMerMarker, transfer->iCurrentReadID);
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, iLocalReadID) : make_pair(tempDNA + sFalsekMerMarker, iLocalReadID);
-								}
-							}
-							else {
-								if (!_bInputAreAAs) {
-									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), transfer->iCurrentReadID) : make_pair(reverseComplement(sDNA), transfer->iCurrentReadID);
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), iLocalReadID) : make_pair(reverseComplement(sDNA), iLocalReadID);
-								}
-							}
-
-							//vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, transfer->iCurrentReadID) : make_pair(sDNA, transfer->iCurrentReadID);
-							vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, iLocalReadID) : make_pair(sDNA, iLocalReadID);
-							++iActualLines;
-
-							bAddTail = true;
-
-							break;
-
-						case 2:
-							if (bAddTail) {
-								// Pad very small reads
-								if (_bInputAreAAs) {
-									while (vLines[iActualLines - 1].first.length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-										vLines[iActualLines - 1].first += '^';
-									}
-								}
-								else {
-									while (vLines[iActualLines - 1].first.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-										vLines[iActualLines - 1].first += 'X';
-									}
-								}
-
-								vLines[iActualLines - 1] = (bSpaced) ? vLines[iActualLines - 1] : make_pair(vLines[iActualLines - 1].first + sFalsekMerMarker, vLines[iActualLines - 1].second); // add false marker
-								if (bReadIDsAreInteresting) {
-									//++(transfer->iCurrentReadID);
-									++iLocalReadID;
-									vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
-									iSoftMaxSize -= sizeof(pair<string,uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
-									transfer->finished = true;
-								}
-								bAddTail = false;
-							}
-
-							iQualityLength += resultChunkPair.first.length();
-
-
-							if (iQualityLength == iDNALength) {
-								iExpectedInput = 0;
-							}
-							else {
-								if (iQualityLength > iDNALength) {
-									throw runtime_error("Quality string length and DNA length don't match. Error occured in:\n" + sName);
-								}
-							}
-
-							break;
-						default:
-							break;
-						}
-					}
-
-					const auto& iNumOfkMers = convertLinesTokMers_(int32_t(iActualLines - 1), vLines, vRCLines, vOut, Tr, bSpaced, vCountGarbagekMerPerK);
-					iSumOfkMers += iNumOfkMers;
-					iProcID = (iProcID + 1) % _iNumOfThreads;
-					//iSoftMaxSize -= iNumOfkMers * (sizeof(pair<uint32_t, uint32_t>) + sizeof(uint64_t));
-					
-					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
-
+					iSumOfkMers += lastLineKmerSize;
+					iSoftMaxSize -= lastLineKmerSize * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 					if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
-
-
-					vLines[0] = vLines[iActualLines - 1];
-					iActualLines = 1;
 				}
+				transfer->iNumOfNewReads = 0 + (transfer->addTail);
+				transfer->finished = false;
+				char bufferArrayForInput[10000]; //100000
+
+				while (input && bNotFull) {
+					uint64_t iNumOfChars = 0;
+					pair<std::string, bool> resultChunkPair;
+					Utilities::getChunk(input, move(resultChunkPair), bufferArrayForInput, move(iNumOfChars));
+
+					if (_bVerbose && iFileLength != 0) {
+						transfer->iNumOfCharsRead += iNumOfChars;
+						transfer->iNumOfAllCharsRead += iNumOfChars;
+						double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
+						if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
+							transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+							cout << "OUT: Progress of current file " << transfer->iCurrentPercentage << "%" << endl;
+						}
+						if (iFileLength != overallFilesSize) {
+							dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
+							if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentOverallPercentage) {
+								transfer->iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+								cout << "OUT: Progress of all files " << transfer->iCurrentOverallPercentage << " %" << endl;
+							}
+						}
+					}
+
+					if (resultChunkPair.first.length() == 0) {
+						continue;
+					}
+
+					if (resultChunkPair.first.front() == '+' && iExpectedInput != 2) {
+						if (!resultChunkPair.second) {
+							input.ignore(numeric_limits<streamsize>::max(), '\n'); // discard the rest of the +
+						}
+						iExpectedInput = 2;
+						continue;
+					}
+
+					const uint8_t iCurrentExpInput = iExpectedInput;
+					switch (iCurrentExpInput) {
+
+					case 0:
+						sName = Utilities::lstrip(resultChunkPair.first, '@');
+						if (!resultChunkPair.second) {
+							input.ignore(numeric_limits<streamsize>::max(), '\n'); // discard the rest of the name
+						}
+						bNewRead = true;
+						sOverhang = "";
+						iDNALength = 0;
+						iQualityLength = 0;
+
+						//vReadNameAndLength.reserve(vReadNameAndLength.capacity() + 1);
+
+						if (bReadIDsAreInteresting) {
+							//transfer->vReadIDs.push_back(transfer->iCurrentReadID);
+							//transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
+							transfer->iNumOfNewReads++;
+							iSoftMaxSize -= iAmountOfSpecies * sizeof(float);// + sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
+						}
+
+						//cout << iSoftMaxSize << endl;
+
+						iExpectedInput = 1;
+						break;
+
+					case 1:
+
+						for (char& c : resultChunkPair.first) {
+							if (c == '\t' || c == ' ') {
+								throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:\n" + sName);
+							}
+							else {
+								if (_bInputAreAAs) {
+									if (c == '*') {
+										c = '[';
+									}
+								}
+								else {
+									if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
+										c = 'Z';
+									}
+								}
+							}
+						}
+
+						sDNA = sOverhang + resultChunkPair.first;
+						iDNALength += resultChunkPair.first.length();
+						if (_bInputAreAAs) {
+							if (sDNA.length() < size_t(_iHighestK)) {
+								sOverhang = sDNA;
+							}
+							else {
+								sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
+							}
+						}
+						else {
+							if (sDNA.length() < size_t(_iHighestK) * 3) {
+								sOverhang = sDNA;
+							}
+							else {
+								sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK * 3);
+							}
+						}
+
+						if (bNewRead) {
+							bNewRead = false;
+							if (!_bInputAreAAs) {
+								string tempDNA = reverseComplement(sDNA);
+								while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+									tempDNA += 'X';
+								}
+								tempDNA += sFalsekMerMarker;
+								vRCLines.emplace_back(tempDNA, iLocalReadID, calculatekMerCount(tempDNA));
+							}
+						}
+						else {
+							if (!_bInputAreAAs) {
+								const auto& rc = reverseComplement(sDNA);
+								vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
+							}
+						}
+
+						vLines.emplace_back(sDNA, iLocalReadID, calculatekMerCount(sDNA));
+
+						bAddTail = true;
+
+						break;
+
+					case 2:
+						if (bAddTail) {
+							// Pad very small reads
+							if (_bInputAreAAs) {
+								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+									get<0>(vLines.back()) += '^';
+								}
+							}
+							else {
+								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+									get<0>(vLines.back()) += 'X';
+								}
+							}
+							
+							get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+							get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+
+							iSumOfkMers += sFalsekMerMarker.size();
+							iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+
+							if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+								bNotFull = false;
+							}
+
+							if (bReadIDsAreInteresting) {
+								//++(transfer->iCurrentReadID);
+								++iLocalReadID;
+								vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
+								iSoftMaxSize -= sizeof(pair<string, uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
+								transfer->finished = true;
+							}
+							bAddTail = false;
+						}
+
+						iQualityLength += resultChunkPair.first.length();
+
+
+						if (iQualityLength == iDNALength) {
+							iExpectedInput = 0;
+						}
+						else {
+							if (iQualityLength > iDNALength) {
+								throw runtime_error("Quality string length and DNA length don't match. Error occured in:\n" + sName);
+							}
+						}
+						// read completely parsed
+
+						break;
+					default:
+						break;
+					}
+
+					if (bAddTail) {
+						const auto& kMersForward = (vLines.size()) ? get<2>(vLines.back()) : 0;
+						const auto& kMersBackwards = (vRCLines.size()) ? get<2>(vRCLines.back()) : 0;
+						const auto& iNumOfkMers = kMersForward + kMersBackwards;
+						iSumOfkMers += iNumOfkMers;
+
+						iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+
+						if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+							bNotFull = false;
+						}
+					}
+				}
+
+				// convert it in parallel
+				//auto startTIME = std::chrono::high_resolution_clock::now();
+				try {
+					vOut.resize(iSumOfkMers);
+				}
+				catch (const bad_alloc&) {
+					cerr << "ERROR: Not enough memory available. Please try again with a lower number after - m" << endl;
+					throw;
+				}
+				const auto& chunkSize = iSumOfkMers / _iNumOfThreads;
+				size_t start = 0;
+				uint64_t iCurrentkMerCount = 0, iTotalkMerCount = 0;
+				int32_t iProcID = 0;
+				unique_ptr<uint64_t[]> garbagekMersArray(new uint64_t[_iNumOfK*_iNumOfThreads]);
+				memset(garbagekMersArray.get(), 0, _iNumOfK*_iNumOfThreads * sizeof(uint64_t));
+
+				for (size_t iLineIdx = 0; iLineIdx < vLines.size(); ++iLineIdx) {
+					if (iCurrentkMerCount >= chunkSize) {
+						//call function with start, iLineIdx, iTotalkMerCount
+						auto task = [&, start, iLineIdx, iTotalkMerCount, this](const int32_t& iTid) { convertLinesTokMers_new(start, iLineIdx, iTotalkMerCount, ref(vLines), ref(vRCLines), ref(vOut), iTid, garbagekMersArray); };
+						threadPool[iProcID].pushTask(task);
+						start = iLineIdx;
+						iTotalkMerCount += iCurrentkMerCount;
+						iCurrentkMerCount = 0;
+						iProcID = (iProcID + 1) % _iNumOfThreads;
+					}
+					iCurrentkMerCount += get<2>(vLines[iLineIdx]) + get<2>(vRCLines[iLineIdx]);
+				}
+				// call function with start, vLines.size(), iTotalkMerCount
+				auto task = [&, start, iTotalkMerCount, this](const int32_t& iTid) { convertLinesTokMers_new(start, vLines.size(), iTotalkMerCount, ref(vLines), ref(vRCLines), ref(vOut), iTid, garbagekMersArray); };
+				threadPool[iProcID].pushTask(task);
+
+				// start Threads, join threads
+				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+					threadPool[iThreadID].startThread();
+				}
+				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+					threadPool[iThreadID].waitUntilFinished();
+				}
+
+				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+					for (int32_t ik = 0; ik < _iNumOfK; ++ik) {
+						vCountGarbagekMerPerK[ik] += garbagekMersArray[iThreadID*_iNumOfK + ik];
+					}
+				}
+				//auto endTIME = std::chrono::high_resolution_clock::now();
+				//cout << "Convert " << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
+
 				if (!input) {
-					vRCLines[0] = make_pair("", 0);
-					iSumOfkMers += convertLinesTokMers_(1, vLines, vRCLines, vOut, Tr, bSpaced, vCountGarbagekMerPerK);
 					transfer->addTail = false; //signal that all is done
-					transfer->lastLine = vLines[0];
 				}
 				else {
-					transfer->lastLine = vLines[0];
+					transfer->lastLine = get<0>(vLines.back());
 					transfer->addTail = bAddTail;
 					transfer->bNewRead = bNewRead;
 					transfer->iExpectedInput = iExpectedInput;
@@ -467,15 +479,20 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta as input for comparison, no parallelization possible due to the unknown length of a contig/genome
 		template<typename T>
-		inline uint64_t readFasta_partialSort(T& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const bool& bSpaced, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, const Trie& Tr, vector<uint64_t>& vCountGarbagekMerPerK) {
+		inline uint64_t readFasta_partialSort(T& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, unique_ptr<strTransfer>& transfer, vector<WorkerThread>& threadPool, vector<uint64_t>& vCountGarbagekMerPerK) {
 			uint64_t iSumOfkMers = 0;
 			try {
 				bool bNotFull = true;
 				readIDType iLocalReadID = 0;
 
-				/*for (int16_t i = 0; i < _iNumOfThreads; ++i) {
-					vOut[i].reserve(static_cast<size_t>((iSoftMaxSize*1.1)/(sizeof(tuple<uint64_t, readIDType>) * (_iNumOfThreads))));
-				}*/
+				auto calculatekMerCount = [&, this](const string& str) {
+					if (_bInputAreAAs) {
+						return static_cast<int32_t>(str.length() - _iHighestK + 1);
+					}
+					else {
+						return static_cast<int32_t>(str.length() - 3 * _iHighestK + 1);
+					}
+				};
 
 				string sFalsekMerMarker = "";
 				if (_bInputAreAAs) {
@@ -495,204 +512,215 @@ namespace kASA {
 				bool bNewRead = transfer->bNewRead, bAddTail = transfer->addTail;
 
 
+				vector<tuple<string, readIDType, int32_t>> vLines, vRCLines;
+				if (transfer->lastLine != "") {
+					auto lastLineKmerSize = calculatekMerCount(transfer->lastLine);
+					vLines.emplace_back(transfer->lastLine, 0ul, lastLineKmerSize);
+					vRCLines.emplace_back("", 0ul, 0);
 
-				size_t iLinesPerRun = 2;//2;
-
-				vector<pair<string, readIDType>> vLines(iLinesPerRun), vRCLines(iLinesPerRun);
-				size_t iActualLines = 1;
-				vLines[0] = transfer->lastLine;
-				vLines[0].second = 0;
-				transfer->iNumOfNewReads = 0 + (transfer->addTail);
-				transfer->finished = false;
-
-				while (input && bNotFull) {
-					while (input && iActualLines < iLinesPerRun) {
-						uint64_t iNumOfChars = 0;
-						pair<std::string, bool> resultChunkPair;
-						Utilities::getChunk(input, move(resultChunkPair), move(iNumOfChars));
-
-						if (_bVerbose && iFileLength != 0) {
-							transfer->iNumOfCharsRead += iNumOfChars;
-							transfer->iNumOfAllCharsRead += iNumOfChars;
-							double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
-							if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
-								transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-								cout << "OUT: Progress of current file " << transfer->iCurrentPercentage << " %" << endl;
-							}
-							if (iFileLength != overallFilesSize) {
-								dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
-								if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentOverallPercentage) {
-									transfer->iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-									cout << "OUT: Progress of all files " << transfer->iCurrentOverallPercentage << " %" << endl;
-								}
-							}
-						}
-
-						if (resultChunkPair.first.length() == 0) {
-							continue;
-						}
-
-						if (resultChunkPair.first.front() == '>') {
-							if (!resultChunkPair.second) {
-								input.ignore(numeric_limits<streamsize>::max(), '\n'); // discard the rest of the name
-							}
-							iExpectedInput = 0;
-						}
-
-						const uint8_t& iCurrentExpInput = iExpectedInput; // In C++17, this can be written inside the switch brackets
-						switch (iCurrentExpInput) {
-
-						case 0:
-							if (bAddTail) {
-								// Pad very small reads
-								if (_bInputAreAAs) {
-									while (vLines[iActualLines - 1].first.length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-										vLines[iActualLines - 1].first += '^';
-									}
-								}
-								else {
-									while (vLines[iActualLines - 1].first.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-										vLines[iActualLines - 1].first += 'X';
-									}
-								}
-								vLines[iActualLines - 1] = (bSpaced) ? vLines[iActualLines - 1] : make_pair(vLines[iActualLines - 1].first + sFalsekMerMarker, vLines[iActualLines - 1].second); // add false marker
-								if (bReadIDsAreInteresting) {
-									//++(transfer->iCurrentReadID);
-									transfer->finished = true;
-									++iLocalReadID;
-									vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
-									iSoftMaxSize -= sizeof(pair<string, uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
-								}
-								bAddTail = false;
-							}
-
-							sName = Utilities::lstrip(resultChunkPair.first, '>');
-
-							bNewRead = true;
-							sOverhang = "";
-							iDNALength = 0;
-
-							//vReadNameAndLength.reserve(vReadNameAndLength.capacity() + 1);
-							if (bReadIDsAreInteresting) {
-								//transfer->vReadIDs.push_back(transfer->iCurrentReadID);
-								//transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
-								transfer->iNumOfNewReads++;
-								iSoftMaxSize -= iAmountOfSpecies * sizeof(float); //+ sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
-							}
-
-							iExpectedInput = 1;
-							break;
-
-						case 1:
-							for (char& c : resultChunkPair.first) {
-								if (c == '\t' || c == ' ') {
-									throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:" + sName);
-								}
-								else {
-									if (_bInputAreAAs) {
-										if (c == '*') {
-											c = '[';
-										}
-									}
-									else {
-										if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
-											c = 'Z';
-										}
-									}
-								}
-							}
-
-							sDNA = sOverhang + resultChunkPair.first;
-							iDNALength += resultChunkPair.first.length();
-							if (_bInputAreAAs) {
-								if (sDNA.length() < size_t(_iHighestK)) {
-									sOverhang = sDNA;
-								}
-								else {
-									sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
-								}
-							}
-							else {
-								if (sDNA.length() < size_t(_iHighestK) * 3) {
-									sOverhang = sDNA;
-								}
-								else {
-									sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK * 3);
-								}
-							}
-
-							if (bNewRead) {
-								bNewRead = false;
-								if (!_bInputAreAAs) {
-									string tempDNA = reverseComplement(sDNA);
-									while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-										tempDNA += 'X';
-									}
-									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, transfer->iCurrentReadID) : make_pair(tempDNA + sFalsekMerMarker, transfer->iCurrentReadID);
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(tempDNA, iLocalReadID) : make_pair(tempDNA + sFalsekMerMarker, iLocalReadID);
-								}
-							}
-							else {
-								if (!_bInputAreAAs) {
-									//vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), transfer->iCurrentReadID) : make_pair(reverseComplement(sDNA), transfer->iCurrentReadID);
-									vRCLines[iActualLines - 1] = (bSpaced) ? make_pair(reverseComplement(sDNA), iLocalReadID) : make_pair(reverseComplement(sDNA), iLocalReadID);
-								}
-							}
-
-							//vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, transfer->iCurrentReadID) : make_pair(sDNA, transfer->iCurrentReadID);
-							vLines[iActualLines] = (bSpaced) ? make_pair(sDNA, iLocalReadID) : make_pair(sDNA, iLocalReadID);
-							++iActualLines;
-
-							bAddTail = true;
-
-							break;
-						default:
-							break;
-						}
-					}
-
-					const auto& iNumOfkMers = convertLinesTokMers_(int32_t(iActualLines - 1), vLines, vRCLines, vOut, Tr, bSpaced, vCountGarbagekMerPerK);
-					iSumOfkMers += iNumOfkMers;
-					
-					iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
-
-					
+					iSumOfkMers += lastLineKmerSize;
+					iSoftMaxSize -= lastLineKmerSize * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 					if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 						bNotFull = false;
 					}
-
-
-					vLines[0] = vLines[iActualLines - 1];
-					iActualLines = 1;
 				}
-				if (!input) {
-					if (bAddTail) {
-						// when finished, convert the last part
+				transfer->iNumOfNewReads = 0 + (transfer->addTail);
+				transfer->finished = false;
 
-						// Pad very small reads
+				char bufferArrayForInput[10000]; //100000
+
+				while (input && bNotFull) {
+					uint64_t iNumOfChars = 0;
+					pair<std::string, bool> resultChunkPair;
+					Utilities::getChunk(input, move(resultChunkPair), bufferArrayForInput, move(iNumOfChars));
+
+					if (_bVerbose && iFileLength != 0) {
+						transfer->iNumOfCharsRead += iNumOfChars;
+						transfer->iNumOfAllCharsRead += iNumOfChars;
+						double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
+						if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
+							transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+							cout << "OUT: Progress of current file " << transfer->iCurrentPercentage << " %" << endl;
+						}
+						if (iFileLength != overallFilesSize) {
+							dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
+							if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentOverallPercentage) {
+								transfer->iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+								cout << "OUT: Progress of all files " << transfer->iCurrentOverallPercentage << " %" << endl;
+							}
+						}
+					}
+
+					if (resultChunkPair.first.length() == 0) {
+						continue;
+					}
+
+					if (resultChunkPair.first.front() == '>') {
+						if (!resultChunkPair.second) {
+							input.ignore(numeric_limits<streamsize>::max(), '\n'); // discard the rest of the name
+						}
+						iExpectedInput = 0;
+					}
+
+					const uint8_t& iCurrentExpInput = iExpectedInput; // In C++17, this can be written inside the switch brackets
+					switch (iCurrentExpInput) {
+
+					case 0:
+						if (bAddTail) {
+							// Pad very small reads
+							if (_bInputAreAAs) {
+								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+									get<0>(vLines.back()) += '^';
+								}
+							}
+							else {
+								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+									get<0>(vLines.back()) += 'X';
+								}
+							}
+
+							get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+							get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+
+							iSumOfkMers += sFalsekMerMarker.size();
+							iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+
+							if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+								bNotFull = false;
+							}
+
+							if (bReadIDsAreInteresting) {
+								//++(transfer->iCurrentReadID);
+								transfer->finished = true;
+								++iLocalReadID;
+								vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
+								iSoftMaxSize -= sizeof(pair<string, uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
+							}
+							bAddTail = false;
+						}
+
+						sName = Utilities::lstrip(resultChunkPair.first, '>');
+
+						bNewRead = true;
+						sOverhang = "";
+						iDNALength = 0;
+
+						//vReadNameAndLength.reserve(vReadNameAndLength.capacity() + 1);
+						if (bReadIDsAreInteresting) {
+							//transfer->vReadIDs.push_back(transfer->iCurrentReadID);
+							//transfer->mReadIDToArrayIdx[transfer->iCurrentReadID] = iLocalReadID;
+							transfer->iNumOfNewReads++;
+							iSoftMaxSize -= iAmountOfSpecies * sizeof(float); //+ sizeof(readIDType) + sizeof(pair<readIDType, uint64_t>);
+						}
+
+						iExpectedInput = 1;
+						break;
+
+					case 1:
+						for (char& c : resultChunkPair.first) {
+							if (c == '\t' || c == ' ') {
+								throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:" + sName);
+							}
+							else {
+								if (_bInputAreAAs) {
+									if (c == '*') {
+										c = '[';
+									}
+								}
+								else {
+									if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
+										c = 'Z';
+									}
+								}
+							}
+						}
+
+						sDNA = sOverhang + resultChunkPair.first;
+						iDNALength += resultChunkPair.first.length();
 						if (_bInputAreAAs) {
-							while (vLines[iActualLines - 1].first.length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-								vLines[iActualLines - 1].first += '^';
+							if (sDNA.length() < size_t(_iHighestK)) {
+								sOverhang = sDNA;
+							}
+							else {
+								sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
 							}
 						}
 						else {
-							while (vLines[iActualLines - 1].first.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-								vLines[iActualLines - 1].first += 'X';
+							if (sDNA.length() < size_t(_iHighestK) * 3) {
+								sOverhang = sDNA;
+							}
+							else {
+								sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK * 3);
 							}
 						}
 
-						vLines[iActualLines - 1] = (bSpaced) ? vLines[iActualLines - 1] : make_pair(vLines[iActualLines - 1].first + sFalsekMerMarker, vLines[iActualLines - 1].second);
-						vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));// + sFalsekMerMarker.length())));
-						iSoftMaxSize -= sName.size() * sizeof(char) + sizeof(uint32_t);
-						bAddTail = false;
+						if (bNewRead) {
+							bNewRead = false;
+							if (!_bInputAreAAs) {
+								string tempDNA = reverseComplement(sDNA);
+								while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+									tempDNA += 'X';
+								}
+								tempDNA += sFalsekMerMarker;
+								vRCLines.emplace_back(tempDNA, iLocalReadID, calculatekMerCount(tempDNA));
+							}
+						}
+						else {
+							if (!_bInputAreAAs) {
+								const auto& rc = reverseComplement(sDNA);
+								vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
+							}
+						}
+
+						vLines.emplace_back(sDNA, iLocalReadID, calculatekMerCount(sDNA));
+
+						bAddTail = true;
+
+						break;
+					default:
+						break;
 					}
-					vRCLines[0] = make_pair("", 0);
-					iSumOfkMers += convertLinesTokMers_(1, vLines, vRCLines, vOut, Tr, bSpaced, vCountGarbagekMerPerK);
-					transfer->lastLine = vLines[0];
-					transfer->addTail = bAddTail;
+
+					if (bAddTail) {
+						const auto& kMersForward = (vLines.size()) ? get<2>(vLines.back()) : 0;
+						const auto& kMersBackwards = (vRCLines.size()) ? get<2>(vRCLines.back()) : 0;
+						const auto& iNumOfkMers = kMersForward + kMersBackwards;
+						iSumOfkMers += iNumOfkMers;
+
+						iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+
+
+						if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+							bNotFull = false;
+						}
+					}
+
+				}
+
+				if (!input) {
+					if (_bInputAreAAs) {
+						while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+							get<0>(vLines.back()) += '^';
+						}
+					}
+					else {
+						while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+							get<0>(vLines.back()) += 'X';
+						}
+					}
+
+					get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+					get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+					iSumOfkMers += get<2>(vLines.back());
+
+					if (bReadIDsAreInteresting) {
+						transfer->finished = true;
+						vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));
+					}
+					transfer->addTail = false;
 				}
 				else {
-					transfer->lastLine = vLines[0];
+					transfer->lastLine = get<0>(vLines.back());
 					transfer->addTail = bAddTail;
 					transfer->bNewRead = bNewRead;
 					transfer->iExpectedInput = iExpectedInput;
@@ -701,6 +729,50 @@ namespace kASA {
 					transfer->overhang = sOverhang;
 				}
 
+				// convert it in parallel
+				try {
+					vOut.resize(iSumOfkMers);
+				}
+				catch (const bad_alloc&) {
+					cerr << "ERROR: Not enough memory available. Please try again with a lower number after - m" << endl;
+					throw;
+				}
+				const auto& chunkSize = iSumOfkMers / _iNumOfThreads;
+				size_t start = 0;
+				uint64_t iCurrentkMerCount = 0, iTotalkMerCount = 0;
+				int32_t iProcID = 0;
+				unique_ptr<uint64_t[]> garbagekMersArray(new uint64_t[_iNumOfK*_iNumOfThreads]);
+				memset(garbagekMersArray.get(), 0, _iNumOfK*_iNumOfThreads * sizeof(uint64_t));
+
+				for (size_t iLineIdx = 0; iLineIdx < vLines.size(); ++iLineIdx) {
+					if (iCurrentkMerCount >= chunkSize) {
+						//call function with start, iLineIdx, iTotalkMerCount
+						auto task = [&, start, iLineIdx, iTotalkMerCount, this](const int32_t& iTid) { convertLinesTokMers_new(start, iLineIdx, iTotalkMerCount, ref(vLines), ref(vRCLines), ref(vOut), iTid, garbagekMersArray); };
+						threadPool[iProcID].pushTask(task);
+						start = iLineIdx;
+						iTotalkMerCount += iCurrentkMerCount;
+						iCurrentkMerCount = 0;
+						iProcID = (iProcID + 1) % _iNumOfThreads;
+					}
+					iCurrentkMerCount += get<2>(vLines[iLineIdx]) + get<2>(vRCLines[iLineIdx]);
+				}
+				// call function with start, vLines.size(), iTotalkMerCount
+				auto task = [&, start, iTotalkMerCount, this](const int32_t& iTid) { convertLinesTokMers_new(start, vLines.size(), iTotalkMerCount, ref(vLines), ref(vRCLines), ref(vOut), iTid, garbagekMersArray); };
+				threadPool[iProcID].pushTask(task);
+
+				// start Threads, join threads
+				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+					threadPool[iThreadID].startThread();
+				}
+				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+					threadPool[iThreadID].waitUntilFinished();
+				}
+
+				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+					for (int32_t ik = 0; ik < _iNumOfK; ++ik) {
+						vCountGarbagekMerPerK[ik] += garbagekMersArray[iThreadID*_iNumOfK + ik];
+					}
+				}
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

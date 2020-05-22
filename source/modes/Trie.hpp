@@ -1,7 +1,7 @@
 /***************************************************************************
 *  Part of kASA: https://github.com/SilvioWeging/kASA
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -9,7 +9,7 @@
 **************************************************************************/
 #pragma once
 
-#include "MetaHeader.h"
+#include "../MetaHeader.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 namespace TrieSnG { // Statics and globals used inside this header
@@ -277,7 +277,7 @@ private:
 public:
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const bool& bShitLoadOfRAM = false, const uint8_t& iPrefixCheckMode = 0) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
+	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const uint8_t& iPrefixCheckMode = 0) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
 		for (uint8_t i = 1; i < iMaxLevel; ++i) {
 			_Bitmask |= 31ULL << (5 * i);
 		}
@@ -301,11 +301,7 @@ public:
 			iSizeOfTrie = 754137931 * sizeof(packedBigPair);
 			break;
 		default:
-			if (bShitLoadOfRAM) {
-				_prefixLookuptable.reset(new packedBigPair[754137931]);
-				fill(_prefixLookuptable.get(), _prefixLookuptable.get() + 754137931, packedBigPair(numeric_limits<uint64_t>::max(), 0)); // 754137930 = 30+30*30+30*30^2+30*30^3+30*30^4+30*30^5 = "]^^^^^" as integer without spaces
-				iSizeOfTrie = 754137931 * sizeof(packedBigPair);
-			} // else: use trie
+			break;
 		};
 	}
 

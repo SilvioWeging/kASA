@@ -1,7 +1,7 @@
 /***************************************************************************
 *  Part of kASA: https://github.com/SilvioWeging/kASA 
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -9,7 +9,8 @@
 **************************************************************************/
 #pragma once
 
-#include "kASA.hpp"
+#include "../kASA.hpp"
+#include "../utils/ParallelQuicksort.hpp"
 
 namespace kASA {
 	class Build {
@@ -24,7 +25,7 @@ namespace kASA {
 
 		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
 
-#if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
+#if __GNUC__ || defined(__llvm__)
 		int32_t _iNumOfThreads_ = 1;
 #endif
 
@@ -55,7 +56,7 @@ namespace kASA {
 			for (uint64_t i = 0; i < iNumOfTaxa * 12; ++i) {
 				arrFrequencies[i] = 0;
 			}
-#if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
+#if __GNUC__ || defined(__llvm__)
 			_iNumOfThreads_ = iNumOfThreads;
 #endif
 		}
@@ -219,8 +220,8 @@ namespace kASA {
 		inline void IntToExtPart() {
 			try {
 
-# if __GNUC__ && !defined(__llvm__)  && defined(_OPENMP)
-				__gnu_parallel::sort(vInternal->begin(), vInternal->end(), __gnu_parallel::balanced_quicksort_tag(_iNumOfThreads_));
+# if __GNUC__ || defined(__llvm__)
+				Utilities::parallelQuicksort(vInternal->begin(), vInternal->end(), less<>{}, _iNumOfThreads_);
 #else
 #if __has_include(<execution>)
 				sort(std::execution::par_unseq, vInternal->begin(), vInternal->end());

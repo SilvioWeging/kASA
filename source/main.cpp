@@ -1,17 +1,19 @@
 /***************************************************************************
 *  Part of kASA: https://github.com/SilvioWeging/kASA
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at
 *  http://www.boost.org/LICENSE_1_0.txt)
 **************************************************************************/
 #include "kASA.hpp"
-#include "Read.hpp"
-#include "Shrink.hpp"
-#include "Compare.hpp"
-#include "Update.hpp"
+#include "modes/Read.hpp"
+#include "modes/Shrink.hpp"
+#include "modes/Compare.hpp"
+#include "modes/Update.hpp"
+
+#include "utils/dToStr.h"
 
 //#include "Unittests.h"
 
@@ -88,7 +90,7 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
---six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+--threshold <float>: Set a minimum relative score so that everything below it will not be included in the output. Default: 0.0.\n\
 ";
 		}
 		else if (m == "update") {
@@ -111,7 +113,7 @@ Optional parameters:\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
---three: Use only three reading frames instead of six. Halves index size. Default: off.\n\
+--six: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 ";
 		}
 		else if (m == "shrink") {
@@ -185,17 +187,9 @@ Optional parameters:\n\
 	}
 }
 
-struct SCompareForSortIDsMAP {
-	bool operator() (const uint64_t& a, const uint64_t& b) const {
-		return a < b;
-	}
-	static uint64_t min_value() { return numeric_limits<uint64_t>::min(); };
-	static uint64_t max_value() { return numeric_limits<uint64_t>::max(); };
-};
-
-
 int main(int argc, char* argv[]) {
 	try {
+
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1";
@@ -204,7 +198,7 @@ int main(int argc, char* argv[]) {
 		kASA::Compare::OutputFormat eOutputFormat = kASA::Compare::OutputFormat::Json;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
 		uint64_t iMemorySizeAvail = 0;
-		float fPercentageOfThrowAway = 0.f;
+		float fPercentageOfThrowAway = 0.f, threshold = 0.f;
 		uint8_t iTrieDepth = 6, iPrefixCheckMode = 0;
 
 		auto timeRightNow = chrono::system_clock::to_time_t(chrono::system_clock::now());
@@ -422,6 +416,9 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "--six") {
 				bSixFrames = true;
 			}
+			else if (sParameter == "--threshold") {
+				threshold = stof(vParameters[++i]);
+			}
 			else {
 				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 			}
@@ -548,7 +545,7 @@ int main(int argc, char* argv[]) {
 
 			kASAObj.format = eOutputFormat;
 			auto start = std::chrono::high_resolution_clock::now();
-			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode);
+			kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode, threshold);
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 #if _WIN32 || _WIN64

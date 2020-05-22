@@ -1,7 +1,7 @@
 /***************************************************************************
 *  Part of kASA: https://github.com/SilvioWeging/kASA
 *
-*  Copyright (C) 2019 Silvio Weging <silvio.weging@gmail.com>
+*  Copyright (C) 2020 Silvio Weging <silvio.weging@gmail.com>
 *
 *  Distributed under the Boost Software License, Version 1.0.
 *  (See accompanying file LICENSE_1_0.txt or copy at
@@ -11,7 +11,7 @@
 
 #include "MetaHeader.h"
 
-#include "Utilities.hpp"
+#include "utils/Utilities.hpp"
 
 
 namespace kASA {
@@ -194,6 +194,8 @@ namespace kASA {
 
 #if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
 			omp_set_num_threads(_iNumOfThreads);
+			omp_set_nested(1);
+			omp_set_dynamic(_iNumOfThreads);
 #endif
 
 			_iMaxK = (iHigherK <= _iHighestK && iHigherK >= iLowerK) ? iHigherK : _iHighestK;

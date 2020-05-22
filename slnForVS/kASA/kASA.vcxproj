@@ -19,16 +19,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\source\Build.hpp" />
-    <ClInclude Include="..\..\source\Compare.hpp" />
     <ClInclude Include="..\..\source\kASA.hpp" />
     <ClInclude Include="..\..\source\MetaHeader.h" />
-    <ClInclude Include="..\..\source\Read.hpp" />
-    <ClInclude Include="..\..\source\Shrink.hpp" />
-    <ClInclude Include="..\..\source\Trie.hpp" />
-    <ClInclude Include="..\..\source\Update.hpp" />
-    <ClInclude Include="..\..\source\Utilities.hpp" />
-    <ClInclude Include="..\..\source\WorkerThread.hpp" />
+    <ClInclude Include="..\..\source\modes\Build.hpp" />
+    <ClInclude Include="..\..\source\modes\Compare.hpp" />
+    <ClInclude Include="..\..\source\modes\Read.hpp" />
+    <ClInclude Include="..\..\source\modes\Shrink.hpp" />
+    <ClInclude Include="..\..\source\modes\Trie.hpp" />
+    <ClInclude Include="..\..\source\modes\Update.hpp" />
+    <ClInclude Include="..\..\source\utils\BitArray.hpp" />
+    <ClInclude Include="..\..\source\utils\dToStr.h" />
+    <ClInclude Include="..\..\source\utils\iToStr.hpp" />
+    <ClInclude Include="..\..\source\utils\ParallelQuicksort.hpp" />
+    <ClInclude Include="..\..\source\utils\Utilities.hpp" />
+    <ClInclude Include="..\..\source\utils\WorkerThread.hpp" />
     <ClInclude Include="..\..\zlib\gzstream.hpp" />
   </ItemGroup>
   <ItemGroup>
