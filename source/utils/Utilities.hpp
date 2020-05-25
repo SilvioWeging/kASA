@@ -281,8 +281,7 @@ namespace Utilities {
 	///////////////////////////////////////////////////////
 
 	inline void createFile(const string& s) {
-		ofstream derp(s);
-		if (!derp) {
+		if (!ofstream(s)) {
 			throw runtime_error("File couldn't be created, maybe a wrong path was used?");
 		}
 	}
