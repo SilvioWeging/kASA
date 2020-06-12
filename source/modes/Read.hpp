@@ -1422,17 +1422,7 @@ namespace kASA {
 					delete libFile;
 
 					remove(fOutFile.c_str());
-					//rename((fOutFile + "_taxOnly").c_str(), fOutFile.c_str());
-					ifstream source(fOutFile + "_taxOnly", ios::binary);
-					ofstream dest(fOutFile, ios::binary);
-
-					istreambuf_iterator<char> begin_source(source);
-					istreambuf_iterator<char> end_source;
-					ostreambuf_iterator<char> begin_dest(dest);
-					copy(begin_source, end_source, begin_dest);
-
-					source.close();
-					dest.close();
+					Utilities::copyFile(fOutFile + "_taxOnly", fOutFile);
 				}
 
 				ofstream outFile(fOutFile + "_f.txt");

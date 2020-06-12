@@ -98,17 +98,7 @@ namespace kASA {
 				}
 				if (bOverwrite) {
 					remove(sLibFile.c_str());
-					//rename(sTempFile.c_str(), fOutfile.c_str());
-					ifstream source(sTempFile, ios::binary);
-					ofstream dest(fOutfile, ios::binary);
-
-					istreambuf_iterator<char> begin_source(source);
-					istreambuf_iterator<char> end_source;
-					ostreambuf_iterator<char> begin_dest(dest);
-					copy(begin_source, end_source, begin_dest);
-
-					source.close();
-					dest.close();
+					Utilities::copyFile(sTempFile, fOutfile);
 				}
 
 
@@ -295,17 +285,7 @@ namespace kASA {
 				// "overwrite" old index
 				if (bOverwrite) {
 					remove(sLibFile.c_str());
-					//rename(sTempFile.c_str(), fOutFile.c_str());
-					ifstream source(sTempFile, ios::binary);
-					ofstream dest(fOutFile, ios::binary);
-
-					istreambuf_iterator<char> begin_source(source);
-					istreambuf_iterator<char> end_source;
-					ostreambuf_iterator<char> begin_dest(dest);
-					copy(begin_source, end_source, begin_dest);
-
-					source.close();
-					dest.close();
+					Utilities::copyFile(sTempFile, fOutFile);
 				}
 				
 			}

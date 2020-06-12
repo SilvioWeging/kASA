@@ -58,6 +58,7 @@ using namespace std;
 // Check windows
 #if _WIN32 || _WIN64
 #include <stxxl/bits/io/wincall_file.h>
+#include <Windows.h>
 	#if __has_include(<filesystem>)
 		#include <filesystem>
 	#else
@@ -134,6 +135,7 @@ struct packedBigPairTrie {
 
 // Check GCC or Clang
 #if __GNUC__ || __clang__
+#include <unistd.h>
 #include <stxxl/bits/io/syscall_file.h>
 #include <dirent.h>
 #include <gzstream.hpp>

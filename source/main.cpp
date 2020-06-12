@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
 				iNumOfCall = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
 			}
 			else if (sParameter == "-n" || sParameter == "--threads") {
-				iNumOfThreads = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				iNumOfThreads = abs(stoi(Utilities::removeSpaceAndEndline(vParameters[++i])));
 			}
 			else if (sParameter == "-k") {
 				iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
@@ -430,6 +430,27 @@ int main(int argc, char* argv[]) {
 #endif
 		iMemorySizeAvail *= 1024ull * 1024ull;
 
+#if _WIN32 || _WIN64
+		MEMORYSTATUSEX statex;
+		statex.dwLength = sizeof(statex);
+		GlobalMemoryStatusEx(&statex);
+		if (statex.ullTotalPhys < iMemorySizeAvail) {
+			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail/(1024ull*1024ull*1024ull) << "GB RAM is too much for your system (" << statex.ullTotalPhys / (1024ull * 1024ull * 1024ull) <<"GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
+		}
+
+#elif __GNUC__ || __clang__
+		unsigned long long pages = sysconf(_SC_PHYS_PAGES);
+		unsigned long long page_size = sysconf(_SC_PAGE_SIZE);
+		unsigned long long iMaxPhysMemory = pages * page_size;
+
+		if (iMaxPhysMemory < iMemorySizeAvail) {
+			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail / (1024ull * 1024ull * 1024ull) << "GB RAM is too much for your system (" << iMaxPhysMemory / (1024ull * 1024ull * 1024ull) << "GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
+		}
+#endif
+
+		if (thread::hardware_concurrency() < static_cast<uint32_t>(iNumOfThreads)) {
+			cout << "OUT: WARNING! The requested number of " << iNumOfThreads << " threads is too much for your system (" << thread::hardware_concurrency() << " cores available). kASA may crash or slow down to a crawl..." << endl;
+		}
 
 		if (cMode == "build") {
 			kASA::Read kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, bTranslated, sStxxlMode, bUnfunny, bSixFrames);

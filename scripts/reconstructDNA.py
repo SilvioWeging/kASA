@@ -45,6 +45,7 @@ code_16 = {
 }
 
 inputSequence = sys.argv[1]
+scramble = sys.argv[2]
 
 switch = 0
 aaSequences = ["","",""]
@@ -55,6 +56,9 @@ for i in range(len(inputSequence)):
 		switch = (switch + 1) % 3
 
 print("Frame 1:",aaSequences[0], "Frame 2:",aaSequences[1], "Frame 3:", aaSequences[2])
+if scramble:
+	aaSequences = sorted(aaSequences)
+	print("Frame 1:",aaSequences[0], "Frame 2:",aaSequences[1], "Frame 3:", aaSequences[2])
 
 codeTTPOMinus1 = {
 "F" : ["TTT","TTC"], 
@@ -124,7 +128,7 @@ for i in range(len(aaSequences[0])):
 			found = True
 			break
 	if not found and reconstructedSequence != "":
-		print("error, wrong order!")
+		print("error, wrong order! ", reconstructedSequence)
 		break
 	
 	resultArr = []

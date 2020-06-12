@@ -112,10 +112,10 @@ Run without debugging.
 
 ## TL;DR
 ```
-build/kASA build -d <path and name of index file to be build> -i <fasta or folder with fastas> -m <amount of available GB> -n <number of parallel threads> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> <verbose>
+build/kASA build -d <path and name of index file to be build> -i <fasta or folder with fastas> -m <amount of memory in GB you want to use> -n <number of CPUs you want to use> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> <verbose>
 e.g.: [weging@example:/kASA$] build/kASA build -d example/work/index/exampleIndex -i example/work/example.fasta -m 8 -n 2 -f example/taxonomy/acc2Tax/ -y example/taxonomy/ -u species -v
 
-build/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -n <number of parallel threads>
+build/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise output> -m <amount of memory in GB you want to use> -n <number of CPUs you want to use>
 e.g.: [weging@example:/kASA$] build/kASA identify -d example/work/index/exampleIndex -i example/work/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 5 -n 2
 ```
 
@@ -135,8 +135,8 @@ Some parameters which are used by most modes:
 ##### Optional
 * `<mode> --help`: Shows all parameters for a given mode.
 * `-t (--temp) <path>`: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS, [here](https://stxxl.org/tags/1.4.1/install_config.html) are some details. Typically, the path of the executable is used.
-* `-n (--threads) <number>`: Number of parallel threads. Recommendation for different settings (due to I/O bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C\+\+17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.
-* `-m (--memory) <number>`: Amount of RAM in Gigabytes available to kASA. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write "inf" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.
+* `-n (--threads) <number>`: Number of parallel threads. If you are trying to use more than your system supports, a warning will be printed. Recommendation for different settings (due to I/O bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C\+\+17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.
+* `-m (--memory) <number>`: Amount of RAM in Gigabytes kASA will use. If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it prints out a warning and may crash or thrash (slow down). If you write "inf" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.
 * `-x (--callidx) <number>`: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.
 * `-v (--verbose)`: Prints out a little more information e.g. how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.

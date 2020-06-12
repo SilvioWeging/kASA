@@ -287,6 +287,23 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+
+	inline void copyFile(const string& sIn, const string& sOut) {
+		// rename is bugging under linux in that it creates a segmentation fault if the file is on another drive
+		// so we just take this solution from https://stackoverflow.com/users/1054324/peter: https://stackoverflow.com/questions/10195343/copy-a-file-in-a-sane-safe-and-efficient-way
+		ifstream source(sIn, ios::binary);
+		ofstream dest(sOut, ios::binary);
+
+		istreambuf_iterator<char> begin_source(source);
+		istreambuf_iterator<char> end_source;
+		ostreambuf_iterator<char> begin_dest(dest);
+		copy(begin_source, end_source, begin_dest);
+
+		source.close();
+		dest.close();
+	}
+
+	///////////////////////////////////////////////////////
 	inline uint64_t countBits(uint64_t val) {
 		// http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
 		if (val == 0) {

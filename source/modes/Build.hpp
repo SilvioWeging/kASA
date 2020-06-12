@@ -221,7 +221,7 @@ namespace kASA {
 			try {
 
 # if __GNUC__ || defined(__llvm__)
-				Utilities::parallelQuicksort(vInternal->begin(), vInternal->end(), less<packedBigPair>(), _iNumOfThreads_);
+				Utilities::parallelQuicksort(vInternal->begin(), vInternal->end(), less<>{}, _iNumOfThreads_);
 #else
 #if __has_include(<execution>)
 				sort(std::execution::par_unseq, vInternal->begin(), vInternal->end());
@@ -257,6 +257,7 @@ namespace kASA {
 				for (auto it = vInternal->cbegin(); it != vIntEndItC; ++it) {
 					vNCIt << *(it);
 				}
+
 				vNCIt.finish();
 
 				vNC->export_files("_");
@@ -293,12 +294,14 @@ namespace kASA {
 						iSumSize += vVectorSizes[iCurrentIdx];
 						remainingFiles--;
 					}
+
 					// create merge-file
 					Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
 
 					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
 					unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), iSumSize));
 					contentVecType_32p::bufwriter_type vNCIt(*vNC);
+
 					packedBigPair pSeen;
 					uint64_t iSizeOfNewVec = 0;
 					while (!vCurrentIterators.empty()) {
@@ -340,23 +343,10 @@ namespace kASA {
 
 				// move the last temporary file to the given path
 				remove(sOutPath.c_str());
-				//rename((_sTempPath + to_string(_iCounterOfContainers - 1)).c_str(), sOutPath.c_str());
-				// rename is bugging under linux in that it creates a segmentation fault if the file is on another drive
-				// so we just take this solution from https://stackoverflow.com/users/1054324/peter: https://stackoverflow.com/questions/10195343/copy-a-file-in-a-sane-safe-and-efficient-way
-				ifstream source(_sTempPath + to_string(_iCounterOfContainers - 1), ios::binary);
-				ofstream dest(sOutPath, ios::binary);
-
-				istreambuf_iterator<char> begin_source(source);
-				istreambuf_iterator<char> end_source;
-				ostreambuf_iterator<char> begin_dest(dest);
-				copy(begin_source, end_source, begin_dest);
-
-				source.close();
-				dest.close();
-
-
+				Utilities::copyFile(_sTempPath + to_string(_iCounterOfContainers - 1), sOutPath);
 				ofstream fLibInfo(sOutPath + "_info.txt");
 				fLibInfo << vVectorSizes[_iCounterOfContainers - 1];
+
 				return vVectorSizes[_iCounterOfContainers - 1];
 			}
 			catch (...) {
