@@ -428,11 +428,11 @@ inline void dtoa_milo(double value, std::string& s) {
 	char temp[32];
 	char* buffer = temp;
 	// handling NaN and inf
-	if (isnan(value)) {
+	if (std::isnan(value)) {
 		s.append("NaN");
 		return;
 	}
-	if (isinf(value)) {
+	if (std::isinf(value)) {
 		s.append("inf");
 		return;
 	}
