@@ -13,7 +13,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 namespace TrieSnG { // Statics and globals used inside this header
-	const uint8_t _iNumOfAminoAcids = 31; // convenience, better than looking through the list everytime
+	const uint8_t _iNumOfAminoAcids = 32; // convenience, better than looking through the list everytime
 
 	///DEBUG
 	//const uint8_t LISTOFAA[31] = { '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','[','\\', ']', '^' };

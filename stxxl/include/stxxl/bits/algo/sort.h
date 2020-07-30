@@ -136,7 +136,7 @@ create_runs(
         check_sort_settings();
 		// Modified by Silvio Weging
 #if _HAS_CXX17
-		sort(std::execution::par_unseq, make_element_iterator(Blocks1, 0),
+		std::sort(std::execution::par_unseq, make_element_iterator(Blocks1, 0),
 			make_element_iterator(Blocks1, run_size * block_type::size),
 			cmp);
 #else
@@ -183,7 +183,7 @@ create_runs(
     check_sort_settings();
 	// Modified by Silvio Weging
 #if _HAS_CXX17
-	sort(std::execution::par_unseq, make_element_iterator(Blocks1, 0),
+	std::sort(std::execution::par_unseq, make_element_iterator(Blocks1, 0),
 		make_element_iterator(Blocks1, run_size * block_type::size),
 		cmp);
 #else

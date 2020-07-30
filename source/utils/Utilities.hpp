@@ -259,11 +259,184 @@ namespace Utilities {
 
 	///////////////////////////////////////////////////////
 	template<typename T>
+	class FileReader {
+	private:
+		static const size_t _bufferSize = 2048;
+		char _bufferArrayForInput[_bufferSize];
+		char* _startOfBuffer = &_bufferArrayForInput[0];
+		const string _newlineCharacters = "\r\n";
+		size_t _currendPosition = 0, _maxCharsRead = 0;
+		T* _file = nullptr;
+
+		inline bool readFromFile() {
+			if (_currendPosition >= _maxCharsRead) {
+				_file->read(_bufferArrayForInput, _bufferSize);
+				_maxCharsRead = _file->gcount();
+				_currendPosition = 0;
+
+				// Nothing to read, file is either corrupted or at the end
+				if (_maxCharsRead == 0) {
+					if (_file->fail() && !_file->eof()) {
+						_file->clear();
+						string dummyString = "";
+						getline(*_file, dummyString);
+					}
+					else if (_file->eof()) {
+						return false;
+					}
+				}
+				//  Reset state to continue reading characters from buffer
+				if (_maxCharsRead < _bufferSize) {
+					_file->clear();
+					_bufferArrayForInput[_maxCharsRead] = '\n';
+				}
+			}
+
+			return true;
+		}
+
+	public:
+
+		// Standard contructor is sufficient
+
+		inline void setFile(T* input) {
+			_file = input;
+			memset(_bufferArrayForInput, ' ', _bufferSize);
+		}
+
+		inline void ignore(uint64_t& iNumOfChars) {
+			pair<std::string, bool> dummyObject("",false);
+			uint64_t iNumOfDummyChars = 0; 
+			while (!dummyObject.second) {
+				getChunk(dummyObject, iNumOfDummyChars);
+				iNumOfChars += iNumOfDummyChars;
+			}
+		}
+
+		inline bool eof() {
+			return _file->eof();
+		}
+
+		inline void getChunk(pair<std::string, bool>& outPair, uint64_t& iNumOfChars) {
+			iNumOfChars = 0;
+			if (readFromFile()) {
+				auto newlineCharPos = find_first_of(_startOfBuffer + _currendPosition, _startOfBuffer + _bufferSize, _newlineCharacters.cbegin(), _newlineCharacters.cend());
+				if (newlineCharPos != _startOfBuffer + _bufferSize) {
+					if (*newlineCharPos == '\r' && *(newlineCharPos + 1) == '\n') {
+						*newlineCharPos = '\0';
+						newlineCharPos++;
+					}
+					outPair.first.append(_startOfBuffer + _currendPosition, newlineCharPos);
+					iNumOfChars = newlineCharPos - &_bufferArrayForInput[_currendPosition] + 1;
+					_currendPosition = newlineCharPos - _startOfBuffer + 1;
+					outPair.second = true;
+				}
+				else {
+					outPair.first.append(_startOfBuffer + _currendPosition, _startOfBuffer + _bufferSize);
+					iNumOfChars = newlineCharPos - &_bufferArrayForInput[_currendPosition];
+					_currendPosition = _bufferSize;
+					outPair.second = false;
+				}
+			}
+		}
+	};
+
+	///////////////////////////////////////////////////////
+	// Class to simulate 2D Arrays but with contiguous memory and constant element access
+	// DONT USE WITH ANYTHING ELSE THAN BASIC TYPES LIKE int, float, ...
+	template<typename T>
+	class Vector2D {
+	private:
+		vector<T> _vValues;
+		vector<T*> _vPointers;
+
+	public:
+
+		inline void setSize(const size_t& rows, const size_t& cols) {
+			setZero();
+			_vValues.resize(rows * cols);
+			_vPointers.clear();
+			for (size_t i = 0; i < rows; ++i) {
+				_vPointers.push_back(&_vValues[0] + i * cols);
+			}
+		}
+
+		inline void setZero() {
+			memset(&_vValues[0], 0, _vValues.size());
+		}
+
+		inline size_t size() {
+			return _vValues.size();
+		}
+
+		inline T* operator[](const size_t& row) {
+			return _vPointers[row];
+		}
+
+		inline const T* operator[](const size_t& row) const {
+			return _vPointers[row];
+		}
+
+	};
+
+	///////////////////////////////////////////////////////
+	// Write strings to file, which are large enough
+	class BufferedWriter {
+	private:
+		ofstream* _file = nullptr;
+		size_t _iMaxBufferSize = 0;
+		string _sStringToBeWritten = "";
+	
+	public:
+
+		BufferedWriter(ofstream& ofstr, const size_t& bufferSize) {
+			_file = &ofstr;
+			_iMaxBufferSize = bufferSize;
+			_sStringToBeWritten.reserve(bufferSize + bufferSize/1024);
+		}
+
+		~BufferedWriter() {
+			writeToFile();
+		}
+
+		inline void writeToFile() {
+			_file->write(&_sStringToBeWritten[0], _sStringToBeWritten.size());
+			_sStringToBeWritten = "";
+		}
+
+		inline void operator+=(const string& str) {
+			_sStringToBeWritten.append(str);
+			if (_sStringToBeWritten.size() >= _iMaxBufferSize) {
+				writeToFile();
+			}
+		}
+
+		inline void operator+=(const char* const charArr) {
+			_sStringToBeWritten.append(charArr);
+			if (_sStringToBeWritten.size() >= _iMaxBufferSize) {
+				writeToFile();
+			}
+		}
+
+		inline void operator+=(const char& _Ch) {
+			_sStringToBeWritten.push_back(_Ch);
+			if (_sStringToBeWritten.size() >= _iMaxBufferSize) {
+				writeToFile();
+			}
+		}
+
+		inline string& getString() {
+			return _sStringToBeWritten;
+		}
+	};
+
+	///////////////////////////////////////////////////////
+	template<typename T>
 	inline void getChunk(T&& input, pair<std::string, bool>&& outPair, char* buffer, uint64_t&& iNumOfChars = 0) {
-		input.get(buffer, 10000);
+		input.get(buffer, 1000); // .get and .getline are way slower than .read but .read would ignore the newline character. only mmap would be faster albeit more memory intensive
 		iNumOfChars = input.gcount();
 		bool bLineFinished = false;
-		if (iNumOfChars != 9999 && input) {
+		if (iNumOfChars != 999 && input) {
 			bLineFinished = true;
 			input.get();
 		}
@@ -277,6 +450,7 @@ namespace Utilities {
 		outPair.first.append(buffer, buffer + iNumOfChars);
 		outPair.second = bLineFinished;
 	}
+
 
 	///////////////////////////////////////////////////////
 
@@ -393,5 +567,6 @@ namespace Utilities {
 		}
 		return static_cast<T2>(0);
 	}
+
 
 } // namespace

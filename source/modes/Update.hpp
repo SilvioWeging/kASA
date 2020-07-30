@@ -122,6 +122,7 @@ namespace kASA {
 		// Update an existing library with a fasta file
 		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, const string& fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway) {
 			try {
+
 				// test if files exists
 				if (!ifstream(contentFile) || !ifstream(sLibFile)) {
 					throw runtime_error("One of the files does not exist");

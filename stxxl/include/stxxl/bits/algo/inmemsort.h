@@ -48,7 +48,7 @@ void stl_in_memory_sort(ExtIterator first, ExtIterator last, StrictWeakOrdering 
 
 	// Modified by Silvio Weging
 #if _HAS_CXX17
-	sort(std::execution::par_unseq, make_element_iterator(blocks.begin(), first.block_offset()),
+	std::sort(std::execution::par_unseq, make_element_iterator(blocks.begin(), first.block_offset()),
 			make_element_iterator(blocks.begin(), nblocks * block_type::size - last_block_correction),
 			cmp);
 #else

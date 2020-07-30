@@ -47,6 +47,7 @@ if (CMAKE_CXX_COMPILER MATCHES ".*clang[+][+]"
    endif()
 endif()
 
+
 # if gcc or visual studio is used, openmp is not an issue
 if(CMAKE_COMPILER_IS_GNUCXX OR MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")

@@ -45,7 +45,7 @@ You can use the system specific pre-compiled binaries in the `/bin` folder but I
 
 Note, that kASA is a console application so if you want to use these binaries, you must either use a terminal (Linux, macOS, Linux Subsystem for Windows) or PowerShell (Windows). A GUI may be implemented, depending on the amount of requests in the [poll](https://github.com/SilvioWeging/kASA/issues/1). If you're using the PowerShell, don't forget to add ".exe" at the end of each call to kASA: `.\<path to kASA>\kASA.exe`.
 
-If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+11 or if possible C\+\+17 (for `filesystem` and `execution`). We successfully tested it with Visual Studio 2017, GCC version 6.1, LLVM/Clang 9.0 and Apple Clang 9.0. [Here](https://en.cppreference.com/w/cpp/compiler_support) is a table showing if your version is sufficient. On Linux and macOS, cmake is needed as well.
+If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+11 or if possible C\+\+17 (for `filesystem` and `execution`). I successfully tested it with Visual Studio 2017/2019, GCC version 6.1, LLVM/Clang 9.0 and Apple Clang 9.0. [Here](https://en.cppreference.com/w/cpp/compiler_support) is a table showing if your version is sufficient. On Linux and macOS, cmake is needed as well.
 
 kASA depends on the [STXXL](https://stxxl.org/) and [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) but contains all necessary files so you don't need to download those.
 
@@ -96,7 +96,7 @@ and proceed as in the Linux part starting from "Clone ...".
 
 ### Windows
 
-Clone the repository and open the file `slnForVS/kASA.sln` with Visual Studio 17.
+Clone the repository and open the file `slnForVS/kASA.sln` with Visual Studio 2019.
 
 Do [this](https://docs.microsoft.com/en-us/cpp/windows/how-to-use-the-windows-10-sdk-in-a-windows-desktop-application?view=vs-2017) to update to your Windows SDK-Version.
 
@@ -193,7 +193,7 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Currently in BETA.
-* `--six`: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+* `--three`: Use only three reading frames instead of six. Halves index size but implies the usage of `--six` during identification if the orientation of the reads is unknown. Default: off.
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
 e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
@@ -216,7 +216,7 @@ Since kASA uses k-mers, a `k` can be given to influence accuracy. You can set th
 Smaller `k`'s than 6 only make sense if your data is very noisy or you're working on amino acid level.
 If your read length is smaller than ![equation](http://www.sciweavers.org/tex2img.php?eq=%24k_%7Blower%7D%20%5Ccdot%203%24&bc=White&fc=Black&im=png&fs=12&ff=arev&edit=0) on DNA/RNA level, it will be padded. 
 
-If you want to optimise precision over sensitivity, you could use `k 12 12` and/or filter out low scoring reads (e.g. by ignoring everything below 0.5 (Relative Score)).
+If you want to optimise precision over sensitivity, you could use `k 12 12` and/or filter out low scoring reads (e.g. by ignoring everything below 0.4 (Relative Score)).
 
 Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, by default in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
 But because too much information isn't always nice, you can specify how much taxa with different score shall be shown for each read (e.g. `-b 5` shows best 5 hits). 
@@ -249,6 +249,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--tsv`: Sets the output format to a tab separated, per line format.
 * `--kraken`: Sets the output format to a kraken like tsv format.
 * `--threshold <float>:` Set a minimum relative score so that everything below it will not be included in the output. For not-so-noisy data and reads of length 100, we recommend a value of 0.4. Default: 0.0.
+* `--six`: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -322,7 +323,7 @@ If you've created the content file together with the index, this default content
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
  converted via the same alphabet to amino acids. Currently in BETA.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
-* `--six`: Use all six reading frames instead of three. Doubles index size but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+* `--three`: Use only three reading frames instead of six. Default: off.
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>
@@ -404,6 +405,7 @@ This gives you a hint whether you should look at the unique relative frequencies
 - small collection of adapter sequences
 - consideration of paired-end information
 - bzip2 support
+- live streaming of .bcl files
 
 ## License
 

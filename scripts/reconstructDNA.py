@@ -44,19 +44,25 @@ code_16 = {
 "GGT":"P", "GGC":"P", "GGA":"P", "GGG":"P"
 }
 
+code_12 = {
+"GTT":"A","CTA":"A","ATG":"A","GTA":"A","GTC":"A","ATC":"A","ATA":"A","CTT":"B","CTC":"B","GTG":"B","TTA":"B","TTT":"B","CTG":"C","TTC":"C","ATT":"C","TTG":"C","ACC":"D","TCA":"D","ACG":"D","GCA":"D","GCC":"E","TCG":"E","CCG":"E","GCG":"E","CCC":"E","TCC":"F","CCT":"F","TCT":"F","GCT":"F","CCA":"F","ACA":"F","ACT":"F","GAA":"G","GAC":"G","GAT":"G","CAA":"G","AAT":"G","CAT":"G","CAG":"G","AAC":"H","AAG":"H","AAA":"H","GAG":"H","TAC":"H","TAG":"I","CAC":"I","TAA":"I","TAT":"I","CGA":"J","GGC":"J","TGG":"J","GGA":"J","CGG":"K","AGC":"K","TGA":"K","CGC":"K","AGA":"K","AGG":"L","TGT":"L","TGC":"L","CGT":"L","GGT":"L","AGT":"L","GGG":"L"}
+
 inputSequence = sys.argv[1]
-scramble = sys.argv[2]
+scramble = False
+if len(sys.argv) == 3:
+	scramble = sys.argv[2]
 
 switch = 0
 aaSequences = ["","",""]
 
 for i in range(len(inputSequence)):
 	if i + 2 < len(inputSequence):
-		aaSequences[switch] += code[inputSequence[i:i+3]]
+		aaSequences[switch] += code_12[inputSequence[i:i+3]]
 		switch = (switch + 1) % 3
 
 print("Frame 1:",aaSequences[0], "Frame 2:",aaSequences[1], "Frame 3:", aaSequences[2])
 if scramble:
+	print("scramble on")
 	aaSequences = sorted(aaSequences)
 	print("Frame 1:",aaSequences[0], "Frame 2:",aaSequences[1], "Frame 3:", aaSequences[2])
 
@@ -105,27 +111,46 @@ code_16TTPOMinus1 = {
 "P": ["GGT", "GGC", "GGA", "GGG"]
 }
 
+code_12TTPOMinus1 = {
+"A" : ["GTT","CTA","ATG","GTA","GTC","ATC","ATA"],
+"B" : ["CTT","CTC","GTG","TTA","TTT"],
+"C" : ["CTG","TTC","ATT","TTG"],
+"D" : ["ACC","TCA","ACG","GCA"],
+"E" : ["GCC","TCG","CCG","GCG","CCC"],
+"F" : ["TCC","CCT","TCT","GCT","CCA","ACA","ACT"],
+"G" : ["GAA","GAC","GAT","CAA","AAT","CAT","CAG"],
+"H" : ["AAC","AAG","AAA","GAG","TAC"],
+"I" : ["TAG","CAC","TAA","TAT"],
+"J" : ["CGA","GGC","TGG","GGA"],
+"K" : ["CGG","AGC","TGA","CGC","AGA"],
+"L" : ["AGG","TGT","TGC","CGT","GGT","AGT","GGG"]
+}
+
 reconstructedSequence = ""
 resultArr = []
 
 for i in range(len(aaSequences[0])):
 	#print("Iteration: ",i)
-	triplets0 = codeTTPOMinus1[aaSequences[0][i]]
-	triplets1 = codeTTPOMinus1[aaSequences[1][i]] if  i < len(aaSequences[1]) else []
-	triplets2 = codeTTPOMinus1[aaSequences[2][i]] if  i < len(aaSequences[2]) else []
+	triplets0 = code_12TTPOMinus1[aaSequences[0][i]]
+	triplets1 = code_12TTPOMinus1[aaSequences[1][i]] if  i < len(aaSequences[1]) else []
+	triplets2 = code_12TTPOMinus1[aaSequences[2][i]] if  i < len(aaSequences[2]) else []
 	
 	#print(triplets0, triplets1, triplets2, resultArr)
 	
 	found  = False
 	for elem in resultArr:
-		#print(reconstructedSequence, elem, triplets0[0])
-		if elem[3] == triplets0[0][0] and elem[4] == triplets0[0][1]:
-			if reconstructedSequence == "":
-				reconstructedSequence += elem
-			else:
-				#print(elem)
-				reconstructedSequence += elem[2] + elem[3] + elem[4]
-			found = True
+		for entry in triplets0:
+			#print(entry[0],entry[1])
+			if elem[3] == entry[0] and elem[4] == entry[1]:
+				if reconstructedSequence == "":
+					reconstructedSequence += elem
+				else:
+					#print(elem)
+					reconstructedSequence += elem[2] + elem[3] + elem[4]
+				found = True
+				#print(reconstructedSequence, elem, triplets0[0])
+				break
+		if found:
 			break
 	if not found and reconstructedSequence != "":
 		print("error, wrong order! ", reconstructedSequence)
@@ -173,7 +198,7 @@ for elem in resultArr:
 		break
 
 if not found or len(reconstructedSequence) != len(inputSequence): #the latter could be replaced by 3*len(aaSequences[2]) + 2 assuming aaSequences[2] is the shortest amino acid-like sequence
-	print("error, wrong order!")
+	print("error, wrong order!", reconstructedSequence)
 	sys.exit()
 
 print(inputSequence)

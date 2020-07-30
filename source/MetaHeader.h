@@ -35,7 +35,8 @@
 #include <thread>
 #include <mutex>
 
-//#include <emmintrin.h>
+//#include <immintrin.h> // AVX
+
 //#include <omp.h>
 #if _HAS_CXX17
 	#if __has_include(<execution>)

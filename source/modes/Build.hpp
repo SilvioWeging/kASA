@@ -326,7 +326,7 @@ namespace kASA {
 							currentFiles[whichOne].reset();
 							currentFiles.erase(currentFiles.begin() + whichOne);
 							vCurrentIterators.erase(it); 
-							cout << whichOne;
+							//cout << whichOne;
 							//for (size_t i = 0; i < vCurrentIterators.size(); ++i) {
 							//	cout << " " << currentVecs[i]->size() << endl;
 							//}
