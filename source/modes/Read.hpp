@@ -1166,8 +1166,6 @@ namespace kASA {
 					vDivisionArray[i] = (i + 1) * iStep;
 				}*/
 
-
-
 				Utilities::createFile(fOutFile);
 				
 				//stxxlFile* stxxlOutFile = new stxxlFile(fOutFile, stxxl::file::RDWR);
@@ -1179,17 +1177,29 @@ namespace kASA {
 				unordered_map<string, uint32_t> mAccToID;
 				ifstream content(fContentFile);
 				string sDummy = "";
+				bool bTaxIdsAsStrings = false;
 				while (getline(content, sDummy)) {
 					if (sDummy != "") {
 						const auto& line = Utilities::split(sDummy, '\t');
+						if (line.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
 						if (line.size() >= 4) {
-							mIDsAsIdx[stoul(line[1])] = iIdxCounter;
 							mIdxToName[iIdxCounter] = line[0];
-							++iIdxCounter;
 							const auto& vAccessionNumbers = Utilities::split(line[3], ';');
-							for (const auto& acc : vAccessionNumbers) {
-								mAccToID.insert(make_pair(acc, stoul(line[1])));
+							if (bTaxIdsAsStrings) {
+								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
+								for (const auto& acc : vAccessionNumbers) {
+									mAccToID.insert(make_pair(acc, stoul(line[4])));
+								}
 							}
+							else {
+								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+								for (const auto& acc : vAccessionNumbers) {
+									mAccToID.insert(make_pair(acc, stoul(line[1])));
+								}
+							}
+							++iIdxCounter;
 						}
 						else {
 							throw runtime_error("Content file contains less than 4 columns, it may be damaged... The faulty line was: " + sDummy + "\n");
@@ -1197,7 +1207,7 @@ namespace kASA {
 					}
 				}
 
-				Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMem / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
+				Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMem / (sizeof(packedBigPair)), iIdxCounter);
 
 				size_t overallCharsRead = 0;
 				unique_ptr<contentVecType_32p> dummy;
@@ -1278,7 +1288,7 @@ namespace kASA {
 				}
 			}
 			catch (invalid_argument&) {
-				cerr << "ERROR: content file has not the right format. Taxids in the second row are required to be integers!" << endl;
+				cerr << "ERROR: content file doesn't have the right format. If you'd like to use non-numeric taxids, please apply the --taxidasstr flag." << endl;
 				return;
 			}
 			catch (...) {

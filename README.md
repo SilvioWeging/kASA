@@ -145,8 +145,8 @@ Some parameters which are used by most modes:
 ##### Context
 To fully use kASA, you first need a genomic database that you can create by either concatenating some fasta files (containing DNA) into one big file or putting them into a folder. From this data, a so called *content file* is created via the mode `generateCF`. This file contains a mapping of the accession numbers to the corresponding taxonomic IDs and names by using the NCBI taxonomy. Since it's only a text file, you can edit it if you want or just copy one from somewhere else. 
 
-Furthermore, you'll need the NCBI taxonomy files `nodes.dmp` and `names.dmp` from [here](ftp://ftp.ncbi.nih.gov/pub/taxonomy/) contained in one of the `taxdump.*` files. 
-The NCBI taxonomy offers multiple files for a mapping from accession number to taxid (see [here](ftp://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/)) . 
+Furthermore, you'll need the NCBI taxonomy files `nodes.dmp` and `names.dmp` from [here](https://ftp.ncbi.nih.gov/pub/taxonomy/) contained in one of the `taxdump.*` files. 
+The NCBI taxonomy offers multiple files for a mapping from accession number to taxid (see [here](https://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/)) . 
 If you know beforehand which one contains your mappings, just hand this to kASA. If not, please put them in one folder and hand the path to kASA instead. It's not necessary to uncompress them (the `.gz` at the end determines in which mode it'll be read).
 
 Accession numbers in the fasta file(s) should be placed either right after the ">" e.g. ">CP023965.1 Proteus vulgaris" or inside the old format e.g. ">gi|89106884|ref|AC_000091.1| Escherichia coli str. K-12 substr. W3110". Anything else will get a dummy taxid.
@@ -164,7 +164,7 @@ which for example could look like this:
 Proteus vulgaris	585	585	CP023965.1;NZ_NBUT01000031.1
 Hyphomicrobium denitrificans	53399	582899;670307	NC_014313.1;NC_021172.1
 ```
-The taxids are required to be integers and no header line is necessary. This file can be given to `build` via the `-c` parameter.
+No header line is necessary. This file can be given to `build` via the `-c` parameter.
 
 ##### Necessary parameters
 * `-i (--input) <file/folder>`: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.
@@ -172,6 +172,8 @@ The taxids are required to be integers and no header line is necessary. This fil
 * `-f (--acc2tax) <folder or file>`: As mentioned, either the folder containing the translation tables from accession number to taxid or a specific file. Can be gzipped.
 * `-y (--taxonomy)` <folder>: This folder should contain the `nodes.dmp` and the `names.dmp` files.
 * `-c (--content) <file>`: Here, this parameter specifies where the content file should be written to.
+##### Optional paramameters
+* `--taxidasstr`: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.
 ##### Example call 
 ```
 <path to kASA>/kASA generateCF -i <fastaFile(s)> -c <content file> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> (-v )
@@ -192,8 +194,9 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 ##### Optional paramameters
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
-* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Currently in BETA.
+* `-z (--translated)`: Tell kASA, that the input consists of protein sequences.
 * `--three`: Use only three reading frames instead of six. Halves index size but implies the usage of `--six` during identification if the orientation of the reads is unknown. Default: off.
+* `--taxidasstr`: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
 e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
@@ -400,6 +403,7 @@ This gives you a hint whether you should look at the unique relative frequencies
 - ~~Omission of the prefix trie if enough RAM (ca 12GB) is available~~
 - ~~Support of Clang (macOS)~~
 - ~~Snakemake pipeline for quality control~~
+- ~~TaxIDs can now be strings as well~~
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - small collection of adapter sequences

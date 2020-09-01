@@ -30,11 +30,11 @@ namespace kASA {
 #endif
 
 		unique_ptr<uint64_t[]> arrFrequencies;
-		unordered_map<uint32_t, uint32_t> _mContent;
+		//unordered_map<uint32_t, uint32_t> _mContent;
 
 	public:
 
-		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa, const unordered_map<uint32_t, uint32_t>& mContent) : _iSoftSize(iSoftLimit), _mContent(mContent) {
+		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa) : _iSoftSize(iSoftLimit) {
 			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
 			//ofstream derp;
 			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
@@ -354,6 +354,7 @@ namespace kASA {
 			}
 		}
 
-
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// BuildAll can be found in Read.hpp
 	};
 }

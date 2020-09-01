@@ -1553,15 +1553,30 @@ namespace kASA {
 				vector<string> mOrganisms;
 				unordered_map<uint32_t, uint32_t> mTaxToIdx;
 				vector<uint32_t> mIdxToTax;
+				bool bTaxIdsAsStrings = false;
 				mTaxToIdx[0] = 0;
 				mOrganisms.push_back("non_unique");
 				mIdxToTax.push_back(0);
 				while (getline(fContent, sTempLine)) {
 					if (sTempLine != "") {
 						const auto& tempLineContent = Utilities::split(sTempLine, '\t');
-						mOrganisms.push_back(Utilities::removeCharFromString(tempLineContent[0], ','));
-						mIdxToTax.push_back(stoul(tempLineContent[1]));
-						mTaxToIdx[stoul(tempLineContent[1])] = iAmountOfSpecies++;
+						if (tempLineContent.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
+						if (tempLineContent.size() >= 4) {
+							mOrganisms.push_back(Utilities::removeCharFromString(tempLineContent[0], ','));
+							if (bTaxIdsAsStrings) {
+								mIdxToTax.push_back(stoul(tempLineContent[4]));
+								mTaxToIdx[stoul(tempLineContent[4])] = iAmountOfSpecies++;
+							}
+							else {
+								mIdxToTax.push_back(stoul(tempLineContent[1]));
+								mTaxToIdx[stoul(tempLineContent[1])] = iAmountOfSpecies++;
+							}
+						}
+						else {
+							throw runtime_error("Content file contains less than 4 columns, it may be damaged... The faulty line was: " + sTempLine + "\n");
+						}
 					}
 				}
 				fContent.close();

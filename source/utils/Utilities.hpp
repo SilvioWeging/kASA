@@ -120,7 +120,7 @@ namespace Utilities {
 			vector<pair<string, int8_t>> files; // 0: not zipped; 1: gzipped; 2: bzip2'ed
 			size_t overallFileSize = 0;
 #if _WIN32 || _WIN64 
-			if (sPath.back() == '/') {
+			if (sPath.back() == '/' || sPath.back() == '\\') {
 				for (auto& fsPath : filesystem::directory_iterator(sPath)) {
 					const string& fileName = (fsPath.path()).string();
 					
@@ -465,6 +465,7 @@ namespace Utilities {
 	inline void copyFile(const string& sIn, const string& sOut) {
 		// rename is bugging under linux in that it creates a segmentation fault if the file is on another drive
 		// so we just take this solution from https://stackoverflow.com/users/1054324/peter: https://stackoverflow.com/questions/10195343/copy-a-file-in-a-sane-safe-and-efficient-way
+		createFile(sOut);
 		ifstream source(sIn, ios::binary);
 		ofstream dest(sOut, ios::binary);
 

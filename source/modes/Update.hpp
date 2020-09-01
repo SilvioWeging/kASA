@@ -49,13 +49,14 @@ namespace kASA {
 				while (getline(content, sDummy)) {
 					if (sDummy != "") {
 						const auto& cline = Utilities::split(sDummy, '\t');
-						if (cline.size() >= 4)
-						mIDsAsIdx[stoul(cline[1])] = iIdxCounter;
-						mIdxToName[iIdxCounter] = cline[0];
-						++iIdxCounter;
-					}
-					else {
-						throw runtime_error("Content file contains less than 4 columns, it may be damaged...");
+						if (cline.size() >= 4) {
+							mIDsAsIdx[stoul(cline[1])] = iIdxCounter;
+							mIdxToName[iIdxCounter] = cline[0];
+							++iIdxCounter;
+						}
+						else {
+							throw runtime_error("Content file contains less than 4 columns, it may be damaged...");
+						}
 					}
 				}
 
@@ -120,12 +121,16 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Update an existing library with a fasta file
-		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, const string& fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway) {
+		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, string fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway) {
 			try {
 
 				// test if files exists
 				if (!ifstream(contentFile) || !ifstream(sLibFile)) {
 					throw runtime_error("One of the files does not exist");
+				}
+
+				if (bOverwrite) {
+					fOutFile = sLibFile;
 				}
 
 				// read new content file
@@ -135,15 +140,27 @@ namespace kASA {
 				unordered_map<string, uint32_t> mAccToID;
 				ifstream content(contentFile);
 				string sDummy = "";
+				bool bTaxIdsAsStrings = false;
 				while (getline(content, sDummy)) {
 					if (sDummy != "") {
 						const auto& line = Utilities::split(sDummy, '\t');
+						if (line.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
 						if (line.size() >= 4) {
-							mIDsAsIdx[stoul(line[1])] = iIdxCounter;
 							mIdxToName[iIdxCounter] = line[0];
 							const auto& vAccessionNumbers = Utilities::split(line[3], ';');
-							for (const auto& acc : vAccessionNumbers) {
-								mAccToID.insert(make_pair(acc, stoul(line[1])));
+							if (bTaxIdsAsStrings) {
+								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
+								for (const auto& acc : vAccessionNumbers) {
+									mAccToID.insert(make_pair(acc, stoul(line[4])));
+								}
+							}
+							else {
+								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+								for (const auto& acc : vAccessionNumbers) {
+									mAccToID.insert(make_pair(acc, stoul(line[1])));
+								}
 							}
 							++iIdxCounter;
 						}
@@ -178,7 +195,7 @@ namespace kASA {
 					// add kMers from fasta
 					Utilities::createFile(_sTemporaryPath + "_tempUpdate_" + to_string(_iNumOfCall));
 
-					Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMemory / (sizeof(packedBigPair)), iIdxCounter, mIDsAsIdx);
+					Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMemory / (sizeof(packedBigPair)), iIdxCounter);
 
 					size_t overallCharsRead = 0;
 					unique_ptr<contentVecType_32p> dummy;

@@ -315,11 +315,20 @@ namespace kASA {
 				unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
 				ifstream content(sContentFile);
 				string sDummy = "";
+				bool bTaxIdsAsStrings = false;
 				while (getline(content, sDummy)) {
 					if (sDummy != "") {
 						const auto& line = Utilities::split(sDummy, '\t');
-						if (line.size() == 4) {
-							mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+						if (line.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
+						if (line.size() >= 4) {
+							if (bTaxIdsAsStrings) {
+								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
+							}
+							else {
+								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+							}
 							mIdxToName[iIdxCounter] = line[0];
 							++iIdxCounter;
 						}

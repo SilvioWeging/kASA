@@ -430,7 +430,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// C++ version of the python script that creates the content file
-		inline void generateContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sOutput, string sTaxonomicLevel, pair<uint32_t,uint32_t> poolAndNames = make_pair(numeric_limits<uint32_t>::max() - 1,0UL)) {
+		inline void generateContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sOutput, string sTaxonomicLevel, const bool& bTaxIdsAsStrings, pair<uint32_t,uint32_t> poolAndNames = make_pair(numeric_limits<uint32_t>::max() - 1,0UL)) {
 			try {
 				if (sTaxonomicLevel != "lowest") {
 					if (!ifstream(sTaxonomyPath + "names.dmp") || !ifstream(sTaxonomyPath + "nodes.dmp")) {
@@ -438,10 +438,8 @@ namespace kASA {
 					}
 				}
 
-				
 				Utilities::createFile(sOutput);
 				
-
 				auto files = Utilities::gatherFilesFromPath(sInput).first;
 
 				if (_bVerbose) {
@@ -697,6 +695,7 @@ namespace kASA {
 					throw runtime_error("Content file couldn't be opened for writing!");
 				}
 				uint32_t iUnnamedCounter = 0;
+				uint64_t iLineCounter = 1;
 				for (const auto& elem : taxToTaxWAccs) {
 					string taxa = "", accnrs = "";
 					for (const auto& tax : elem.second.first) {
@@ -714,16 +713,16 @@ namespace kASA {
 
 					const auto res = taxToNames.find(elem.first);
 					if (res != taxToNames.end()) {
-						contentFile << Utilities::removeCharFromString(res->second, ',') << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << endl;
+						contentFile << Utilities::removeCharFromString(res->second, ',') << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << ((bTaxIdsAsStrings) ? ("\t" + to_string(iLineCounter++)) : "") << endl;
 					}
 					else {
-						contentFile << "unnamed_" << iUnnamedCounter++ << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << endl;
+						contentFile << "unnamed_" << iUnnamedCounter++ << "\t" << elem.first << "\t" << taxa << "\t" << accnrs << ((bTaxIdsAsStrings) ? ("\t" + to_string(iLineCounter++)) : "") << endl;
 					}
 				}
 
 				iUnnamedCounter = poolAndNames.second;
 				for (const auto& elem : vEntriesWithoutAccNr) {
-					contentFile << "EWAN_" << iUnnamedCounter++ << "\t" << elem.second << "\t" << elem.second << "\t" << elem.first << endl;
+					contentFile << "EWAN_" << iUnnamedCounter++ << "\t" << elem.second << "\t" << elem.second << "\t" << elem.first << ((bTaxIdsAsStrings) ? ("\t" + to_string(iLineCounter++)) : "") << endl;
 				}
 
 			}
@@ -777,15 +776,21 @@ namespace kASA {
 				pair<uint32_t, uint32_t> pool(0, 0);
 
 				ifstream fContent;
+				bool bTaxIdsAsStrings = false;
 				//fContent.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 				fContent.open(contentFile);
 				//uint32_t iAmountOfSpecies = 1;
 				string sTempLine = "";
-				unordered_map<string, tuple<string, string, string>> mOrganisms;
+				unordered_map<string, tuple<string, string, string, string>> mOrganisms;
 				vector<string> vDuplicateDummys;
+				uint64_t iLargestLineIndex = 1;
 				while (getline(fContent, sTempLine)) {
 					if (sTempLine != "") {
 						const auto& tempLineContent = Utilities::split(sTempLine, '\t');
+						if (tempLineContent.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
+						
 						bool bDummy = false;
 						// check for dummys to get the current counter
 						if (tempLineContent[0].find("EWAN") != string::npos) {
@@ -808,11 +813,18 @@ namespace kASA {
 
 								const auto& res = func(tempLineContent[2], get<1>(entry->second), tempLineContent[3], get<2>(entry->second));
 
-								entry->second = make_tuple(get<0>(entry->second), res.first, res.second);
+								entry->second = make_tuple(get<0>(entry->second), res.first, res.second, tempLineContent[4]);
 							}
 						}
 						else {
-							mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3]); // [taxID] -> (Name, species ID, Acc Nrs.) 
+							if (bTaxIdsAsStrings) {
+								const auto& currLineIdx = std::stoull(tempLineContent[4]);
+								iLargestLineIndex = (iLargestLineIndex < currLineIdx) ? currLineIdx : iLargestLineIndex;
+								mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], tempLineContent[4]); // [taxID] -> (Name, species ID, Acc Nrs., lineIdx) 
+							}
+							else {
+								mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], ""); // [taxID] -> (Name, species ID, Acc Nrs.) 
+							}
 						}
 					}
 				}
@@ -821,7 +833,7 @@ namespace kASA {
 				for (const auto& entry : vDuplicateDummys) {
 					const auto& IDStr = to_string(--pool.first);
 					const auto& nameStr = "EWAN_" + to_string(++pool.second);
-					mOrganisms[IDStr] = make_tuple(nameStr, IDStr, entry);
+					mOrganisms[IDStr] = make_tuple(nameStr, IDStr, entry, to_string(iLargestLineIndex++));
 				}
 				if (pool.first == 0) {
 					pool.first = numeric_limits<uint32_t>::max() - 1;
@@ -831,7 +843,7 @@ namespace kASA {
 					cout << "OUT: generating temporary content file..." << endl;
 				}
 
-				generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, _sTemporaryPath + "tempContent.txt", sTaxonomicLevel, pool);
+				generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, _sTemporaryPath + "tempContent.txt", sTaxonomicLevel, bTaxIdsAsStrings, pool);
 
 				if (_bVerbose) {
 					cout << "OUT: merging content files..." << endl;
@@ -848,10 +860,10 @@ namespace kASA {
 						if (entry != mOrganisms.end()) {
 							const auto& res = func(tempLineContent[2], get<1>(entry->second), tempLineContent[3], get<2>(entry->second));
 
-							entry->second = make_tuple(tempLineContent[0], res.first, res.second); // overwrite old name with new one
+							entry->second = make_tuple(tempLineContent[0], res.first, res.second, get<3>(entry->second)); // overwrite old name with new one
 						}
 						else {
-							mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3]); // [taxID] -> (Name, species ID, Acc Nrs.) 
+							mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], to_string(iLargestLineIndex++)); // [taxID] -> (Name, species ID, Acc Nrs.) 
 						}
 					}
 				}
@@ -867,7 +879,7 @@ namespace kASA {
 					throw runtime_error("Content file couldn't be opened for writing!");
 				}
 				for (const auto& entry : mOrganisms) {
-					fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << endl;
+					fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << ((bTaxIdsAsStrings) ? ("\t" + get<3>(entry.second)) : "") << endl;
 				}
 
 				remove((_sTemporaryPath + "tempContent.txt").c_str());
