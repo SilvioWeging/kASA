@@ -13,9 +13,10 @@
 #include "../utils/ParallelQuicksort.hpp"
 
 namespace kASA {
+	template<class vecType, class elemType>
 	class Build {
 	private:
-		unique_ptr<vector<packedBigPair>> vInternal;
+		unique_ptr<vector<elemType>> vInternal;
 		//uint64_t iInternalCounter = 0;
 		vector<uint64_t> vVectorSizes;
 
@@ -29,12 +30,12 @@ namespace kASA {
 		int32_t _iNumOfThreads_ = 1;
 #endif
 
-		unique_ptr<uint64_t[]> arrFrequencies;
+		//unique_ptr<uint64_t[]> arrFrequencies;
 		//unordered_map<uint32_t, uint32_t> _mContent;
 
 	public:
 
-		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t& iNumOfTaxa) : _iSoftSize(iSoftLimit) {
+		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t&) : _iSoftSize(iSoftLimit) {
 			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
 			//ofstream derp;
 			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
@@ -42,7 +43,7 @@ namespace kASA {
 			//derp.close();
 			//derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
 			try {
-				vInternal.reset(new vector<packedBigPair>());
+				vInternal.reset(new vector<elemType>());
 				vInternal->reserve(iSoftLimit + 1);
 			}
 			catch (const bad_alloc&) {
@@ -52,10 +53,10 @@ namespace kASA {
 
 			_iAmountOfSpace = iSoftLimit;
 
-			arrFrequencies.reset(new uint64_t[iNumOfTaxa*12]);
-			for (uint64_t i = 0; i < iNumOfTaxa * 12; ++i) {
+			/*arrFrequencies.reset(new uint64_t[iNumOfTaxa* _iHighestK]);
+			for (uint64_t i = 0; i < iNumOfTaxa * _iHighestK; ++i) {
 				arrFrequencies[i] = 0;
-			}
+			}*/
 #if __GNUC__ || defined(__llvm__)
 			_iNumOfThreads_ = iNumOfThreads;
 #endif
@@ -65,22 +66,31 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////
 	public:
+
 		inline bool addToInt(const tuple<uint64_t,uint32_t>& elem) {
-			vInternal->push_back(packedBigPair(get<0>(elem), get<1>(elem)));
+			vInternal->push_back(elemType(get<0>(elem), get<1>(elem)));
 			if (vInternal->size() >= _iSoftSize) {
 				return false;
 			}
 			return true;
 		}
 
-		inline void visualize(const contentVecType_32p* vC, contentVecType_32p::const_iterator& endIt) {
+		inline bool addToInt(const tuple<uint128_t, uint32_t>& elem) {
+			vInternal->push_back(elemType(get<0>(elem), get<1>(elem)));
+			if (vInternal->size() >= _iSoftSize) {
+				return false;
+			}
+			return true;
+		}
+
+		inline void visualize(const vecType* vC, typename vecType::const_iterator& endIt) {
 			ofstream derp(_sTempPath + "derp.txt");
 			for (auto it = vC->cbegin(); it != endIt; ++it) {
 				derp << it->first << ", " << it->second << endl;
 			}
 		}
 
-		inline void visualize(contentVecType_32p::const_iterator& bg, contentVecType_32p::const_iterator& end, ofstream& outFile) {
+		inline void visualize(typename vecType::const_iterator& bg, typename vecType::const_iterator& end, ofstream& outFile) {
 			for (auto it = bg; it != end; ++it) {
 				if (outFile.is_open()) {
 					outFile << it->first << ", " << it->second << endl;
@@ -91,19 +101,19 @@ namespace kASA {
 			}
 		}
 
-	protected:
 		/////////////////////////////////////////////////////////////////////////////////////////
 		// It's like merging two sorted decks of cards into one
 		template<typename W, typename R, typename I>
 		inline uint64_t merge(W& vNCIt, R& it, const uint64_t& vecSize, I&& vIntItC, const I&& vIntEndItC, unique_ptr<uint64_t[]>& freqArray, const unordered_map<uint32_t, uint32_t>& mContent, const bool& bLastCall = false) {
 			try {
-				packedBigPair tSeenInt; //eliminate duplicates
+				elemType tSeenInt; //eliminate duplicates
 				bool bIndexIntChanged = false;
+				int32_t iLocalHighestK = (is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12;
 
-				auto countFreqs = [&mContent,&freqArray,&bLastCall](const packedBigPair& pair) {
+				auto countFreqs = [&mContent,&freqArray,&bLastCall,&iLocalHighestK](const elemType& pair) {
 					if (bLastCall) {
-						const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * 12;
-						for (uint8_t k = 0; k < 12; ++k) {
+						const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * iLocalHighestK;
+						for (uint8_t k = 0; k < iLocalHighestK; ++k) {
 							if (((pair.first >> 5 * k) & 31) != 30) {
 								freqArray[idx + k]++;
 							}
@@ -213,7 +223,6 @@ namespace kASA {
 			return 0;
 		}
 
-	public:
 
 		/////////////////////////////////////////////////////////////////////////////////////////
 		// if the internal vector is full enough, save it to an external one
@@ -221,7 +230,7 @@ namespace kASA {
 			try {
 
 # if __GNUC__ || defined(__llvm__)
-				Utilities::parallelQuicksort(vInternal->begin(), vInternal->end(), less<>{}, _iNumOfThreads_);
+				Utilities::parallelQuicksort(vInternal->begin(), vInternal->end(), [](const elemType& a, const elemType& b) { return a < b; }, _iNumOfThreads_);
 #else
 #if __has_include(<execution>)
 				sort(std::execution::par_unseq, vInternal->begin(), vInternal->end());
@@ -232,7 +241,7 @@ namespace kASA {
 				
 
 				// squeeze it a little
-				auto newEnd = std::unique(vInternal->begin(), vInternal->end(), [](packedBigPair& a, packedBigPair& b) {
+				auto newEnd = std::unique(vInternal->begin(), vInternal->end(), [](elemType& a, elemType& b) {
 					if (a == b) {
 						return true;
 					}
@@ -249,9 +258,9 @@ namespace kASA {
 				Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
 
 				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
-				unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(),vInternal->size()));
+				unique_ptr<vecType> vNC(new vecType(fNCFile.get(),vInternal->size()));
 				vVectorSizes.push_back(vInternal->size());
-				contentVecType_32p::bufwriter_type vNCIt(*vNC);
+				typename vecType::bufwriter_type vNCIt(*vNC);
 
 				auto vIntEndItC = vInternal->cend();
 				for (auto it = vInternal->cbegin(); it != vIntEndItC; ++it) {
@@ -278,18 +287,18 @@ namespace kASA {
 
 				auto remainingFiles = _iCounterOfContainers;
 				int16_t iCurrentIdx = 0;
-				vector<contentVecType_32p::const_iterator> vCurrentIterators;
+				vector<typename vecType::const_iterator> vCurrentIterators;
 				
 
 				while (remainingFiles != 1) {
 					// first gather as many files as permitted
 					vector<unique_ptr<stxxlFile>> currentFiles(FOPEN_MAX - 1);
-					vector<unique_ptr<contentVecType_32p>> currentVecs(FOPEN_MAX - 1);
+					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
 					auto maxNrOfFiles = remainingFiles;
 					uint64_t iSumSize = 0;
 					for (int16_t i=0; i < (FOPEN_MAX - 1) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
 						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDONLY));
-						currentVecs[i].reset(new contentVecType_32p(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
+						currentVecs[i].reset(new vecType(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
 						vCurrentIterators.push_back(currentVecs[i]->cbegin());
 						iSumSize += vVectorSizes[iCurrentIdx];
 						remainingFiles--;
@@ -299,14 +308,14 @@ namespace kASA {
 					Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
 
 					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
-					unique_ptr<contentVecType_32p> vNC(new contentVecType_32p(fNCFile.get(), iSumSize));
-					contentVecType_32p::bufwriter_type vNCIt(*vNC);
+					unique_ptr<vecType> vNC(new vecType(fNCFile.get(), iSumSize));
+					typename vecType::bufwriter_type vNCIt(*vNC);
 
-					packedBigPair pSeen;
+					elemType pSeen;
 					uint64_t iSizeOfNewVec = 0;
 					while (!vCurrentIterators.empty()) {
 						// take smallest value and check if that has been seen before
-						auto it = std::min_element(vCurrentIterators.begin(), vCurrentIterators.end(), [](const contentVecType_32p::const_iterator& it1, const contentVecType_32p::const_iterator& it2) { return *it1 < *it2; });
+						auto it = std::min_element(vCurrentIterators.begin(), vCurrentIterators.end(), [](const typename vecType::const_iterator& it1, const typename vecType::const_iterator& it2) { return *it1 < *it2; });
 						auto& it2 = *it; 
 						
 						if (!(*it2 == pSeen)) {
@@ -346,6 +355,9 @@ namespace kASA {
 				Utilities::copyFile(_sTempPath + to_string(_iCounterOfContainers - 1), sOutPath);
 				ofstream fLibInfo(sOutPath + "_info.txt");
 				fLibInfo << vVectorSizes[_iCounterOfContainers - 1];
+				if (is_same<vecType,contentVecType_128>::value) {
+					fLibInfo << endl << 128;
+				}
 
 				return vVectorSizes[_iCounterOfContainers - 1];
 			}

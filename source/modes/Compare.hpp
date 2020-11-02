@@ -16,27 +16,276 @@
 #include "../utils/dToStr.h"
 #include "../utils/iToStr.hpp"
 
+
 namespace kASA {
-	class Compare : public Read {
+
+	enum OutputFormat
+	{
+		Kraken,
+		Json,
+		JsonL,
+		tsv
+	};
+
+	template<class contentVecType, class elemType, class intType>
+	class Compare : public Read<contentVecType, elemType, intType> {
+
+		typedef Read<contentVecType, elemType, intType> Base;
 
 		const bool _bTranslated = false;
 		bool bUnfunny = false;
 		mutex m_exceptionLock;
 		exception_ptr someThingWentWrong;
 
+		vector<pair<string, uint32_t>> _matchedkMers;
+
 	public:
-		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const bool& bProtein = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bProtein, stxxl_mode, bSixFrames, bUnfunny), _bTranslated(bProtein), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
+		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const bool& bProtein = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read<contentVecType, elemType, intType>(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bProtein, stxxl_mode, bSixFrames, bUnfunny), _bTranslated(bProtein), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
 
 		// for output
 		int32_t iNumOfBeasts = 3;
 
-		enum OutputFormat
-		{
-			Kraken,
-			Json,
-			JsonL,
-			tsv
-		} format = Json;
+		OutputFormat format = OutputFormat::Json;
+
+		struct ReadIndex {
+
+			unique_ptr<stxxlFile> stxxlLibFile;
+			unique_ptr<unique_ptr<const contentVecType>[]> vLib;
+			unique_ptr<unique_ptr<const index_t_p>[]> vLibParted_p;
+			unique_ptr<unique_ptr<const taxaOnly>[]> vLib_taxaOnly;
+			vector<elemType> vLib_RAM_Full;
+			vector<packedPair> vLib_RAM_Half;
+			vector<uint16_t> vLib_RAM_taxaOnly;
+
+			Trie<intType>* trieForVector;
+
+
+			bool bRAM = false;
+			bool bUnfunny = false;
+			bool bPartitioned = false;
+			bool bIndexHasBeenLoaded = false;
+			bool bTrieHasBeenLoadedFromOutside = false;
+			int32_t iNumOfThreads = 1;
+			int64_t iBytesUsedBySTXXLVectors = 0;
+
+			void set(const bool& ram, const bool& unfunny, const int32_t& threads) {
+				bRAM = ram;
+				bUnfunny = unfunny;
+				iNumOfThreads = threads;
+			}
+
+			inline void loadIndex(const string& sLibFile, const int32_t& iMaxk, const int32_t& iMink, int64_t& iAvailableMemory, const string& sContentFile, unordered_map<uint32_t, uint32_t>& taxToIndex) {
+				ifstream fLibInfo(sLibFile + "_info.txt");
+				uint64_t iSizeOfLib = 0;
+				fLibInfo >> iSizeOfLib;
+				uint32_t iTempVecType = 0;
+				fLibInfo >> iTempVecType;
+				if (iTempVecType == 3) {
+					bPartitioned = true;
+				}
+				fLibInfo.close();
+
+				if (taxToIndex.empty()) {
+					ifstream fContent(sContentFile);
+					uint32_t iAmountOfSpecies = 1;
+					string sTempLine = "";
+
+					bool bTaxIdsAsStrings = false;
+					taxToIndex[0] = 0;
+					while (getline(fContent, sTempLine)) {
+						if (sTempLine != "") {
+							const auto& tempLineContent = Utilities::split(sTempLine, '\t');
+							if (tempLineContent.size() >= 5 && !bTaxIdsAsStrings) {
+								bTaxIdsAsStrings = true;
+							}
+							if (tempLineContent.size() >= 4) {
+								if (bTaxIdsAsStrings) {
+									taxToIndex[stoul(tempLineContent[4])] = iAmountOfSpecies++;
+								}
+								else {
+									taxToIndex[stoul(tempLineContent[1])] = iAmountOfSpecies++;
+								}
+							}
+							else {
+								throw runtime_error("Content file contains less than 4 columns, it may be damaged... The faulty line was: " + sTempLine + "\n");
+							}
+						}
+					}
+					fContent.close();
+				}
+
+
+				stxxlLibFile.reset(new stxxlFile(sLibFile, stxxl::file::RDONLY));
+
+				if (bPartitioned) {
+					vLibParted_p.reset(new unique_ptr<const index_t_p>[iNumOfThreads]);
+					//stxxlLibFile.reset(new unique_ptr<stxxlFile>[iNumOfThreads]);
+					for (int32_t i = 0; i < iNumOfThreads; ++i) {
+						//stxxlLibFile[i].reset(new stxxlFile(sLibFile + "_"+ to_string(i), stxxl::file::RDONLY));
+						vLibParted_p[i].reset(new const index_t_p(stxxlLibFile.get(), iSizeOfLib));
+					}
+					iBytesUsedBySTXXLVectors = uint64_t(iNumOfThreads) * index_t_p::block_size * index_t_p::page_size * (vLibParted_p[0])->numpages();
+				}
+				else {
+					if (bUnfunny) {
+						vLib_taxaOnly.reset(new unique_ptr<const taxaOnly>[iNumOfThreads]);
+						for (int32_t i = 0; i < iNumOfThreads; ++i) {
+							vLib_taxaOnly[i].reset(new const taxaOnly(stxxlLibFile.get(), iSizeOfLib));
+						}
+						iBytesUsedBySTXXLVectors = uint64_t(iNumOfThreads) * taxaOnly::block_size * taxaOnly::page_size * (vLib_taxaOnly[0])->numpages();
+					}
+					else {
+						vLib.reset(new unique_ptr<const contentVecType>[iNumOfThreads]);
+						for (int32_t i = 0; i < iNumOfThreads; ++i) {
+							vLib[i].reset(new const contentVecType(stxxlLibFile.get(), iSizeOfLib));
+						}
+						iBytesUsedBySTXXLVectors = uint64_t(iNumOfThreads) * contentVecType::block_size * contentVecType::page_size * (vLib[0])->numpages();
+					}
+				}
+
+				if (bRAM) {
+					try {
+						if (bPartitioned || (iMink > 6 && taxToIndex.size() <= 65535 && !bUnfunny && iMaxk <= 12)) {
+							if (iAvailableMemory - static_cast<int64_t>(iSizeOfLib * sizeof(packedPair)) < 0) {
+								cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
+								bRAM = false;
+							}
+							else {
+								vLib_RAM_Half.reserve(iSizeOfLib);
+
+								if (bPartitioned) {
+									stxxl::vector_bufreader<index_t_p::const_iterator> bufferedReader(vLibParted_p[0]->cbegin(), vLibParted_p[0]->cend(), 0);
+									for (; !bufferedReader.empty(); ++bufferedReader) {
+										vLib_RAM_Half.push_back(*bufferedReader);
+									}
+
+									for (int32_t i = 0; i < iNumOfThreads; ++i) {
+										vLibParted_p[i].reset();
+									}
+									vLibParted_p.reset();
+									stxxlLibFile.reset();
+								}
+								else {
+									stxxl::vector_bufreader<typename contentVecType::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
+									for (; !bufferedReader.empty(); ++bufferedReader) {
+										vLib_RAM_Half.push_back(packedPair(static_cast<uint32_t>(bufferedReader->first & 1073741823ULL), static_cast<uint16_t>(taxToIndex[bufferedReader->second])));
+									}
+
+									for (int32_t i = 0; i < iNumOfThreads; ++i) {
+										vLib[i].reset();
+									}
+									vLib.reset();
+									stxxlLibFile.reset();
+									bPartitioned = true;
+								}
+
+								iAvailableMemory -= iSizeOfLib * sizeof(packedPair);
+							}
+						}
+						else {
+							if (bUnfunny) {
+								if (iAvailableMemory - static_cast<int64_t>(iSizeOfLib * sizeof(uint16_t)) < 0) {
+									cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
+									bRAM = false;
+								}
+								else {
+									vLib_RAM_taxaOnly.reserve(iSizeOfLib);
+									stxxl::vector_bufreader<taxaOnly::const_iterator> bufferedReader(vLib_taxaOnly[0]->cbegin(), vLib_taxaOnly[0]->cend(), 0);
+									for (; !bufferedReader.empty(); ++bufferedReader) {
+										vLib_RAM_taxaOnly.push_back(*bufferedReader);
+									}
+
+									for (int32_t i = 0; i < iNumOfThreads; ++i) {
+										vLib_taxaOnly[i].reset();
+									}
+									vLib_taxaOnly.reset();
+									stxxlLibFile.reset();
+									iAvailableMemory -= iSizeOfLib * sizeof(uint16_t);
+								}
+							}
+							else {
+								if (iAvailableMemory - static_cast<int64_t>(iSizeOfLib * sizeof(elemType)) < 0) {
+									cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
+									bRAM = false;
+								}
+								else {
+									vLib_RAM_Full.reserve(iSizeOfLib);
+									stxxl::vector_bufreader<typename contentVecType::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
+									for (; !bufferedReader.empty(); ++bufferedReader) {
+										vLib_RAM_Full.push_back(*bufferedReader);
+									}
+
+									for (int32_t i = 0; i < iNumOfThreads; ++i) {
+										vLib[i].reset();
+									}
+									vLib.reset();
+									stxxlLibFile.reset();
+									iAvailableMemory -= iSizeOfLib * sizeof(elemType);
+								}
+							}
+						}
+					}
+					catch (const bad_alloc&) {
+						cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
+						bRAM = false;
+						vLib_RAM_Half.clear();
+						vLib_RAM_taxaOnly.clear();
+						vLib_RAM_Full.clear();
+					}
+				}
+
+				if(!bRAM) {
+					iAvailableMemory -= iBytesUsedBySTXXLVectors;
+				}
+
+				bIndexHasBeenLoaded = true;
+			}
+
+			inline void loadTrie(const string& sLibFile, const int32_t& iMaxk, const int32_t& iMink) {
+				trieForVector = new Trie<intType>(iMaxk, iMink, 6);
+				trieForVector->LoadFromStxxlVec(sLibFile);
+				trieForVector->SetForIsInTrie((iMink < 6) ? static_cast<uint8_t>(iMink) : static_cast<uint8_t>(6));
+			}
+
+			inline void setHasBeenLoadedFromOutside() {
+				bTrieHasBeenLoadedFromOutside = true;
+			}
+
+			inline bool getHasBeenLoadedFromOutside() {
+				return bTrieHasBeenLoadedFromOutside;
+			}
+
+			inline Trie<intType>* getTrie() {
+				return trieForVector;
+			}
+
+			inline unique_ptr<unique_ptr<const contentVecType>[]>* getContentVecType() {
+				return &vLib;
+			}
+
+			inline unique_ptr<unique_ptr<const index_t_p>[]>* getIndexTP() {
+				return &vLibParted_p;
+			}
+
+			inline unique_ptr<unique_ptr<const taxaOnly>[]>* getTaxaOnly() {
+				return &vLib_taxaOnly;
+			}
+
+			inline vector<elemType>* getLibRAMFull() {
+				return &vLib_RAM_Full;
+			}
+
+			inline vector<packedPair>* getLibRAMHalf() {
+				return &vLib_RAM_Half;
+			}
+
+			inline vector<uint16_t>* getLibRAMTaxaOnly() {
+				return &vLib_RAM_taxaOnly;
+			}
+
+
+
+		} index;
 
 	private:
 
@@ -56,11 +305,27 @@ namespace kASA {
 			return ".rtt";
 		}
 
+		public:
+		inline string getOutputFormatFileEnding() {
+			return outputFormatFileEnding();
+		}
+
+		private:
+
 		///////////////////////////////////////////////////////
-		const float arrWeightingFactors[12] = { 1, 121.f / 144.f , 100.f / 144.f , 81.f / 144.f , 64.f / 144.f , 49.f / 144.f , 36.f / 144.f , 25.f / 144.f , 16.f / 144.f , 9.f / 144.f , 4.f / 144.f , 1.f / 144.f };
+		//const float arrWeightingFactors[12] = { 1.f , 121.f / 144.f , 100.f / 144.f , 81.f / 144.f , 64.f / 144.f , 49.f / 144.f , 36.f / 144.f , 25.f / 144.f , 16.f / 144.f , 9.f / 144.f , 4.f / 144.f , 1.f / 144.f };
+		const float arrWeightingFactors[HIGHESTPOSSIBLEK] = { 1.f , 576.f / 625.f , 529.f / 625.f , 484.f / 625.f , 441.f / 625.f , 400.f / 625.f , 361.f / 625.f , 324.f / 625.f , 289.f / 625.f , 256.f / 625.f , 225.f / 625.f , 196.f / 625.f , 169.f / 625.f , 144.f / 625.f , 121.f / 625.f , 100.f / 625.f , 81.f / 625.f , 64.f / 625.f , 49.f / 625.f , 36.f / 625.f , 25.f / 625.f , 16.f / 625.f , 9.f / 625.f , 4.f / 625.f , 1.f / 625.f };
 		//const float arrWeightingFactors[12] = { 1, 1331.f / 1728.f , 1000.f / 1728.f , 729.f / 1728.f , 512.f / 1728.f , 343.f / 1728.f , 216.f / 1728.f , 125.f / 1728.f , 64.f / 1728.f , 27.f / 1728.f , 8.f / 1728.f , 1.f / 1728.f };
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		inline void markTaxIDs(const uint64_t& codedTaxIDs, Utilities::sBitArray& vMemoryOfTaxIDs_k, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, unique_ptr<const contentVecType_32p>&) {
+		inline void markTaxIDs(const uint64_t& codedTaxIDs, Utilities::sBitArray& vMemoryOfTaxIDs_k, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, unique_ptr<const contentVecType>&) {
+			try {
+				vMemoryOfTaxIDs_k.set(Utilities::checkIfInMap(mTaxToIdx, static_cast<uint32_t>(codedTaxIDs))->second);
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
+		}
+		inline void markTaxIDs(const uint64_t& codedTaxIDs, Utilities::sBitArray& vMemoryOfTaxIDs_k, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, const vector<packedLargePair>*) {
 			try {
 				vMemoryOfTaxIDs_k.set(Utilities::checkIfInMap(mTaxToIdx, static_cast<uint32_t>(codedTaxIDs))->second);
 			}
@@ -104,11 +369,17 @@ namespace kASA {
 		inline unique_ptr<const contentVecType_32p>& getVec(const unique_ptr<unique_ptr<const contentVecType_32p>[]>& vec, const int& iThreadID) {
 			return vec[iThreadID];
 		}
+		inline unique_ptr<const contentVecType_128>& getVec(const unique_ptr<unique_ptr<const contentVecType_128>[]>& vec, const int& iThreadID) {
+			return vec[iThreadID];
+		}
 		//inline const unique_ptr<const contentVecType_32p[]>& getVec(const unique_ptr<const contentVecType_32p[]>& vec, const int&) {
 		//	return vec;
 		//}
 		inline unique_ptr<const index_t_p>& getVec(const unique_ptr<unique_ptr<const index_t_p>[]>& vec, const int& iThreadID) {
 			return vec[iThreadID];
+		}
+		inline const vector<packedLargePair>* getVec(const vector<packedLargePair>* vec, const int&) {
+			return vec;
 		}
 		inline const vector<packedBigPair>* getVec(const vector<packedBigPair>* vec, const int&) {
 			return vec;
@@ -122,10 +393,10 @@ namespace kASA {
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const int32_t& iThreadID, const vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, Utilities::Vector2D<float>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const int32_t& iThreadID, const int32_t& iThreadIDOffset, const vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, Utilities::Vector2D<float>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
-
+				debugBarrier
 				// In case of profiling only, this is the default
 				function<void(vector<uint64_t>&, uint64_t&, const uint64_t&)> addToMatchedReadID = [](vector<uint64_t>&, uint64_t& position, const uint64_t&) {
 					position++;
@@ -154,20 +425,20 @@ namespace kASA {
 						}
 					};
 				}
-
-				unique_ptr<vector<uint64_t>[]> vReadIDs(new vector<uint64_t>[_iNumOfK]);
-				vector<uint64_t> vPositions(_iNumOfK);
-				vector<uint64_t> vMemoryOfSeenkMers(_iNumOfK);
-				vector<Utilities::sBitArray> vMemoryOfTaxIDs(_iNumOfK, Utilities::sBitArray(iSpecIDRange));
-				const int32_t& ikDifferenceTop = _iHighestK - _iMaxK;
+				debugBarrier
+				unique_ptr<vector<uint64_t>[]> vReadIDs(new vector<uint64_t>[Base::_iNumOfK]);
+				vector<uint64_t> vPositions(Base::_iNumOfK);
+				vector<intType> vMemoryOfSeenkMers(Base::_iNumOfK);
+				vector<Utilities::sBitArray> vMemoryOfTaxIDs(Base::_iNumOfK, Utilities::sBitArray(iSpecIDRange));
+				const int32_t& ikDifferenceTop = HIGHESTPOSSIBLEK - Base::_iMaxK; // Highest possible k and length of arrWeightingFactors
 				const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
 				auto seenResultIt = libBeginIt;
 				auto rangeBeginIt = libBeginIt, rangeEndIt = libBeginIt;
 
-				tuple<uint64_t, uint64_t> iSeenInput = make_pair(0, 0);
-				int16_t ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
-				int32_t shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
-				const auto shiftVal = [&shift](const uint64_t& val) { return val >> shift; };
+				tuple<intType, uint64_t> iSeenInput = make_pair(0, 0);
+				int16_t ikLengthCounter = static_cast<int16_t>(Base::_iNumOfK - 1);
+				int32_t shift = 5 * (Base::_iHighestK - Base::_aOfK[ikLengthCounter]);
+				const auto shiftVal = [&shift](const intType& val) { return val >> shift; };
 
 
 
@@ -177,7 +448,7 @@ namespace kASA {
 					uint64_t iSeenRange = get<0>(vIn[vInIndex]);
 					uint32_t iRangeLength = get<2>(vIn[vInIndex]);
 					uint64_t iInputRangeIdx = vInIndex;
-
+					debugBarrier
 					if (iSeenRange == numeric_limits<uint64_t>::max()) {
 						++vInIndex;
 						continue;
@@ -194,7 +465,7 @@ namespace kASA {
 					}
 
 					// reset stuff
-					for (int32_t i = 0; i < _iNumOfK; ++i) {
+					for (int32_t i = 0; i < Base::_iNumOfK; ++i) {
 						vPositions[i] = 0;
 						vMemoryOfSeenkMers[i] = 0;
 						vMemoryOfTaxIDs[i].clear();
@@ -209,7 +480,7 @@ namespace kASA {
 
 					bool bDetermineBeginForMatching = true;
 					bool bInputIterated = true;
-
+					debugBarrier
 					for (; iInputRangeIdx < vInIndex; ++iInputRangeIdx) {
 						// ignore missmatches
 						if (get<0>(vIn[iInputRangeIdx]) == numeric_limits<uint64_t>::max()) {
@@ -217,15 +488,17 @@ namespace kASA {
 						}
 
 						// reset local stuff
-						ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
-						shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
+						ikLengthCounter = static_cast<int16_t>(Base::_iNumOfK - 1);
+						shift = 5 * (Base::_iHighestK - Base::_aOfK[ikLengthCounter]);
 
 						// get kmer
-						const pair<uint64_t, uint32_t>& iCurrentkMer = make_pair(get<1>(vIn[iInputRangeIdx]), get<3>(vIn[iInputRangeIdx]));
+						const pair<intType, uint32_t>& iCurrentkMer = make_pair(get<1>(vIn[iInputRangeIdx]), get<3>(vIn[iInputRangeIdx]));
 						auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
 						bInputIterated = true;
 
-							// determine first occurence inside index to save matching time
+						//cout << kASA::kMerToAminoacid(iCurrentkMer.first, 25) << " " << kASA::kMerToAminoacid(shiftVal(iCurrentkMer.first), 25) << " " << kASA::kMerToAminoacid(iCurrentkMerShifted, 25) << " " << kASA::kMerToAminoacid(shiftVal(rangeBeginIt->first), 25) << " " << kASA::kMerToAminoacid(shiftVal(rangeEndIt->first), 25) << endl;
+						debugBarrier
+						// determine first occurence inside index to save matching time
 						if ((get<0>(iSeenInput) != get<0>(iCurrentkMer)) && (shiftVal(seenResultIt->first) != iCurrentkMerShifted) && bDetermineBeginForMatching) {
 							if (shiftVal(rangeBeginIt->first) == iCurrentkMerShifted) {
 								seenResultIt = rangeBeginIt;
@@ -246,12 +519,14 @@ namespace kASA {
 									}
 									else {
 										// binary search
-										seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const uint64_t& val) { return (a.first >> shift) < val; });
+										debugBarrier
+										seenResultIt = lower_bound(rangeBeginIt, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const decltype(iCurrentkMerShifted)& val) { return (a.first >> shift) < val; });
 									}
 								}
 							}
 						}
 						bDetermineBeginForMatching = false;
+						debugBarrier
 
 						// Now for the real part: Trying to match the kmer with those from the index
 
@@ -262,8 +537,8 @@ namespace kASA {
 
 						// Count duplicates that matched too
 						if ((get<0>(iSeenInput) == get<0>(iCurrentkMer)) || (seenResultIt == rangeEndIt + 1)) {
-							for (int32_t ik = _iNumOfK - 1; ik > -1; --ik) {
-								const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
+							for (int32_t ik = Base::_iNumOfK - 1; ik > -1; --ik) {
+								const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 								const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
 								if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
 									addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
@@ -276,16 +551,16 @@ namespace kASA {
 						}
 
 
-
+						debugBarrier
 						bool bBreakOut = false;
 						while (seenResultIt != rangeEndIt + 1 && !bBreakOut) {
 
-							const tuple<uint64_t, uint32_t>& iCurrentLib = make_tuple(seenResultIt->first, seenResultIt->second);
+							const tuple<intType, uint32_t>& iCurrentLib = make_tuple(seenResultIt->first, seenResultIt->second);
 
-							ikLengthCounter = static_cast<int16_t>(_iNumOfK - 1);
+							ikLengthCounter = static_cast<int16_t>(Base::_iNumOfK - 1);
 							for (; ikLengthCounter >= 0; --ikLengthCounter) {
 
-								shift = 5 * (_iHighestK - _aOfK[ikLengthCounter]);
+								shift = 5 * (Base::_iHighestK - Base::_aOfK[ikLengthCounter]);
 								iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
 
 								const auto& iCurrentLibkMerShifted = get<0>(iCurrentLib) >> shift;
@@ -293,7 +568,7 @@ namespace kASA {
 								if (iCurrentkMerShifted < iCurrentLibkMerShifted) {
 									if (bInputIterated) {
 										for (int32_t ik = ikLengthCounter; ik > -1; --ik) {
-											const int32_t& shift_ = 5 * (_iHighestK - _aOfK[ik]);
+											const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 											const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
 											if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
 												addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
@@ -315,6 +590,10 @@ namespace kASA {
 											break;
 										}
 
+										if (this->_bVisualize) {
+											_matchedkMers.push_back(make_pair(Base::kMerToAminoacid(iCurrentLibkMerShifted, Base::_iMaxK),get<1>(iCurrentLib)));
+										}
+
 										// Delayed scoring: First gather everything and then score it instead of scoring everytime you encounter a new read or tax id.
 										if (iCurrentkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
 											// We've seen that already, just add it. 
@@ -324,13 +603,13 @@ namespace kASA {
 											}
 										}
 										else {
-
+											debugBarrier
 											// For this k, the kmer is different. Save the gathered information.
 											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
 											auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
 											it.SetNumOfEntries(numOfEntries);
 											for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
-												const auto& tempIndex = uint64_t(iSpecIDRange) * _iNumOfK * iThreadID + iSpecIDRange * uint64_t(ikLengthCounter) + (*it);
+												const auto& tempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID - iThreadIDOffset) + iSpecIDRange * uint64_t(ikLengthCounter) + (*it);
 												const auto& numOfHits = vPositions[ikLengthCounter];
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
@@ -348,6 +627,7 @@ namespace kASA {
 											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
 
 											vMemoryOfSeenkMers[ikLengthCounter] = iCurrentkMerShifted;
+											debugBarrier
 										}
 
 									}
@@ -356,18 +636,21 @@ namespace kASA {
 										// index kmer is smaller than input kmer. Iterate linearly and score everything that also matched before (albeit with a smaller k)
 										uint64_t iTempCounter = 1;
 										while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-											const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
+											const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
 											if (iCurrentkMerShifted > (iNextLibSuffix >> shift)) {
-												int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
+												int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 												for (; iUntilK > -1; --iUntilK) {
-													if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (_iHighestK - _aOfK[iUntilK]))) {
+													if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))) {
+														if (this->_bVisualize) {
+															_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
+														}
 														markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
 													}
 													else {
 														break;
 													}
 												}
-												if (iUntilK < static_cast<int16_t>(_iNumOfK - 1)) {
+												if (iUntilK < static_cast<int16_t>(Base::_iNumOfK - 1)) {
 													++iTempCounter;
 												}
 												else {
@@ -379,7 +662,7 @@ namespace kASA {
 											}
 										}
 										seenResultIt += iTempCounter;
-
+										debugBarrier
 										break;
 									}
 								}
@@ -394,20 +677,23 @@ namespace kASA {
 					}
 
 					// look through the rest of the range for possible tax id matches
-
+					debugBarrier
 					uint64_t iTempCounter = 0;
 					while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-						const uint64_t& iNextLibSuffix = static_cast<uint64_t>((seenResultIt + iTempCounter)->first);
-						int16_t iUntilK = static_cast<int16_t>(_iNumOfK - 1);
+						const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
+						int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 						for (; iUntilK > -1; --iUntilK) {
-							if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (_iHighestK - _aOfK[iUntilK]))) {
+							if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))) {
+								if (this->_bVisualize) {
+									_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
+								}
 								markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
 							}
 							else {
 								break;
 							}
 						}
-						if (iUntilK < static_cast<int16_t>(_iNumOfK - 1)) {
+						if (iUntilK < static_cast<int16_t>(Base::_iNumOfK - 1)) {
 							++iTempCounter;
 						}
 						else {
@@ -416,13 +702,14 @@ namespace kASA {
 					}
 
 					// save everything from this range
-					for (int16_t ikLC = static_cast<int16_t>(_iNumOfK - 1); ikLC >= 0; --ikLC) {
+					debugBarrier
+					for (int16_t ikLC = static_cast<int16_t>(Base::_iNumOfK - 1); ikLC >= 0; --ikLC) {
 
 						const auto& numOfEntries = vMemoryOfTaxIDs[ikLC].numOfEntries();
 						auto it = vMemoryOfTaxIDs[ikLC].begin();
 						it.SetNumOfEntries(numOfEntries);
 						for (; it != vMemoryOfTaxIDs[ikLC].end() && numOfEntries != 0; ++it) {
-							const auto& tempIndex = uint64_t(iSpecIDRange) * _iNumOfK * iThreadID + uint64_t(iSpecIDRange) * ikLC + (*it);
+							const auto& tempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID - iThreadIDOffset) + uint64_t(iSpecIDRange) * ikLC + (*it);
 							const auto& numOfHits = vPositions[ikLC];//vReadIDs[ikLC].size();
 							//#pragma omp atomic
 							vCount[tempIndex] += double(numOfHits) / numOfEntries;
@@ -434,7 +721,9 @@ namespace kASA {
 							linkReadIDToTaxID(*it, ikDifferenceTop + ikLC, numOfEntries, numOfHits, vReadIDs[ikLC]);
 						}
 					}
+					debugBarrier
 				}
+				debugBarrier
 			}
 			catch (...) {
 				if (someThingWentWrong == nullptr) {
@@ -448,121 +737,20 @@ namespace kASA {
 		}
 
 
-		//////////////////////////////////////////////////
-		// For the sloppy index
-		inline const vector<uint16_t>* getVec(const vector<uint16_t>* vec, const int&) {
-			return vec;
-		}
-		inline unique_ptr<const taxaOnly>& getVec(const unique_ptr<unique_ptr<const taxaOnly>[]>& vec, const int& iThreadID) {
-			return vec[iThreadID];
-		}
 
-		template <typename vecType>
-		inline void compareWithDatabase_sloppy(const int32_t& iThreadID, const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<float[]>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void sortInputAndCheckInvalidkMers(vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vInputVec, const bool& bPartitioned, const Trie<intType>& T, const int32_t& iLocalNumOfThreads) {
 
-			try {
-
-				//auto start = std::chrono::high_resolution_clock::now();
-				for (auto vInIndex = vInStart; vInIndex < vInEnd; ++vInIndex) {
-
-					const uint64_t& ivInSize = vIn[vInIndex].second.kMers_ST6.size();
-
-					const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
-					auto seenResultIt = libBeginIt;
-
-					const auto rangeBeginIt = libBeginIt + vIn[vInIndex].first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn[vInIndex].first) + vIn[vInIndex].second.range;
-					seenResultIt = rangeBeginIt;
-
-					while (seenResultIt != rangeEndIt + 1) {
-						const auto& iCurrentLib = *seenResultIt;
-
-						vCount[iSpecIDRange*iThreadID + iCurrentLib] += static_cast<double>(ivInSize) / (vIn[vInIndex].second.range + 1);
-
-
-						if (vIn[vInIndex].second.range == 0) {
-							vCountUnique[iSpecIDRange*iThreadID + iCurrentLib] += ivInSize;
-						}
-
-						const auto& score = arrWeightingFactors[0] * (1.f / ivInSize);
-						for (const auto& elem : vIn[vInIndex].second.kMers_ST6) {
-							const auto& arrayIdx = mReadIDToArrayIdx.find(get<1>(elem))->second * iSpecIDRange + iCurrentLib;
-							//#pragma omp atomic
-							vReadIDtoGenID[arrayIdx] += score;
-
-						}
-
-						++seenResultIt;
-					}
-
-					/*auto end = std::chrono::high_resolution_clock::now();
-					criticalSectionLock.lock();
-					cout << "OUT: Time: " << iThreadID << " " <<  chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << " ns" << endl;
-					criticalSectionLock.unlock();*/
-				}
-			}
-			catch (...) {
-				if (someThingWentWrong == nullptr) {
-					m_exceptionLock.lock();
-					someThingWentWrong = current_exception();
-					m_exceptionLock.unlock();
-				}
-				return;
-			}
-
-		}
-
-		template <typename vecType>
-		inline void createProfile_sloppy(const int32_t iThreadID, const vector<pair<uint64_t, Utilities::rangeContainer>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, const uint32_t& iSpecIDRange) {
-
-			try {
-				for (auto vInIndex = vInStart; vInIndex < vInEnd; ++vInIndex) {
-
-					const uint64_t& ivInSize = vIn[vInIndex].second.kMers_ST6.size();
-
-					const auto libBeginIt = getVec(vLib, iThreadID)->cbegin();
-					auto seenResultIt = libBeginIt;
-
-					const auto rangeBeginIt = libBeginIt + vIn[vInIndex].first, rangeEndIt = libBeginIt + static_cast<uint64_t>(vIn[vInIndex].first) + vIn[vInIndex].second.range;
-					seenResultIt = rangeBeginIt;
-
-					while (seenResultIt != rangeEndIt + 1) {
-						const auto& iCurrentLib = *seenResultIt;
-						//#pragma omp atomic
-						vCount[iSpecIDRange*iThreadID + iCurrentLib] += static_cast<double>(ivInSize) / (vIn[vInIndex].second.range + 1);
-
-
-						if (vIn[vInIndex].second.range == 0) {
-							//#pragma omp atomic
-							vCountUnique[iSpecIDRange*iThreadID + iCurrentLib] += ivInSize;
-						}
-						++seenResultIt;
-					}
-				}
-			}
-			catch (...) {
-				if (someThingWentWrong == nullptr) {
-					m_exceptionLock.lock();
-					someThingWentWrong = current_exception();
-					m_exceptionLock.unlock();
-				}
-				return;
-			}
-
-		}
-
-
-		inline void sortInputAndCheckInvalidkMers(vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vInputVec, const bool& bPartitioned, const Trie& T) {
-
-			if (_iNumOfThreads == 1) {
-				std::sort(vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p1, const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p2) {
+			if (iLocalNumOfThreads == 1) {
+				std::sort(vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
 					return get<1>(p1) < get<1>(p2);
 					});
+				
 
 				if (bPartitioned) {
-					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<1>(a) = get<1>(a) & 1073741823ULL;
@@ -574,10 +762,18 @@ namespace kASA {
 						});
 				}
 				else {
-					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						uint64_t kMerForTrie = 0;
+						if (is_same<intType, uint128_t>::value) {
+							kMerForTrie = static_cast<uint64_t>((static_cast<uint128_t>(get<1>(a)) >> 95));
+						}
+						else {
+							kMerForTrie = (get<1>(a) >> 30);
+						}
+						//cout << kASA::kMerToAminoacid(get<1>(a), 25) << " " << kASA::kMerToAminoacid(kMerForTrie, 12) << endl;
+						T.GetIndexRange(kMerForTrie, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<2>(a) = range;
@@ -598,15 +794,15 @@ namespace kASA {
 				// Therefore I set out to find a better one and found the preliminary implementation for C++17 inside Visual Studio which was published under the Apache Software License 2.0.
 				// This is compatible with kASA and as near to the current implementation inside Visual Studio 2017 as can be without risking copyright infringement towards Microsoft.
 				// It can be found inside the ParallelQuicksort.hpp header.
-				Utilities::parallelQuicksort(vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p1, const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p2) {
+				Utilities::parallelQuicksort(vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
 					return get<1>(p1) < get<1>(p2);
-					}, _iNumOfThreads);
-
+					}, iLocalNumOfThreads);
+				
 				if (bPartitioned) {
-					__gnu_parallel::for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					__gnu_parallel::for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<1>(a) = get<1>(a) & 1073741823ULL;
@@ -618,10 +814,17 @@ namespace kASA {
 						});
 				}
 				else {
-					__gnu_parallel::for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					__gnu_parallel::for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						uint64_t kMerForTrie = 0;
+						if (is_same<intType, uint128_t>::value) {
+							kMerForTrie = static_cast<uint64_t>((static_cast<uint128_t>(get<1>(a)) >> 95));
+						}
+						else {
+							kMerForTrie = (get<1>(a) >> 30);
+						}
+						T.GetIndexRange(kMerForTrie, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<2>(a) = range;
@@ -634,15 +837,16 @@ namespace kASA {
 #else					
 #if __has_include(<execution>)
 
-				sort(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p1, const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p2) {
+				std::sort(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
 					return get<1>(p1) < get<1>(p2);
 					});
+				
 
 				if (bPartitioned) {
-					for_each(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					for_each(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<1>(a) = get<1>(a) & 1073741823ULL;
@@ -654,10 +858,17 @@ namespace kASA {
 						});
 				}
 				else {
-					for_each(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					for_each(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						uint64_t kMerForTrie = 0;
+						if (is_same<intType, uint128_t>::value) {
+							kMerForTrie = static_cast<uint64_t>((static_cast<uint128_t>(get<1>(a)) >> 95));
+						}
+						else {
+							kMerForTrie = (get<1>(a) >> 30);
+						}
+						T.GetIndexRange(kMerForTrie, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<2>(a) = range;
@@ -668,15 +879,16 @@ namespace kASA {
 						});
 				}
 #else
-				Utilities::parallelQuicksort(vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p1, const tuple<uint64_t, uint64_t, uint32_t, uint32_t>& p2) {
+				
+				Utilities::parallelQuicksort(vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
 					return get<1>(p1) < get<1>(p2);
-					}, _iNumOfThreads);
-
+					}, iLocalNumOfThreads);
+				
 				if (bPartitioned) {
-					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<1>(a) = get<1>(a) & 1073741823ULL;
@@ -688,10 +900,17 @@ namespace kASA {
 						});
 				}
 				else {
-					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, uint64_t, uint32_t, uint32_t>& a) {
+					for_each(vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
 						uint64_t start = 0;
 						uint32_t range = 0;
-						T.GetIndexRange(get<1>(a) >> 30, static_cast<int8_t>((_iMinK > 6) ? 6 : _iMinK), move(start), move(range));
+						uint64_t kMerForTrie = 0;
+						if (is_same<intType, uint128_t>::value) {
+							kMerForTrie = static_cast<uint64_t>((static_cast<uint128_t>(get<1>(a)) >> 95));
+						}
+						else {
+							kMerForTrie = (get<1>(a) >> 30);
+						}
+						T.GetIndexRange(kMerForTrie, static_cast<int8_t>((Base::_iMinK > 6) ? 6 : Base::_iMinK), move(start), move(range));
 						if (start != numeric_limits<uint64_t>::max()) {
 							get<0>(a) = start;
 							get<2>(a) = range;
@@ -721,8 +940,8 @@ namespace kASA {
 					auto currentReadLengthAndName = vReadNameAndLength.front();
 
 					float bestScore = 0.f;
-					for (int32_t i = _iMinK; i <= _iMaxK; ++i) {
-						bestScore += (currentReadLengthAndName.second - i * 3 + 1)*arrWeightingFactors[_iHighestK - i];
+					for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
+						bestScore += (currentReadLengthAndName.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i];
 					}
 
 
@@ -734,10 +953,10 @@ namespace kASA {
 							kMerScore = vReadIDtoGenID[readIdx][iSpecIdx];
 
 							if (_bTranslated) {
-								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - _iHighestK + 1)));
+								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK + 1)));
 							}
 							else {
-								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - _iHighestK * 3 + 1)));
+								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK * 3 + 1)));
 							}
 							if (relativeScore >= fThreshold) {
 								get<0>(resultVec[iCountOfHits]) = iSpecIdx;
@@ -1060,18 +1279,18 @@ namespace kASA {
 
 				Utilities::BufferedWriter outStreamer(fOut, 524288ull);
 				float bestScore = 0.f;
-				for (int32_t i = _iMinK; i <= _iMaxK; ++i) {
-					bestScore += (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[_iHighestK - i];
-					//cout << (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[_iHighestK - i] << " " << vReadNameAndLength.second << " " << i << " " << vReadNameAndLength.second - i * 3 + 1 <<" " << arrWeightingFactors[_iHighestK - i] << endl;
+				for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
+					bestScore += (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i];
+					//cout << (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i] << " " << vReadNameAndLength.second << " " << i << " " << vReadNameAndLength.second - i * 3 + 1 <<" " << arrWeightingFactors[Base::_iHighestK - i] << endl;
 				}
 
 				for (auto it = vTempResultVec.begin(); it != vTempResultVec.end();) {
 					double relativeScore = 0.0;
 					if (_bTranslated) {
-						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - _iHighestK + 1)));
+						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - Base::_iHighestK + 1)));
 					}
 					else {
-						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - _iHighestK * 3 + 1)));
+						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - Base::_iHighestK * 3 + 1)));
 					}
 					if (relativeScore >= fThreshold) {
 						get<2>(*it) = relativeScore;
@@ -1458,12 +1677,16 @@ namespace kASA {
 
 
 	public:
-		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t& iTrieDepth, const int64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode, const float& fThreshold) {
 
+		/////////////////////////////////////////////////////////////////////////////////
+		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t&, const int64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode, const float& fThreshold, int32_t iLocalNumOfThreads = 0, const int32_t& iLocalThreadIdx = 0 ) {
 			try {
-				// test if files exists
-				if (!ifstream(contentFile) || !ifstream(sLibFile) || !ifstream(sLibFile + "_f.txt") || !ifstream(sLibFile + "_trie.txt")) {
+				if (iLocalNumOfThreads == 0) {
+					iLocalNumOfThreads = Base::_iNumOfThreads;
+				}
+
+				// test if files exists, except if this was already checked
+				if ((!ifstream(contentFile) || !ifstream(sLibFile) || !ifstream(sLibFile + "_f.txt") || !ifstream(sLibFile + "_trie.txt")) && !index.bIndexHasBeenLoaded) {
 					throw runtime_error("One of the files does not exist");
 				}
 //#define TIME
@@ -1545,7 +1768,7 @@ namespace kASA {
 
 				}*/
 
-
+				debugBarrier
 				// get names of idxes
 				ifstream fContent(contentFile);
 				uint32_t iAmountOfSpecies = 1;
@@ -1592,7 +1815,7 @@ namespace kASA {
 					}
 				}
 
-
+				debugBarrier
 				// get Size of Lib and open it for reading
 				ifstream fLibInfo(sLibFile + "_info.txt");
 				uint64_t iSizeOfLib = 0;
@@ -1604,31 +1827,42 @@ namespace kASA {
 				if (iTempVecType == 3) {
 					bPartitioned = true;
 				}
+
 				fLibInfo.close();
 
 				// Assert, that if the index was shrunken via trieHalf MinK can only be larger than 6
-				if (bPartitioned && _iMinK <= 6) {
-					cerr << "ERROR: k can only be larger than 6 if your index was shrunken via strategy 2. Setting it to 7..." << endl;
-					_iMinK = 7;
-					_iNumOfK = _iMaxK - _iMinK + 1;
+				if (bPartitioned && Base::_iMinK <= 6 && Base::_iMaxK <= 12) {
+					cerr << "ERROR: k can only be larger than 6 and smaller than 12 if your index was shrunken via strategy 2. Setting it right..." << endl;
+					if (Base::_iMinK <= 6) {
+						Base::_iMinK = 7;
+					}
+					if (Base::_iMaxK > 12) {
+						Base::_iMaxK = 12;
+					}
+					Base::_iNumOfK = Base::_iMaxK - Base::_iMinK + 1;
 				}
 				if (bUnfunny) {
-					_iMinK = 6;
-					_iMaxK = 6;
-					_iNumOfK = _iMaxK - _iMinK + 1;
+					Base::_iMinK = 6;
+					Base::_iMaxK = 6;
+					Base::_iNumOfK = Base::_iMaxK - Base::_iMinK + 1;
 				}
 
 				// Create threadpool(s), in stxxl mode we can only have synced parallelism (as in no two threads should not access the same vector instance)
-				vector<WorkerThread> workerThreadPool(_iNumOfThreads);
-				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-					workerThreadPool[i].setID(i);
+				vector<WorkerThread> workerThreadPool(iLocalNumOfThreads);
+				for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
+					workerThreadPool[i].setID(i + iLocalThreadIdx);
 				}
 
 				// load index
-				unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
-				unique_ptr<unique_ptr<const contentVecType_32p>[]> vLib;
+				if (!index.bIndexHasBeenLoaded) {
+					index.set(bRAM, bUnfunny, iLocalNumOfThreads);
+				}
+				debugBarrier
+
+				/*unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
+				unique_ptr<unique_ptr<const contentVecType>[]> vLib;
 				unique_ptr<unique_ptr<const index_t_p>[]> vLibParted_p;
-				vector<packedBigPair> vLib_RAM_Full;
+				vector<elemType> vLib_RAM_Full;
 				vector<packedPair> vLib_RAM_Half;
 				vector<uint16_t> vLib_RAM_taxaOnly;
 
@@ -1636,30 +1870,30 @@ namespace kASA {
 
 				int64_t iBytesUsedBySTXXLVectors = 0;
 				if (bPartitioned) {
-					vLibParted_p.reset(new unique_ptr<const index_t_p>[_iNumOfThreads]);
-					//stxxlLibFile.reset(new unique_ptr<stxxlFile>[_iNumOfThreads]);
-					for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+					vLibParted_p.reset(new unique_ptr<const index_t_p>[iLocalNumOfThreads]);
+					//stxxlLibFile.reset(new unique_ptr<stxxlFile>[iLocalNumOfThreads]);
+					for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 						//stxxlLibFile[i].reset(new stxxlFile(sLibFile + "_"+ to_string(i), stxxl::file::RDONLY));
 						vLibParted_p[i].reset(new const index_t_p(stxxlLibFile.get(), iSizeOfLib));
 					}
-					iBytesUsedBySTXXLVectors = uint64_t(_iNumOfThreads )* index_t_p::block_size * index_t_p::page_size * (vLibParted_p[0])->numpages();
+					iBytesUsedBySTXXLVectors = uint64_t(iLocalNumOfThreads )* index_t_p::block_size * index_t_p::page_size * (vLibParted_p[0])->numpages();
 				}
 				else {
 					if (bUnfunny) {
-						vLib_taxaOnly.reset(new unique_ptr<const taxaOnly>[_iNumOfThreads]);
-						for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+						vLib_taxaOnly.reset(new unique_ptr<const taxaOnly>[iLocalNumOfThreads]);
+						for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 							vLib_taxaOnly[i].reset(new const taxaOnly(stxxlLibFile.get(), iSizeOfLib));
 						}
-						iBytesUsedBySTXXLVectors = uint64_t(_iNumOfThreads) * taxaOnly::block_size * taxaOnly::page_size * (vLib_taxaOnly[0])->numpages();
+						iBytesUsedBySTXXLVectors = uint64_t(iLocalNumOfThreads) * taxaOnly::block_size * taxaOnly::page_size * (vLib_taxaOnly[0])->numpages();
 					}
 					else {
-						vLib.reset(new unique_ptr<const contentVecType_32p>[_iNumOfThreads]);
-						for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-							vLib[i].reset(new const contentVecType_32p(stxxlLibFile.get(), iSizeOfLib));
+						vLib.reset(new unique_ptr<const contentVecType>[iLocalNumOfThreads]);
+						for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
+							vLib[i].reset(new const contentVecType(stxxlLibFile.get(), iSizeOfLib));
 						}
-						iBytesUsedBySTXXLVectors = uint64_t(_iNumOfThreads) * contentVecType_32p::block_size * contentVecType_32p::page_size * (vLib[0])->numpages();
+						iBytesUsedBySTXXLVectors = uint64_t(iLocalNumOfThreads) * contentVecType::block_size * contentVecType::page_size * (vLib[0])->numpages();
 					}
-				}
+				}*/
 
 #ifdef TIME
 				auto endTIME = std::chrono::high_resolution_clock::now();
@@ -1668,13 +1902,18 @@ namespace kASA {
 #endif
 
 				// load Trie
-				const uint8_t& iTD = iTrieDepth;
-				Trie T(static_cast<int8_t>(_iMaxK), static_cast<int8_t>(_iMinK), iTD, _iNumOfThreads, iPrefixCheckMode);
-				T.LoadFromStxxlVec(sLibFile);
-				T.SetForIsInTrie((_iMinK < 6) ? static_cast<uint8_t>(_iMinK) : static_cast<uint8_t>(6));
+				Trie<intType>* T;
+				if (!index.bIndexHasBeenLoaded) {
+					T = new Trie<intType>(static_cast<int8_t>(Base::_iMaxK), static_cast<int8_t>(Base::_iMinK), 6, iPrefixCheckMode);
+					T->LoadFromStxxlVec(sLibFile);
+					T->SetForIsInTrie((Base::_iMinK < 6) ? static_cast<uint8_t>(Base::_iMinK) : static_cast<uint8_t>(6));
+				}
+				else {
+					T = index.getTrie();
+				}
 
-				if (_bVerbose) {
-					T.GetIfVecIsUsed();
+				if (Base::_bVerbose) {
+					T->GetIfVecIsUsed();
 				}
 
 #ifdef TIME
@@ -1682,10 +1921,10 @@ namespace kASA {
 				cout << "Trie load_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
 				startTIME = std::chrono::high_resolution_clock::now();
 #endif
-
+				debugBarrier
 				// This holds the hits for each organism
 				// Initialize this here to calculate the average memory usage
-				const uint64_t& iMult = uint64_t(_iNumOfThreads) * _iNumOfK * uint64_t(iAmountOfSpecies);
+				const uint64_t& iMult = uint64_t(iLocalNumOfThreads) * Base::_iNumOfK * uint64_t(iAmountOfSpecies);
 				unique_ptr<double[]> vCount_all(new double[iMult]);
 				unique_ptr<uint64_t[]> vCount_unique(new uint64_t[iMult]);
 
@@ -1697,22 +1936,28 @@ namespace kASA {
 				// If the user wishes to load the index into RAM, check if there is enough space.
 				// First calculate the average memory usage: 
 				//	Size of trie + size of counts_all/_unique + index size + memory for tax ids + chunksize from input + overhead buffer for various allocations 
-				int64_t iMemoryUsageOnAverage = T.GetSize() + iMult * sizeof(uint64_t) + iBytesUsedBySTXXLVectors + uint64_t(_iNumOfThreads) * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes() + 14399756 + 4 * iAmountOfSpecies + 1024ull * 1024ull * 1024ull;
-				
+				int64_t iMemoryUsageOnAverage = ((index.getHasBeenLoadedFromOutside()) ? 0 + (1024ull * 1024ull * 1024ull)/iLocalNumOfThreads : T->GetSize() + 1024ull * 1024ull * 1024ull) + iMult * sizeof(uint64_t) + uint64_t(iLocalNumOfThreads) * Utilities::sBitArray(iAmountOfSpecies).sizeInBytes() + 14399756 + 4 * iAmountOfSpecies;
+
 				// Set memory boundaries
-				int64_t iSoftMaxMemoryUsage = 0;
+				int64_t iSoftMaxMemoryAvailable = 0;
 				if (iMemory > iMemoryUsageOnAverage) {
-					iSoftMaxMemoryUsage = iMemory - iMemoryUsageOnAverage;
+					iSoftMaxMemoryAvailable = iMemory - iMemoryUsageOnAverage;
 				}
 				else {
 					cerr << "ERROR: Not enough memory given, try to download more RAM. Adding 1GB. May lead to bad_alloc errors..." << endl;
-					//iSoftMaxMemoryUsage = 1024ull * 1024ull * 1ull / (sizeof(tuple<uint64_t, uint64_t>)*_iNumOfThreads);
-					iSoftMaxMemoryUsage = static_cast<int64_t>(1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
+					//iSoftMaxMemoryUsage = 1024ull * 1024ull * 1ull / (sizeof(tuple<uint64_t, uint64_t>)*iLocalNumOfThreads);
+					iSoftMaxMemoryAvailable = static_cast<int64_t>(1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
 				}
 
-				if (bRAM) {
+				if (!index.bIndexHasBeenLoaded) {
+					index.loadIndex(sLibFile, Base::_iMaxK, Base::_iMinK, iSoftMaxMemoryAvailable, "", mTaxToIdx);
+				}
+				bPartitioned = index.bPartitioned;
+				bRAM = index.bRAM; // if not enough primary memory is available, the variable will be set to false inside "index"
+				debugBarrier
+				/*if (bRAM) {
 					try {
-						if (bPartitioned || (_iMinK > 6 && iAmountOfSpecies <= 65535 && !bUnfunny)) {
+						if (bPartitioned || (Base::_iMinK > 6 && iAmountOfSpecies <= 65535 && !bUnfunny && Base::_iMaxK <= 12)) {
 							if (iSoftMaxMemoryUsage + iBytesUsedBySTXXLVectors - static_cast<int64_t>(iSizeOfLib * sizeof(packedPair)) < 0) {
 								cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
 								bRAM = false;
@@ -1726,18 +1971,18 @@ namespace kASA {
 										vLib_RAM_Half.push_back(*bufferedReader);
 									}
 
-									for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+									for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 										vLibParted_p[i].reset();
 									}
 									vLibParted_p.reset();
 								}
 								else {
-									stxxl::vector_bufreader<contentVecType_32p::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
+									stxxl::vector_bufreader<typename contentVecType::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
 									for (; !bufferedReader.empty(); ++bufferedReader) {
 										vLib_RAM_Half.push_back(packedPair(static_cast<uint32_t>(bufferedReader->first & 1073741823ULL), static_cast<uint16_t>(mTaxToIdx[bufferedReader->second])));
 									}
 
-									for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+									for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 										vLib[i].reset();
 									}
 									vLib.reset();
@@ -1760,7 +2005,7 @@ namespace kASA {
 										vLib_RAM_taxaOnly.push_back(*bufferedReader);
 									}
 
-									for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+									for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 										vLib_taxaOnly[i].reset();
 									}
 									vLib_taxaOnly.reset();
@@ -1768,22 +2013,22 @@ namespace kASA {
 								}
 							}
 							else {
-								if (iSoftMaxMemoryUsage + iBytesUsedBySTXXLVectors - static_cast<int64_t>(iSizeOfLib * sizeof(packedBigPair)) < 0) {
+								if (iSoftMaxMemoryUsage + iBytesUsedBySTXXLVectors - static_cast<int64_t>(iSizeOfLib * sizeof(elemType)) < 0) {
 									cerr << "ERROR: Not enough RAM available to load index into it. Resuming with secondary memory approach..." << endl;
 									bRAM = false;
 								}
 								else {
 									vLib_RAM_Full.reserve(iSizeOfLib);
-									stxxl::vector_bufreader<contentVecType_32p::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
+									stxxl::vector_bufreader<typename contentVecType::const_iterator> bufferedReader(vLib[0]->cbegin(), vLib[0]->cend(), 0);
 									for (; !bufferedReader.empty(); ++bufferedReader) {
 										vLib_RAM_Full.push_back(*bufferedReader);
 									}
 
-									for (int32_t i = 0; i < _iNumOfThreads; ++i) {
+									for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 										vLib[i].reset();
 									}
 									vLib.reset();
-									iSoftMaxMemoryUsage = iSoftMaxMemoryUsage + iBytesUsedBySTXXLVectors - iSizeOfLib * sizeof(packedBigPair);
+									iSoftMaxMemoryUsage = iSoftMaxMemoryUsage + iBytesUsedBySTXXLVectors - iSizeOfLib * sizeof(elemType);
 								}
 							}
 						}
@@ -1795,7 +2040,7 @@ namespace kASA {
 						vLib_RAM_taxaOnly.clear();
 						vLib_RAM_Full.clear();
 					}
-				}
+				}*/
 
 #ifdef TIME
 				endTIME = std::chrono::high_resolution_clock::now();
@@ -1803,29 +2048,32 @@ namespace kASA {
 				startTIME = std::chrono::high_resolution_clock::now();
 #endif
 
-
-
+				
 				uint64_t iTimeFastq = 0, iTimeCompare = 0, iNumOfReads = 0, iNumOfReadsOld = 0, iNumOfReadsSum = 0;
-				vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>> vInputVec;
-				/*while (true) {
+				vector<tuple<uint64_t, intType, uint32_t, uint32_t>> vInputVec;
+
+				// Memory management
+				while (true) {
 					try {
-						vInputVec.reserve(iSoftMaxMemoryUsage / sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>));
+						vInputVec.reserve((iSoftMaxMemoryAvailable + 524288000) / sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>));
+						vInputVec.shrink_to_fit();
 						//vInputVec.resize(iSoftMaxMemoryUsage / sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>));
 						break;
 					}
 					catch (const bad_alloc&) {
+						cout << "OUT: Not enough memory available, reducing usage by 1GB..." << endl;
 						//vInputVec.clear();
 						vInputVec.shrink_to_fit();
-						if (iSoftMaxMemoryUsage > 1073741824ull) { // 1073741824 == 1024^3 == 1GB
-							iSoftMaxMemoryUsage -= 1073741824ull;
+						if ((iSoftMaxMemoryAvailable + 524288000) > 1073741824) { // 1073741824 == 1024^3 == 1GB
+							iSoftMaxMemoryAvailable -= 1073741824;
 						}
 						else {
-							cerr << "ERROR: Not enough memory available. Please try again with a lower number after - m" << endl;
+							cerr << "ERROR: Your system has not enough contiguous memory available. Please restart the system!" << endl;
 							throw;
 						}
 					}
-				}*/
-
+				}
+				debugBarrier
 				const bool& bReadIDsAreInteresting = fOutFile != "";
 
 				Utilities::Vector2D<float> vReadIDtoTaxID; // Array of #species times #reads with scores as values
@@ -1834,18 +2082,34 @@ namespace kASA {
 
 				uint64_t iNumberOfkMersInInput = 0;
 
-				auto pathAndSize = Utilities::gatherFilesFromPath(fInFile);
+				pair<vector<pair<string, int8_t>>, size_t> pathAndSize;
+				
+				const bool& bIsPairedEnd = fInFile.find_first_of(char(0xB)) != string::npos;
+				vector<string> vPairedEndFiles;
+				if (bIsPairedEnd) {
+					vPairedEndFiles = Utilities::split(fInFile, char(0xB));
+					pathAndSize = Utilities::gatherFilesFromPath(vPairedEndFiles[0]);
+				}
+				else {
+					pathAndSize = Utilities::gatherFilesFromPath(fInFile);
+				}
 				const auto& vInputFiles = pathAndSize.first;
+				
+				
 				size_t overallFileSize = pathAndSize.second, allFilesProgress = 0, charsReadOverall = 0;
 
-
+				debugBarrier
 				// allow multiple input files
 				for (const auto& inFile : vInputFiles) {
 
-					if (_bVerbose) {
-						cout << "OUT: Current file: " << inFile.first << endl;
+					if (Base::_bVerbose) {
+						if (bIsPairedEnd) {
+							cout << "OUT: Paired files: " << vPairedEndFiles[0] << " and " << vPairedEndFiles[1] << endl;
+						}
+						else {
+							cout << "OUT: Current file: " << inFile.first << endl;
+						}
 					}
-
 
 					string fileName = "";
 					if (vInputFiles.size() > 1) { // get file name without path and ending
@@ -1870,12 +2134,27 @@ namespace kASA {
 					unique_ptr<igzstream> fast_q_a_File_gz;
 					Utilities::FileReader<ifstream> fileReaderObject;
 					Utilities::FileReader<igzstream> fileReaderObject_gz;
+					// paired
+					unique_ptr<ifstream> fast_q_a_File2;
+					unique_ptr<igzstream> fast_q_a_File_gz2;
+					Utilities::FileReader<ifstream> fileReaderObject2;
+					Utilities::FileReader<igzstream> fileReaderObject_gz2;
+
 					uint64_t iFileLength = 0;
 					vector<char> inFilebuffer(2097152);
+					vector<char> inFilebuffer2(2097152);
 
 					if (isGzipped) {
-						if (_bVerbose) {
+						if (Base::_bVerbose) {
 							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
+						}
+
+						if (bIsPairedEnd) {
+							fast_q_a_File_gz2.reset(new igzstream());
+							fast_q_a_File_gz2->rdbuf()->pubsetbuf(&inFilebuffer2[0], 2097152);
+							fast_q_a_File_gz2->open(vPairedEndFiles[1].c_str());
+							fileReaderObject_gz2.setFile(fast_q_a_File_gz2.get());
+							fast_q_a_File_gz2->exceptions(std::ios_base::badbit);
 						}
 
 						fast_q_a_File_gz.reset(new igzstream());
@@ -1898,6 +2177,14 @@ namespace kASA {
 						fast_q_a_File_gz->exceptions(std::ios_base::badbit);
 					}
 					else {
+
+						if (bIsPairedEnd) {
+							fast_q_a_File2.reset(new ifstream());
+							fast_q_a_File2->rdbuf()->pubsetbuf(&inFilebuffer2[0], 2097152);
+							fast_q_a_File2->open(vPairedEndFiles[1].c_str());
+							fileReaderObject2.setFile(fast_q_a_File2.get());
+						}
+
 						fast_q_a_File.reset(new ifstream());
 						fast_q_a_File->rdbuf()->pubsetbuf(&inFilebuffer[0], 2097152);
 						fast_q_a_File->open(inFile.first);
@@ -1922,7 +2209,7 @@ namespace kASA {
 						iFileLength = fast_q_a_File->tellg();
 						fast_q_a_File->seekg(0, fast_q_a_File->beg);
 					}
-
+					debugBarrier
 					// output file
 					ofstream fOut;
 					// a larger buffer works better for SSDs or HPCCs
@@ -1962,8 +2249,8 @@ namespace kASA {
 					cout << "Prepare input_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
 					startTIME = std::chrono::high_resolution_clock::now();
 #endif
-
-					unique_ptr<strTransfer> transferBetweenRuns(new strTransfer);
+					debugBarrier
+					unique_ptr<typename Base::strTransfer> transferBetweenRuns(new typename Base::strTransfer);
 					transferBetweenRuns->iCurrentOverallPercentage = allFilesProgress;
 					transferBetweenRuns->iNumOfAllCharsRead = charsReadOverall;
 					vector<tuple<readIDType, float, double>> vSavedScores;
@@ -1978,12 +2265,20 @@ namespace kASA {
 						//iSoftMaxMemoryUsage = 19199040;
 
 						if (isGzipped) {
-							iNumberOfkMersInInput += readFastqa_partialSort(fileReaderObject_gz, vInputVec, vReadNameAndLength, iSoftMaxMemoryUsage, iAmountOfSpecies, iFileLength, iFileLength, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+							iNumberOfkMersInInput += Base::readFastqa_partialSort(fileReaderObject_gz, fileReaderObject_gz2, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, iAmountOfSpecies, iFileLength, iFileLength, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+
 						}
 						else {
-							iNumberOfkMersInInput += readFastqa_partialSort(fileReaderObject, vInputVec, vReadNameAndLength, iSoftMaxMemoryUsage, iAmountOfSpecies, iFileLength, overallFileSize, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+							iNumberOfkMersInInput += Base::readFastqa_partialSort(fileReaderObject, fileReaderObject2, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, iAmountOfSpecies, iFileLength, overallFileSize, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
 						}
-
+	
+						// reduce available memory
+						// context: should the input vector increase in size after the first call, bad_alloc will probably be thrown because there will likely be no larger contiguous chunk of memory available
+						// this is mitigated by substracting 0.1% of the available memory after every time this is called
+						if (iSoftMaxMemoryAvailable - static_cast<int64_t>(iSoftMaxMemoryAvailable * 0.001) > 0) {
+							iSoftMaxMemoryAvailable -= static_cast<int64_t>(iSoftMaxMemoryAvailable * 0.001);
+						}
+						debugBarrier
 						//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
 						iNumOfReads = transferBetweenRuns->iNumOfNewReads;
 
@@ -1996,8 +2291,8 @@ namespace kASA {
 #endif
 
 						// sort prefixes for each range in parallel
-						sortInputAndCheckInvalidkMers(vInputVec, bPartitioned, T);
-
+						sortInputAndCheckInvalidkMers(vInputVec, bPartitioned, *T, iLocalNumOfThreads);
+						debugBarrier
 
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
@@ -2027,7 +2322,7 @@ namespace kASA {
 						else {
 							iNumOfReadsSum += transferBetweenRuns->iNumOfNewReads - transferBetweenRuns->addTail;
 						}
-
+						debugBarrier
 						function<void(const int32_t&, const uint64_t&, const uint64_t&)> foo;
 
 						// now compare with index
@@ -2036,27 +2331,27 @@ namespace kASA {
 
 						if (bRAM) {
 							if (bPartitioned) {
-								foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Half, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+								foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(iLocalThreadIdx), ref(vInputVec), placeholders::_2, placeholders::_3, index.getLibRAMHalf(), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 							}
 							else {
 								if (bUnfunny) {
 									//foo = bind(&Compare::compareWithDatabase_sloppy< vector<uint16_t>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
-									foo = bind(&Compare::compareWithDatabase< vector<packedBigPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_Full, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase< vector<elemType>*>, this, placeholders::_1, ref(iLocalThreadIdx), ref(vInputVec), placeholders::_2, placeholders::_3, index.getLibRAMFull(), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 							}
 						}
 						else {
 							if (bPartitioned) {
-								foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLibParted_p), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+								foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(iLocalThreadIdx), ref(vInputVec), placeholders::_2, placeholders::_3, ref(*index.getIndexTP()), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 							}
 							else {
 								if (bUnfunny) {
 									//foo = bind(&Compare::compareWithDatabase_sloppy<unique_ptr<unique_ptr<const taxaOnly>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib_taxaOnly), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
-									foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType_32p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(vLib), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType>[]>>, this, placeholders::_1, ref(iLocalThreadIdx), ref(vInputVec), placeholders::_2, placeholders::_3, ref(*index.getContentVecType()), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 							}
 						}
@@ -2065,9 +2360,9 @@ namespace kASA {
 
 						// because the stxxl is not threadsafe (as in two threads cannot access the same location on the drive), 
 						//   we need to separate the work and make sure that ranges are disjoint for every thread
-						size_t iChunkSize = vInputVec.size() / _iNumOfThreads;
-						size_t iStart = 0, iEnd = iChunkSize + vInputVec.size() % _iNumOfThreads;
-						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+						size_t iChunkSize = vInputVec.size() / iLocalNumOfThreads;
+						size_t iStart = 0, iEnd = iChunkSize + vInputVec.size() % iLocalNumOfThreads;
+						for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
 							uint64_t iSeenRange = get<0>(vInputVec[iEnd - 1]);
 							while (iEnd < vInputVec.size()) {
 								if (get<0>(vInputVec[iEnd]) == iSeenRange) {
@@ -2086,19 +2381,33 @@ namespace kASA {
 								iEnd = vInputVec.size();
 							}
 						}
+						debugBarrier
+
+						/*size_t iStart = 0, iEnd = transferBetweenRuns->vRangesOfOutVec[1];
+						for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
+
+							//cout << iStart << " " << iEnd << endl;
+							auto task = bind(foo, placeholders::_1, iStart, iEnd);
+							workerThreadPool[iThreadID].pushTask(task);
+							iStart = iEnd;
+							if (iLocalNumOfThreads != 1) {
+								iEnd = transferBetweenRuns->vRangesOfOutVec[iThreadID + 2];
+							}
+						}*/
+						
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
 						cout << "Divide for Compare_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
 						startTIME = std::chrono::high_resolution_clock::now();
 #endif
 
-						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+						for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
 							workerThreadPool[iThreadID].startThread();
 						}
-						for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+						for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
 							workerThreadPool[iThreadID].waitUntilFinished();
 						}
-
+						debugBarrier
 						if (someThingWentWrong) {
 							rethrow_exception(someThingWentWrong);
 						}
@@ -2111,6 +2420,63 @@ namespace kASA {
 
 						end = std::chrono::high_resolution_clock::now();
 						iTimeCompare += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+
+						if (this->_bVisualize) {
+							vector<tuple<string,size_t,size_t,uint32_t>> vResultingLinesToPrint;
+							vector<pair<uint32_t, uint64_t>> vResultScores;
+							for (const auto& entry : this->_translatedFramesForVisualization) {
+								cout << entry << endl;
+								for (const auto& elem : this->_matchedkMers) {
+									string sTempString = Utilities::lstrip(elem.first, '@');
+									//cout << sTempString << endl;
+									auto pos = entry.find(sTempString);
+									if (pos != string::npos) {
+										string visualize_outString = "";
+										for (size_t i = 0; i < pos; ++i) {
+											visualize_outString += " ";
+										}
+										visualize_outString += sTempString + "," + to_string(elem.second);
+										for (size_t i = visualize_outString.length() ; i < entry.length(); ++i) {
+											visualize_outString += " ";
+										}
+										vResultingLinesToPrint.push_back(make_tuple(visualize_outString, pos, sTempString.length(), elem.second));
+									}
+								}
+								debugBarrier
+								sort(vResultingLinesToPrint.begin(), vResultingLinesToPrint.end(), [&](const tuple<string, size_t, size_t, uint32_t>& a, const tuple<string, size_t, size_t, uint32_t>& b) { return make_tuple(get<1>(a),get<2>(a), get<3>(a)) < make_tuple(get<1>(b),get<2>(b), get<3>(b)); });
+
+								for (const auto& printableLines : vResultingLinesToPrint) {
+									cout << get<0>(printableLines) << endl;
+								}
+
+								sort(vResultingLinesToPrint.begin(), vResultingLinesToPrint.end(), [&](const tuple<string, size_t, size_t, uint32_t>& a, const tuple<string, size_t, size_t, uint32_t>& b) { return get<3>(a) < get<3>(b); });
+
+								uint32_t iSeentaxID = get<3>(vResultingLinesToPrint[0]);
+								uint64_t iScore = 0;
+								for (const auto& elem : vResultingLinesToPrint) {
+									if (iSeentaxID == get<3>(elem)) {
+										iScore += get<2>(elem);
+									}
+									else {
+										vResultScores.push_back(make_pair(iSeentaxID, iScore));
+										iScore = get<2>(elem);
+										iSeentaxID = get<3>(elem);
+									}
+								}
+								vResultScores.push_back(make_pair(iSeentaxID, iScore));
+								sort(vResultScores.begin(), vResultScores.end(), [](const pair<uint32_t, uint64_t>& a, const pair<uint32_t, uint64_t>& b) {return a.second > b.second; });
+								cout << "Scores: " << endl;
+								for (const auto& elem : vResultScores) {
+									cout << elem.first << " " << elem.second << endl;
+								}
+								cout << endl;
+
+								vResultScores.clear();
+
+								vResultingLinesToPrint.clear();
+							}
+						}
+						debugBarrier
 
 						///////////////////////////
 						if (bReadIDsAreInteresting) {
@@ -2136,7 +2502,7 @@ namespace kASA {
 
 						//iterate until no dna is left
 					}
-
+					debugBarrier
 					///////////////////////////////////////////////////////////////////////////////////////////////
 					if (tOutputThread) {
 						tOutputThread->join();
@@ -2147,11 +2513,11 @@ namespace kASA {
 						fOut << "\n" << "]";
 					}
 					fOut.flush(); // empty the buffer to avoid memory leak
-
+					debugBarrier
 					// sum up parallel results
-					for (int32_t iThreadID = 1; iThreadID < _iNumOfThreads; ++iThreadID) {
-						const uint64_t& iStepsize = uint64_t(iThreadID) * _iNumOfK * iAmountOfSpecies;
-						for (uint64_t iIdx = 0; iIdx < uint64_t(_iNumOfK)*iAmountOfSpecies; ++iIdx) {
+					for (int32_t iThreadID = 1; iThreadID < iLocalNumOfThreads; ++iThreadID) {
+						const uint64_t& iStepsize = uint64_t(iThreadID) * Base::_iNumOfK * iAmountOfSpecies;
+						for (uint64_t iIdx = 0; iIdx < uint64_t(Base::_iNumOfK)*iAmountOfSpecies; ++iIdx) {
 							vCount_all[iIdx] += vCount_all[iStepsize + iIdx];
 							vCount_unique[iIdx] += vCount_unique[iStepsize + iIdx];
 						}
@@ -2165,13 +2531,14 @@ namespace kASA {
 						cout << amountTaxArr[i] << endl;
 					}
 #endif
+					debugBarrier
 					// get profiling results
-					vector<uint64_t> vSumOfUniquekMers(_iNumOfK);
-					vector<double> vSumOfNonUniques(_iNumOfK);
-					vector<tuple<string, vector<pair<double, uint64_t>>, uint32_t>> vOut(iAmountOfSpecies, tuple<string, vector<pair<double, uint64_t>>, uint32_t>("", vector<pair<double, uint64_t>>(_iNumOfK), 0));
+					vector<uint64_t> vSumOfUniquekMers(Base::_iNumOfK);
+					vector<double> vSumOfNonUniques(Base::_iNumOfK);
+					vector<tuple<string, vector<pair<double, uint64_t>>, uint32_t>> vOut(iAmountOfSpecies, tuple<string, vector<pair<double, uint64_t>>, uint32_t>("", vector<pair<double, uint64_t>>(Base::_iNumOfK), 0));
 					for (uint32_t iSpecIdx = 1; iSpecIdx < iAmountOfSpecies; ++iSpecIdx) {
-						vector<pair<double, uint64_t>> vTemp(_iNumOfK);
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+						vector<pair<double, uint64_t>> vTemp(Base::_iNumOfK);
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							const uint64_t& iTempScore = vCount_unique[iSpecIdx + uint64_t(ikMerlength) * iAmountOfSpecies];
 							vSumOfUniquekMers[ikMerlength] += iTempScore;
 							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx + uint64_t(ikMerlength) * iAmountOfSpecies];
@@ -2191,11 +2558,12 @@ namespace kASA {
 						return false;
 					});
 
+					debugBarrier
 					// Because of the padding at the end to get useful k-mers between max_k and min_k (see sFalsekMerMarker), overall relative frequency is distorted
 					// therefore we need to calculate how many there were to get the number right, how many could have possibly matched
-					vector<uint64_t> vNumberOfGarbagekMersPerK(_iNumOfK, 0);
-					for (int32_t i = _iMaxK - _iMinK, j = 0; i > 0; --i, ++j) {
-						vNumberOfGarbagekMersPerK[j] = iNumOfReadsSum * 6 * i; //Number of reads * 2(forward,reverse complement) * 3(frames) * dist(max_k,min_k)
+					vector<uint64_t> vNumberOfGarbagekMersPerK(Base::_iNumOfK, 0);
+					for (int32_t i = Base::_iMaxK - Base::_iMinK, j = 0; i > 0; --i, ++j) {
+						vNumberOfGarbagekMersPerK[j] = iNumOfReadsSum * ((Base::_bSixFrames) ? 6 : 3) * i; //Number of reads * 2(forward,reverse complement) * 3(frames) * dist(max_k,min_k)
 					}
 
 					// save to file(s)
@@ -2217,7 +2585,7 @@ namespace kASA {
 							ostringstream sOutStr;
 							tableFileStream << "#tax ID,Name,Unique rel. freq. in %,Non-unique rel. freq. in %,Overall rel. freq. in %\n";
 							for (const auto& entry : vOut) {
-								if (get<1>(entry)[_iNumOfK - 1].first > 0 && !bBreakOut) {
+								if (get<1>(entry)[Base::_iNumOfK - 1].first > 0 && !bBreakOut) {
 									sOutStr << get<2>(entry) << "," << get<0>(entry);
 									if (get<1>(entry)[0].second == 0) {
 										sOutStr << "," << 0.0;
@@ -2249,36 +2617,36 @@ namespace kASA {
 						ostringstream sOutStr;
 						// long version: taxID,Name,Unique Counts,Unique rel. freq. x in 0.x,Non-unique Counts,Non-unique rel. freq. x in 0.x\n
 						tableFileStream << "#taxID,Name";
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Unique counts k=" << _iMaxK - ikMerlength;
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Unique counts k=" << Base::_iMaxK - ikMerlength;
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Unique rel. freq. k=" << _iMaxK - ikMerlength;
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Unique rel. freq. k=" << Base::_iMaxK - ikMerlength;
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Non-unique counts k=" << _iMaxK - ikMerlength;
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Non-unique counts k=" << Base::_iMaxK - ikMerlength;
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Non-unique rel. freq. k=" << _iMaxK - ikMerlength;
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Non-unique rel. freq. k=" << Base::_iMaxK - ikMerlength;
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Overall rel. freq. k=" << _iMaxK - ikMerlength;
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Overall rel. freq. k=" << Base::_iMaxK - ikMerlength;
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Overall unique rel. freq. k=" << _iMaxK - ikMerlength;
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Overall unique rel. freq. k=" << Base::_iMaxK - ikMerlength;
 						}
 						tableFileStream << "\n";
 
-						vector<double> vSumOfIdentified(_iNumOfK, 0), vSumOfUniqueIdentified(_iNumOfK, 0);
+						vector<double> vSumOfIdentified(Base::_iNumOfK, 0), vSumOfUniqueIdentified(Base::_iNumOfK, 0);
 						for (const auto& entry : vOut) {
-							if (get<1>(entry)[_iNumOfK - 1].first > 0) {
+							if (get<1>(entry)[Base::_iNumOfK - 1].first > 0) {
 								// unique count
 								sOutStr << get<2>(entry) << "," << get<0>(entry);
-								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 									sOutStr << "," << get<1>(entry)[ikMerlength].second;
 								}
 								// unique rel freq
-								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 									if (get<1>(entry)[ikMerlength].second == 0) {
 										sOutStr << "," << 0.0;
 									}
@@ -2287,27 +2655,27 @@ namespace kASA {
 									}
 								}
 								// non-unique count
-								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 									sOutStr << "," << get<1>(entry)[ikMerlength].first;
 								}
 								// non-unique rel freq
-								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 									if (bSpaced) {
 										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
 									}
 									else {
-										//sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (_iMaxK - _iMinK - ikMerlength) * 6 * iNumOfReadsSum);
+										//sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (Base::_iMaxK - Base::_iMinK - ikMerlength) * 6 * iNumOfReadsSum);
 										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
 									}
 								}
 								// Overall rel freq
-								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 									vSumOfIdentified[ikMerlength] += get<1>(entry)[ikMerlength].first;
 									sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
 								}
 
 								// Overall unique rel freq
-								for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 									vSumOfUniqueIdentified[ikMerlength] += get<1>(entry)[ikMerlength].second;
 									sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
 								}
@@ -2316,29 +2684,29 @@ namespace kASA {
 						}
 						// last entry
 						tableFileStream << "0,not identified";
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK * 4; ++ikMerlength) {
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK * 4; ++ikMerlength) {
 							// all counts for unique and non-unique relate to the identified number of counts so no value other than 0 can be written here
 							tableFileStream << "," << 0.0;
 						}
 
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							//cout << iNumberOfkMersInInput << " " << vNumberOfGarbagekMersPerK[ikMerlength] << " " << vSumOfIdentified[ikMerlength] << endl;
 							tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < _iNumOfK; ++ikMerlength) {
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfUniqueIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 						}
 						tableFileStream << "\n" << sOutStr.str();
 
-						allSumOfIdentified = vSumOfIdentified[_iNumOfK - 1];
+						allSumOfIdentified = vSumOfIdentified[Base::_iNumOfK - 1];
 						//}
 					}
 					else {
 						for (const auto& entry : vOut) {
-							allSumOfIdentified += get<1>(entry)[_iNumOfK - 1].first;
+							allSumOfIdentified += get<1>(entry)[Base::_iNumOfK - 1].first;
 						}
 					}
-
+					debugBarrier
 
 #ifdef TIME
 					endTIME = std::chrono::high_resolution_clock::now();
@@ -2349,10 +2717,10 @@ namespace kASA {
 					/*if (fTableFile != "") {
 						cout.rdbuf(orgBuf);
 					}*/
-					if (_bVerbose) {
+					if (Base::_bVerbose) {
 						cout << "OUT: Number of k-mers in input: " << iNumberOfkMersInInput << " of which " << allSumOfIdentified / iNumberOfkMersInInput * 100. << " % were identified." << endl;
 						cout << "OUT: Number of uniques:";
-						for (int32_t j = 0; j < _iNumOfK; ++j) {
+						for (int32_t j = 0; j < Base::_iNumOfK; ++j) {
 							cout << " " << vSumOfUniquekMers[j];
 						}
 						cout << endl;
@@ -2373,6 +2741,7 @@ namespace kASA {
 
 					allFilesProgress = transferBetweenRuns->iCurrentOverallPercentage;
 				}
+				debugBarrier
 #ifdef TIME
 				endTIME = std::chrono::high_resolution_clock::now();
 				cout << "End_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;

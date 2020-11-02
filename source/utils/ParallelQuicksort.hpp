@@ -53,7 +53,7 @@ namespace Utilities {
 	// The _Div_num will be divided by 2 after each task splitting. There are two special numbers for _Div_num:
 	//     1. When _Div_num reaches the point that _Div_num < _SortMaxTasksPerCore, it means we have split more tasks than cores.
 	//     2. When _Div_num reaches the point that _Div_num <= 1, it means stop splitting more tasks and begin sorting serially.
-	const int _SortMaxTasksPerCore = 8; // original: 1024
+	const int _SortMaxTasksPerCore = 1; // original: 1024
 
 	// This is a number mainly is used to control the sampling and dynamic task splitting strategies.
 	// If the user configurable minimal divisible chunk size (default is 2048) is smaller than FINE_GRAIN_CHUNK_SIZE,
@@ -238,6 +238,13 @@ namespace Utilities {
 		});
 
 		thread t(handle);
+		
+#if __GNUC__ && !defined(__llvm__)
+		auto native_thread = t.native_handle();
+		pthread_attr_t attr;
+		pthread_getattr_np(native_thread, &attr);
+		pthread_attr_setstacksize(&attr, 1024); // reduce stacksize
+#endif
 
 		_Parallel_quicksort_impl(_Begin, _I, _Func, _Next_div, _Chunk_size, _Depth + 1);
 

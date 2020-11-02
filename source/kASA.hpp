@@ -36,7 +36,7 @@ namespace kASA {
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		// Variables
-	protected:
+	public:
 		string _sTemporaryPath = "";
 
 		int32_t _iNumOfThreads;
@@ -46,7 +46,7 @@ namespace kASA {
 
 		int32_t _iMaxK, _iMinK, _iNumOfK, _iHighestK = 12, _iLowestK = 1;
 		unique_ptr<int32_t[]> _aOfK;
-		const string _sMaxKBlank;
+		string _sMaxKBlank = "";
 
 		static int8_t _sAminoAcids_bs[], _sAminoAcids_aas[];
 		const static int8_t _sAminoAcids_cs[], _sAminoAcids_un[];
@@ -185,7 +185,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Constructor with paths e.g. "derp/"
-		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _sMaxKBlank(12, ' '), _bVerbose(bVerbose), _bSixFrames(bSixFrames) {
+		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _bVerbose(bVerbose), _bSixFrames(bSixFrames) {
 #ifdef ENVIRONMENT32
 			_iMaxMemUsePerThread = (1024 / _iNumOfThreads) * 1024 * 1024;
 #else
@@ -197,10 +197,12 @@ namespace kASA {
 			omp_set_nested(1);
 			omp_set_dynamic(_iNumOfThreads);
 #endif
-
+			_iHighestK = (iHigherK > 12 && iHigherK <= HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : 12;
 			_iMaxK = (iHigherK <= _iHighestK && iHigherK >= iLowerK) ? iHigherK : _iHighestK;
 			_iMinK = (iLowerK < _iLowestK) ? _iLowestK : _iMinK;
-			//_iNumOfK = _iMaxK - _iMinK + 1;
+			_iNumOfK = _iMaxK - _iMinK + 1;
+
+			_sMaxKBlank = string(_iHighestK, ' ');
 
 			_aOfK.reset(new int32_t[_iNumOfK]);
 			for (int32_t i = 0; i < _iNumOfK; ++i) {
@@ -210,10 +212,30 @@ namespace kASA {
 			createConfig("stxxl_temp_", iNumOfCall, stxxl_mode);
 		}
 		
+		kASA(const kASA& obj) : _bVerbose(obj._bVerbose), _bSixFrames(obj._bSixFrames) {
+			_iMaxMemUsePerThread = obj._iMaxMemUsePerThread;
+			_iHighestK = obj._iHighestK;
+			_iMaxK = obj._iMaxK;
+			_iMinK = obj._iMinK;
+			_iNumOfK = obj._iNumOfK;
+			_aOfK.reset(new int32_t[_iNumOfK]);
+			for (int32_t i = 0; i < _iNumOfK; ++i) {
+				_aOfK[i] = _iMaxK - i;
+			}
+
+			//config already created
+			_iNumOfCall = obj._iNumOfCall;
+			_sTemporaryPath = obj._sTemporaryPath;
+			_iNumOfThreads = obj._iNumOfThreads;
+			_sMaxKBlank = obj._sMaxKBlank;
+		}
+
+
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Converts one aminoacid string to a coded kMer, using 5 bits per amino acid letter (max k = 12 => 60 bits used)
-		static inline uint64_t aminoacidTokMer(const string& aminoacid) {
-			uint64_t ikMer = 0;
+		template<class intType>
+		static inline intType aminoacidTokMer(const string& aminoacid) {
+			intType ikMer = 0;
 
 			const int32_t& iLengthAA = int32_t(aminoacid.length());
 			for (int32_t i = 0; i < iLengthAA - 1; ++i) {
@@ -227,8 +249,9 @@ namespace kASA {
 			return ikMer;
 		}
 
-		inline uint64_t aminoacidTokMer(const string::const_iterator& begin, const string::const_iterator& end) {
-			uint64_t ikMer = 0;
+		template<class intType>
+		inline intType aminoacidTokMer(const string::const_iterator& begin, const string::const_iterator& end) {
+			intType ikMer = 0;
 
 			const int32_t& iLengthAA = int32_t(end - begin);
 			for (int32_t i = 0; i < iLengthAA - 1; ++i) {
@@ -251,6 +274,13 @@ namespace kASA {
 			return ikMer;
 		}
 
+		inline uint128_t aminoacidTokMer(const uint128_t& kMer, const int8_t& aa) {
+			/// shift away the first letter and gather only the relevant bits that remain, then copy the 5 relevant bits of the input onto it
+			uint128_t ikMer = (uint128_t(0) | (kMer << 5)) & uint128_t(0x1FFFFFFFFFFFFFFF, numeric_limits<uint64_t>::max());
+			ikMer |= aa & 31;
+			return ikMer;
+		}
+
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Reverts a coded kMer to the respective aminoacid string
 		static inline string kMerToAminoacid(const int64_t& kMer, const int32_t& iMaxK) {
@@ -259,6 +289,21 @@ namespace kASA {
 			const int8_t& bitmask = 31;
 			while (counter >= 0) {
 				int8_t&& toBeChar = int8_t(kMer >> counter * 5);
+				toBeChar &= bitmask;
+				toBeChar |= 64;
+				aacid += toBeChar;
+				counter--;
+			}
+
+			return aacid;
+		}
+
+		static inline string kMerToAminoacid(const uint128_t& kMer, const int32_t& iMaxK) {
+			string aacid = "";
+			int32_t counter = iMaxK - 1;
+			const int8_t& bitmask = 31;
+			while (counter >= 0) {
+				uint8_t&& toBeChar = uint8_t(kMer >> counter * 5);
 				toBeChar &= bitmask;
 				toBeChar |= 64;
 				aacid += toBeChar;
@@ -284,15 +329,18 @@ namespace kASA {
 					if (sDummy == "l") {
 						cin >> lookup;
 					}
+					if (sDummy == "e") {
+						elem = in.end() - 20;
+					}
 				}
 				if (lookup != "") {
-					if (kMerToAminoacid(elem->first, 12) == lookup) {
-						cout << elem->first << " " << kMerToAminoacid(elem->first, 12) << " " << elem->second << endl;
+					if (kMerToAminoacid(elem->first, (is_same<T,contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12) == lookup) {
+						cout << elem->first << " " << kMerToAminoacid(elem->first, (is_same<T, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12) << " " << elem->second << endl;
 						lookup = "";
 					}
 				}
 				else {
-					cout << elem->first << " " << kMerToAminoacid(elem->first, 12) << " " << elem->second << endl;
+					cout << elem->first << " " << kMerToAminoacid(elem->first, (is_same<T, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12) << " " << elem->second << endl;
 					++iCounter;
 				}
 			}
@@ -301,6 +349,7 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Counts the number of kMers for each taxon (frequency). 
 		// Usually this is counted while creating the index. If for some reason the frequency file got lost, it can be recreated with this.
+		template<class vecType>
 		inline void GetFrequencyK(const string& contentFile, const string& sLibFile, const string& sOutFile) {
 			// test if files exists
 			if (!ifstream(contentFile) || !ifstream(sLibFile)) {
@@ -327,9 +376,9 @@ namespace kASA {
 			uint64_t iSizeOfVec = 0;
 			fInfo >> iSizeOfVec;
 			stxxlFile libfile(sLibFile, stxxl::file::RDONLY);
-			unique_ptr<unique_ptr<const contentVecType_32p>[]> libvec(new unique_ptr<const contentVecType_32p>[_iNumOfThreads]);
+			unique_ptr<unique_ptr<const vecType>[]> libvec(new unique_ptr<const vecType>[_iNumOfThreads]);
 			for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-				libvec[i].reset(new const contentVecType_32p(&libfile, iSizeOfVec));
+				libvec[i].reset(new const vecType(&libfile, iSizeOfVec));
 			}
 			const int32_t& iMaxNumK = _iHighestK - _iLowestK + 1;
 			unique_ptr<uint64_t[]> aFrequencyArray(new uint64_t[_iNumOfThreads * iIdxCounter * iMaxNumK]);
@@ -723,6 +772,157 @@ namespace kASA {
 				iUnnamedCounter = poolAndNames.second;
 				for (const auto& elem : vEntriesWithoutAccNr) {
 					contentFile << "EWAN_" << iUnnamedCounter++ << "\t" << elem.second << "\t" << elem.second << "\t" << elem.first << ((bTaxIdsAsStrings) ? ("\t" + to_string(iLineCounter++)) : "") << endl;
+				}
+
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Merge two content files
+		inline void mergeContentFiles(const string& contentFile, const string& contentFile2, const string& contentOut) {
+			try {
+				// Warning: taxonomic levels must not change in an update
+
+				auto func = [](const string& sTempLineSpecIDs, const string& sCurrLineSpecIDs, const string& sTempLineAccNrs, const string& sCurrLineAccNrs) {
+					unordered_set<string> sSpecIDs, sAccNrs;
+					// concatenate non-redundant species IDs
+					const auto& newSpecIDs = Utilities::split(sTempLineSpecIDs, ';'); // tempLineContent[2]
+					const auto& currentSpecIDs = Utilities::split(sCurrLineSpecIDs, ';'); // get<1>(entry->second)
+					sSpecIDs.insert(newSpecIDs.cbegin(), newSpecIDs.cend());
+					sSpecIDs.insert(currentSpecIDs.cbegin(), currentSpecIDs.cend());
+					string sNewSpecIDs = "";
+					for (const auto& elem : sSpecIDs) {
+						sNewSpecIDs += elem + ";";
+					}
+					sNewSpecIDs.pop_back();
+
+					// concatenate non-redundant accession numbers
+					const auto& newAccNrs = Utilities::split(sTempLineAccNrs, ';'); // tempLineContent[3]
+					const auto& currentAccNrs = Utilities::split(sCurrLineAccNrs, ';'); // get<2>(entry->second)
+					sAccNrs.insert(newAccNrs.cbegin(), newAccNrs.cend());
+					sAccNrs.insert(currentAccNrs.cbegin(), currentAccNrs.cend());
+					string sNewAccNrs = "";
+					for (const auto& elem : sAccNrs) {
+						sNewAccNrs += elem + ";";
+					}
+					sNewAccNrs.pop_back();
+
+					return make_pair(sNewSpecIDs, sNewAccNrs);
+				};
+
+
+				if (_bVerbose) {
+					cout << "OUT: reading and checking existing content file..." << endl;
+				}
+
+				pair<uint32_t, uint32_t> pool(0, 0);
+
+				ifstream fContent;
+				bool bTaxIdsAsStrings = false;
+				//fContent.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+				fContent.open(contentFile);
+				if (!fContent) {
+					throw runtime_error("First content file couldn't be read!");
+				}
+				//uint32_t iAmountOfSpecies = 1;
+				string sTempLine = "";
+				unordered_map<string, tuple<string, string, string, string>> mOrganisms;
+				vector<string> vDuplicateDummys;
+				uint64_t iLargestLineIndex = 1;
+				while (getline(fContent, sTempLine)) {
+					if (sTempLine != "") {
+						const auto& tempLineContent = Utilities::split(sTempLine, '\t');
+						if (tempLineContent.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
+
+						bool bDummy = false;
+						// check for dummys to get the current counter
+						if (tempLineContent[0].find("EWAN") != string::npos) {
+							bDummy = true;
+							const auto& ewanNumber = stoul(Utilities::split(tempLineContent[0], '_')[1]);
+							pool.second = (ewanNumber > pool.second) ? ewanNumber : pool.second; // get highest dummy name counter
+							const auto& ewanTaxID = stoul(tempLineContent[1]);
+							pool.first = (ewanTaxID < pool.first) ? ewanTaxID : pool.first; // get lowest dummy taxID
+						}
+						auto entry = mOrganisms.find(tempLineContent[1]);
+						if (entry != mOrganisms.end()) {
+							if (bDummy) {
+								vDuplicateDummys.push_back(tempLineContent[3]);
+							}
+							else {
+								// content file is corrupted
+								if (_bVerbose) {
+									cout << "OUT: Content file is corrupted, duplicate entries" << tempLineContent[0] << " and " << get<0>(entry->second) << " were found. Merging them now..." << endl;
+								}
+
+								const auto& res = func(tempLineContent[2], get<1>(entry->second), tempLineContent[3], get<2>(entry->second));
+
+								entry->second = make_tuple(get<0>(entry->second), res.first, res.second, tempLineContent[4]);
+							}
+						}
+						else {
+							if (bTaxIdsAsStrings) {
+								const auto& currLineIdx = std::stoull(tempLineContent[4]);
+								iLargestLineIndex = (iLargestLineIndex < currLineIdx) ? currLineIdx : iLargestLineIndex;
+								mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], tempLineContent[4]); // [taxID] -> (Name, species ID, Acc Nrs., lineIdx) 
+							}
+							else {
+								mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], ""); // [taxID] -> (Name, species ID, Acc Nrs.) 
+							}
+						}
+					}
+				}
+				fContent.close();
+
+				for (const auto& entry : vDuplicateDummys) {
+					const auto& IDStr = to_string(--pool.first);
+					const auto& nameStr = "EWAN_" + to_string(++pool.second);
+					mOrganisms[IDStr] = make_tuple(nameStr, IDStr, entry, to_string(iLargestLineIndex++));
+				}
+				if (pool.first == 0) {
+					pool.first = numeric_limits<uint32_t>::max() - 1;
+				}
+
+				if (_bVerbose) {
+					cout << "OUT: merging content files..." << endl;
+				}
+
+				ifstream content2(contentFile2);
+				if (!content2) {
+					throw runtime_error("Second content file couldn't be read!");
+				}
+				// same as above
+				while (getline(content2, sTempLine)) {
+					if (sTempLine != "") {
+						const auto& tempLineContent = Utilities::split(sTempLine, '\t');
+						auto entry = mOrganisms.find(tempLineContent[1]);
+						if (entry != mOrganisms.end()) {
+							const auto& res = func(tempLineContent[2], get<1>(entry->second), tempLineContent[3], get<2>(entry->second));
+
+							entry->second = make_tuple(tempLineContent[0], res.first, res.second, get<3>(entry->second)); // overwrite old name with new one
+						}
+						else {
+							mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], to_string(iLargestLineIndex++)); // [taxID] -> (Name, species ID, Acc Nrs.) 
+						}
+					}
+				}
+				content2.close();
+
+				if (_bVerbose) {
+					cout << "OUT: writing new content file..." << endl;
+				}
+
+				// write content file
+				ofstream fContentOS(contentOut);
+				if (!fContentOS) {
+					throw runtime_error("Content file couldn't be opened for writing!");
+				}
+				for (const auto& entry : mOrganisms) {
+					fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << ((bTaxIdsAsStrings) ? ("\t" + get<3>(entry.second)) : "") << endl;
 				}
 
 			}

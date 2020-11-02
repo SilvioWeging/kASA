@@ -118,6 +118,111 @@ private:
 				}
 			}
 		);
+#if __GNUC__ && !defined(__llvm__)
+		auto native_thread = T[0].native_handle();
+		pthread_attr_t attr;
+		pthread_getattr_np(native_thread, &attr);
+		pthread_attr_setstacksize(&attr, 1024); // reduce stacksize
+#endif
 	}
 
+};
+
+#include <queue>
+
+class WorkerQueue {
+	vector<unique_ptr<thread> > pool; // this holds the threads
+	queue< pair<function<void(const int32_t&)>,int32_t> > tasks; // this holds the tasks
+	condition_variable cv_worker;
+	condition_variable cv_master;
+	mutex taskMutex;
+	bool stop = false, bStarted = false;
+
+public:
+	/////////////////////////////////////////////////////////
+	inline WorkerQueue(const int32_t& iNumOfThreads) {
+		for (int32_t i = 0; i < iNumOfThreads; ++i) {
+			startWorker(i);
+		}
+	}
+
+	////////////////////////////////////////////////////////
+	inline ~WorkerQueue() {
+		std::unique_lock<std::mutex> lock(taskMutex);
+		stop = true;
+		cv_worker.notify_all();
+		cv_worker.wait(lock, [this] { 
+			for (size_t i = 0; i < this->pool.size(); ++i) {
+				if (this->pool[i] != nullptr) {
+					return false;
+				}
+			}
+			return true; 
+		});
+	}
+
+	////////////////////////////////////////////////////////
+	inline void pushTask(const function<void(const int32_t&)>& task, const int32_t& iID) {
+		tasks.push(make_pair([task](const int32_t& id) { task(id); }, iID));
+	}
+	
+	////////////////////////////////////////////////////////
+	inline void start() {
+		if (!tasks.empty()) {
+			bStarted = true;
+			cv_worker.notify_all();
+		}
+	}
+
+	////////////////////////////////////////////////////////
+	inline void waitUntilFinished() {
+		if (bStarted) {
+			unique_lock<std::mutex> lock(this->taskMutex);
+			this->cv_master.wait(lock,
+				[this] { return this->tasks.empty(); });
+		}
+		bStarted = false;
+	}
+
+private:
+	////////////////////////////////////////////////////////
+	inline void startWorker(const size_t& index) {
+		pool.emplace_back( new thread(
+			[this,index]() {
+				while (true) {
+
+					pair<function<void(const int32_t&)>,int32_t> task;
+					bool bQueueisEmpty = false;
+					{
+						std::unique_lock<std::mutex> lock(this->taskMutex);
+						this->cv_worker.wait(lock, [this]() {return !(this->tasks.empty()) || this->stop; });
+
+						if (this->stop) {
+							this->pool[index]->detach();
+							this->pool[index].reset();
+							this->cv_worker.notify_one();
+							return;
+						}
+
+						if (!this->tasks.empty()) {
+							task = std::move(this->tasks.front());
+							this->tasks.pop();
+							bQueueisEmpty = this->tasks.empty();
+						}
+						else {
+							continue;
+						}
+					}
+
+					if (bQueueisEmpty) {
+						std::unique_lock<std::mutex> lock(this->taskMutex);
+						cv_master.notify_one();
+					}
+
+					task.first(task.second);
+				}
+			}
+		)
+		);
+	}
 };

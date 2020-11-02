@@ -15,26 +15,30 @@
 #include "../utils/WorkerThread.hpp"
 
 namespace kASA {
+	template<class vecType, class elemType, class intType>
 	class Read : public kASA {
 		const bool _bInputAreAAs;
-		const bool bUnfunny;
+		const bool _bUnfunny;
+	public:
+		bool _bVisualize = false;
+		vector<string> _translatedFramesForVisualization;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bInputAreAAs(bTranslated), bUnfunny(bUnfunny) {}
-
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bInputAreAAs(bTranslated), _bUnfunny(bUnfunny) {}
+		Read(const kASA& obj, const bool& bTranslated = false, const bool& bUnfunny = false) : kASA(obj), _bInputAreAAs(bTranslated), _bUnfunny(bUnfunny) {}
 	protected:
 
 		// test for garbage to correctly count matchable k-mers
 		//const uint64_t _tails[12] = { 0x1E, 0x3C0, 0x7800, 0xF0000, 0x1E00000, 0x3C000000, 0x780000000, 0xF00000000, 0x1E000000000, 0x3C0000000000, 0x7800000000000, 0xF000000000000 }; // ^, ^@, ^@@, ...
 
 		/////////////////////////////////
-		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec) {
+		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& resultsVec) {
 			const int32_t& iMaxRange = iNumberOfkMers;
 			if (iMaxRange > 0) {
 				for (int32_t iCurrentkMerCounter = 0; iCurrentkMerCounter < iMaxRange; ++iCurrentkMerCounter) {
-					auto kMer = aminoacidTokMer(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + 12);
+					auto kMer = aminoacidTokMer<intType>(sProteinSequence.cbegin() + iCurrentkMerCounter, sProteinSequence.cbegin() + iCurrentkMerCounter + _iHighestK);
 					
-					if (bUnfunny) {
+					if (_bUnfunny) {
 						kMer = aminoAcidsToAminoAcid(kMer);
 					}
 
@@ -45,26 +49,34 @@ namespace kASA {
 		}
 
 		/////////////////////////////////
-		inline void convert_dnaTokMer(const string& sDna, const readIDType& iID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, const int32_t& iMaxKTimes3, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& resultsVec) {
+		inline void convert_dnaTokMer(const string& sDna, const readIDType& iID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, const int32_t& iMaxKTimes3, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& resultsVec) {
 			// This value gives the remaining length of the read which is the number of kMers created
 			const int32_t& iMaxRange = iNumberOfkMers;
 			if (iMaxRange >= 1) {
 				// go through the dna, convert it framewise to an aminoacid kMer and then to its coded representation
 				const int32_t& iNumFrames = (iMaxRange >= 3) ? 3 : iMaxRange;
+				if (_bVisualize && _translatedFramesForVisualization.size() == 0) {
+					for (int32_t i = 0; i < iNumFrames; ++i) {
+						_translatedFramesForVisualization.push_back("");
+					}
+				}
 
 				int32_t ikMerCounter = 0;
 
 				// Frameshifting, so that only one amino acid has to be computed
 				// Compute initial frames
-				AAFrames<uint64_t> sAAFrames;
+				AAFrames<intType> sAAFrames;
 
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
 					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
-					sAAFrames[j] = aminoacidTokMer(sTempFrame);
+					if (_bVisualize) {
+						_translatedFramesForVisualization[j] += sTempFrame;
+					}
+					sAAFrames[j] = aminoacidTokMer<intType>(sTempFrame);
 
 					auto kmerForSearchInTrie = sAAFrames[j];
-					if (bUnfunny) {
+					if (_bUnfunny) {
 						kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 					}
 
@@ -90,10 +102,18 @@ namespace kASA {
 						for (int32_t k = 0; k < 3; ++k) {
 							int8_t sTempAA = ' ';
 							dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
-							sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
+							if (_bVisualize) {
+								_translatedFramesForVisualization[k] += sTempAA;
+							}
+							if (_iMaxK <= 12) {
+								sAAFrames[k] = aminoacidTokMer(static_cast<uint64_t>(sAAFrames[k]), sTempAA);
+							}
+							else {
+								sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
+							}
 
 							auto kmerForSearchInTrie = sAAFrames[k];
-							if (bUnfunny) {
+							if (_bUnfunny) {
 								kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 							}
 
@@ -112,10 +132,18 @@ namespace kASA {
 					for (int32_t j = 0; j < iMaxRangeMod3; ++j) {
 						int8_t sTempAA = ' ';
 						dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
-						sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
+						if (_bVisualize) {
+							_translatedFramesForVisualization[j] += sTempAA;
+						}
+						if (_iMaxK <= 12) {
+							sAAFrames[j] = aminoacidTokMer(static_cast<uint64_t>(sAAFrames[j]), sTempAA);
+						}
+						else {
+							sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
+						}
 
 						auto kmerForSearchInTrie = sAAFrames[j];
-						if (bUnfunny) {
+						if (_bUnfunny) {
 							kmerForSearchInTrie = aminoAcidsToAminoAcid(kmerForSearchInTrie);
 						}
 
@@ -132,19 +160,19 @@ namespace kASA {
 		}
 
 		/////////////////////////////////
-		inline void convertLinesTokMers_new(const size_t& start, const size_t& end, uint64_t iPositionForOut, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& kMerVecOut) {
+		inline void convertLinesTokMers_new(const vector<tuple<string, readIDType, int32_t>>& vLines, const vector<tuple<string, readIDType, int32_t>>& vRCLines, const size_t& start, const size_t& end, uint64_t iPositionForOut, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& kMerVecOut) {
 
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
-
+			//const uint64_t iStartPositionForOut = iPositionForOut;
 			for (uint64_t i = start; i < end; ++i) {
-				if (get<0>(this->vLines[i]) != "" || get<0>(this->vRCLines[i]) != "") {
+				if (get<0>(vLines[i]) != "" || get<0>(vRCLines[i]) != "") {
 					if (_bInputAreAAs) {
-						convert_alreadyTranslatedTokMers(get<0>(this->vLines[i]), get<1>(this->vLines[i]), get<2>(this->vLines[i]), iPositionForOut, kMerVecOut);
+						convert_alreadyTranslatedTokMers(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, kMerVecOut);
 					}
 					else {
-						convert_dnaTokMer(get<0>(this->vLines[i]), get<1>(this->vLines[i]), get<2>(this->vLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
+						convert_dnaTokMer(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
 						if (_bSixFrames) {
-							convert_dnaTokMer(get<0>(this->vRCLines[i]), get<1>(this->vRCLines[i]), get<2>(this->vRCLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
+							convert_dnaTokMer(get<0>(vRCLines[i]), get<1>(vRCLines[i]), get<2>(vRCLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
 						}
 					}
 				}
@@ -157,28 +185,30 @@ namespace kASA {
 
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+	public:
 		struct strTransfer {
-			string name = "", overhang = "";
+			string name = "", overhang = "", overhang2 = "";
 			size_t lengthOfDNA = 0;
 			bool finished = true, addTail = false, bNewRead = true;
 			uint8_t iExpectedInput = 0;
-			string lastLine;
+			string lastLine = "", lastLine2 = "";
 			//list<readIDType> vReadIDs;
 			//readIDType iCurrentReadID = 0;
 			//unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
 			uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iNumOfAllCharsRead = 0, iCurrentOverallPercentage = 0, iNumOfNewReads = 0;
+			//vector<uint64_t> vRangesOfOutVec;
 		};
 
-	private: 
-			vector<tuple<string, readIDType, int32_t>> vLines, vRCLines;
 	public:
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fastq as input for comparison
 		template<typename T>
-		inline uint64_t readFastqa_partialSort(Utilities::FileReader<T>& input, vector<tuple<uint64_t, uint64_t, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, const bool& bIsFasta, unique_ptr<strTransfer>& transfer, vector<WorkerThread>& threadPool) {
+		inline uint64_t readFastqa_partialSort(Utilities::FileReader<T>& input, Utilities::FileReader<T>& input2, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vOut, list<pair<string, uint32_t>>& vReadNameAndLength, int64_t iSoftMaxSize, const uint64_t& iAmountOfSpecies, const uint64_t& iFileLength, const size_t& overallFilesSize, const bool& bReadIDsAreInteresting, const bool& bIsFasta, unique_ptr<strTransfer>& transfer, vector<WorkerThread>& threadPool) {
+			
+			vector<tuple<string, readIDType, int32_t>> vLines, vRCLines, vLines2, vRCLines2;
 			uint64_t iSumOfkMers = 0;
+			const int64_t iAvailMemory = iSoftMaxSize / (1024 * 1024);
 			try {
 //#define TIME
 #ifdef TIME
@@ -211,31 +241,25 @@ namespace kASA {
 
 				////////////////////////////////////////////////////////
 				uint8_t iExpectedInput = transfer->iExpectedInput; // 0 = name, 1 = sequence, 2 = + or quality
-				string sName = transfer->name, sDNA = "", sOverhang = transfer->overhang;
+				string sName = transfer->name, sDNA = "", sOverhang = transfer->overhang, sDNA2 = "", sOverhang2 = transfer->overhang2;
 				size_t iDNALength = transfer->lengthOfDNA, iQualityLength = 0;
 				bool bNewRead = transfer->bNewRead, bAddTail = transfer->addTail;
 
-				if (transfer->lastLine != "") {
-					auto lastLineKmerSize = calculatekMerCount(transfer->lastLine);
-					this->vLines.emplace_back(transfer->lastLine, 0ul, lastLineKmerSize);
-					//this->vRCLines.emplace_back("", 0ul, 0);
-
-					iSumOfkMers += lastLineKmerSize;
-					iSoftMaxSize -= lastLineKmerSize * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
-					if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
-						bNotFull = false;
-					}
-				}
-
 				transfer->iNumOfNewReads = 0 + (transfer->addTail);
 				transfer->finished = false;
-				pair<std::string, bool> resultChunkPair;
+				pair<std::string, bool> resultChunkPair, resultChunkPair2;
+				bool bReadTooShort = false;
 
 				while (!input.eof() && bNotFull) {
 					uint64_t iNumOfChars = 0;
 					resultChunkPair.first = "";
 					resultChunkPair.second = false;
 					input.getChunk(resultChunkPair, iNumOfChars);
+					if (input2.notNull()) {
+						resultChunkPair2.first = "";
+						resultChunkPair2.second = false;
+						input2.getChunk(resultChunkPair2, iNumOfChars);
+					}
 
 					if (iExpectedInput == 1 && (resultChunkPair.first.length() < static_cast<size_t>((_bInputAreAAs) ? (_iHighestK + 1) : (3 * _iHighestK + 1))) && resultChunkPair.second == false) {
 						// currently read DNA string is too short and there is more DNA to be had, usually happens when the end of the buffer is read but the file still contains DNA
@@ -243,6 +267,9 @@ namespace kASA {
 						transfer->iNumOfCharsRead += iNumOfChars;
 						transfer->iNumOfAllCharsRead += iNumOfChars;
 						input.getChunk(resultChunkPair, iNumOfChars); // new DNA will be appended
+						if (input2.notNull()) {
+							input2.getChunk(resultChunkPair2, iNumOfChars);
+						}
 					}
 
 					if (_bVerbose && iFileLength != 0) {
@@ -267,10 +294,18 @@ namespace kASA {
 					}
 					
 					if (resultChunkPair.first.front() == '+' && iExpectedInput != 2) {
+						if (input2.notNull()) {
+							if (resultChunkPair2.first.front() != '+') {
+								throw runtime_error("Paired-end files are out of sync!");
+							}
+						}
 						if (!resultChunkPair.second) {
 							input.ignore(iNumOfChars); // discard the rest of the +
 							transfer->iNumOfCharsRead += iNumOfChars;
 							transfer->iNumOfAllCharsRead += iNumOfChars;
+							if (input2.notNull()) {
+								input2.ignore(iNumOfChars);
+							}
 						}
 						iExpectedInput = 2;
 						continue;
@@ -279,24 +314,30 @@ namespace kASA {
 					if (bIsFasta && resultChunkPair.first.front() == '>') {
 						if (bAddTail) {
 							// Pad very small reads
-							if (_bInputAreAAs) {
-								while (get<0>(this->vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-									get<0>(this->vLines.back()) += '^';
-									get<2>(this->vLines.back())++;
+							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
+								if (_bInputAreAAs) {
+									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+										get<0>(vLines.back()) += '^';
+										get<2>(vLines.back())++;
+									}
 								}
-							}
-							else {
-								while (get<0>(this->vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-									get<0>(this->vLines.back()) += 'X';
-									get<2>(this->vLines.back())++;
+								else {
+									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+										get<0>(vLines.back()) += 'X';
+										get<2>(vLines.back())++;
+									}
 								}
+
+								get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+								get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+
+								iSumOfkMers += sFalsekMerMarker.size();
+								iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+							};
+							padding(vLines);
+							if (input2.notNull()) {
+								padding(vLines2);
 							}
-
-							get<0>(this->vLines.back()) += sFalsekMerMarker; // add false marker
-							get<2>(this->vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
-
-							iSumOfkMers += sFalsekMerMarker.size();
-							iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
 
 							if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 								bNotFull = false;
@@ -317,8 +358,9 @@ namespace kASA {
 
 					const uint8_t iCurrentExpInput = iExpectedInput;
 					switch (iCurrentExpInput) {
-
+						///////////////////////////////////////////////// case 0
 					case 0:
+					{
 						if (bIsFasta) {
 							sName = Utilities::lstrip(resultChunkPair.first, '>');
 						}
@@ -332,9 +374,14 @@ namespace kASA {
 							transfer->iNumOfCharsRead += iNumOfChars;
 							transfer->iNumOfAllCharsRead += iNumOfChars;
 							sName += resultChunkPair.first;
+							if (input2.notNull()) {
+								resultChunkPair2.first = "";
+								input2.getChunk(resultChunkPair2, iNumOfChars);
+							}
 						}
 						bNewRead = true;
 						sOverhang = "";
+						sOverhang2 = "";
 						iDNALength = 0;
 						iQualityLength = 0;
 
@@ -351,92 +398,168 @@ namespace kASA {
 
 						iExpectedInput = 1;
 						break;
-
+					}
+					///////////////////////////////////////////////// case 1
 					case 1:
+					{
+						auto searchAndReplaceLetters = [&](pair<std::string, bool>& resultChunkPair) {
+							for (char& c : resultChunkPair.first) {
+								if (c == '\t' || c == ' ') {
+									throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:\n" + sName);
+								}
+								else {
+									if (_bInputAreAAs) {
+										if (c == '*') {
+											c = '[';
+										}
+									}
+									else {
+										if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
+											c = 'Z';
+										}
+									}
+								}
+							}
+						};
+						searchAndReplaceLetters(resultChunkPair);
+						if (input2.notNull()) {
+							searchAndReplaceLetters(resultChunkPair2);
+						}
 
-						for (char& c : resultChunkPair.first) {
-							if (c == '\t' || c == ' ') {
-								throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:\n" + sName);
+
+						auto funcReadTooShort = [&](string& sDNA, string& sOverhang, const pair<std::string, bool>& resultChunkPair) {
+							sDNA = sOverhang + resultChunkPair.first;
+							iDNALength += resultChunkPair.first.length();
+							if (_bInputAreAAs) {
+								if (sDNA.length() < size_t(_iHighestK)) {
+									sOverhang = sDNA;
+									bReadTooShort = true;
+								}
+								else {
+									sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
+									bReadTooShort = false;
+								}
 							}
 							else {
-								if (_bInputAreAAs) {
-									if (c == '*') {
-										c = '[';
+								if (sDNA.length() < size_t(_iHighestK) * 3 && !resultChunkPair.second) {
+									sOverhang = sDNA;
+									bReadTooShort = true;
+								}
+								else {
+									if (sDNA.length() < size_t(_iHighestK) * 3 && resultChunkPair.second) {
+										sOverhang = "";
+										bReadTooShort = false;
+										while (sDNA.length() < size_t(_iHighestK) * 3) {
+											sDNA += 'X';
+										}
+									}
+									else {
+										sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK * 3);
+										bReadTooShort = false;
+									}
+								}
+							}
+						};
+						funcReadTooShort(sDNA, sOverhang, resultChunkPair);
+						if (input2.notNull()) {
+							funcReadTooShort(sDNA2, sOverhang2, resultChunkPair2);
+						}
+
+						auto emplaceBack = [&](const string& sDNA, vector<tuple<string, readIDType, int32_t>>& vLines, vector<tuple<string, readIDType, int32_t>>& vRCLines) {
+							if (!bReadTooShort) {
+								if (bNewRead) {
+									bNewRead = false;
+									if (!_bInputAreAAs && _bSixFrames) {
+										string tempDNA = reverseComplement(sDNA);
+										while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+											tempDNA += 'X';
+										}
+										tempDNA += sFalsekMerMarker;
+										vRCLines.emplace_back(tempDNA, iLocalReadID, calculatekMerCount(tempDNA));
+										iSoftMaxSize -= tempDNA.length() * sizeof(char) + sizeof(readIDType) + sizeof(int32_t);
 									}
 								}
 								else {
-									if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
-										c = 'Z';
+									if (!_bInputAreAAs && _bSixFrames) {
+										const auto& rc = reverseComplement(sDNA);
+										vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
+										iSoftMaxSize -= rc.length() * sizeof(char) + sizeof(readIDType) + sizeof(int32_t);
 									}
 								}
-							}
-						}
 
-						sDNA = sOverhang + resultChunkPair.first;
-						iDNALength += resultChunkPair.first.length();
-						if (_bInputAreAAs) {
-							if (sDNA.length() < size_t(_iHighestK)) {
-								sOverhang = sDNA;
+								vLines.emplace_back(sDNA, iLocalReadID, calculatekMerCount(sDNA));
+								iSoftMaxSize -= sDNA.length() * sizeof(char) + sizeof(readIDType) + sizeof(int32_t);
+								bAddTail = true;
 							}
-							else {
-								sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
-							}
+						};
+						bool bNewReadTemp = bNewRead;
+						emplaceBack(sDNA, vLines, vRCLines);
+						if (input2.notNull()) {
+							bNewRead = bNewReadTemp;
+							emplaceBack(sDNA2, vLines2, vRCLines2);
 						}
-						else {
-							if (sDNA.length() < size_t(_iHighestK) * 3) {
-								sOverhang = sDNA;
-							}
-							else {
-								sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK * 3);
-							}
-						}
-
-						if (bNewRead) {
-							bNewRead = false;
-							if (!_bInputAreAAs && _bSixFrames) {
-								string tempDNA = reverseComplement(sDNA);
-								while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-									tempDNA += 'X';
-								}
-								tempDNA += sFalsekMerMarker;
-								this->vRCLines.emplace_back(tempDNA, iLocalReadID, calculatekMerCount(tempDNA));
-							}
-						}
-						else {
-							if (!_bInputAreAAs && _bSixFrames) {
-								const auto& rc = reverseComplement(sDNA);
-								this->vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
-							}
-						}
-
-
-						this->vLines.emplace_back(sDNA, iLocalReadID, calculatekMerCount(sDNA));
-
-						bAddTail = true;
 
 						break;
-
+					}
+					///////////////////////////////////////////////// case 2
 					case 2:
-						if (bAddTail) {
-							// Pad very small reads
-							if (_bInputAreAAs) {
-								while (get<0>(this->vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-									get<0>(this->vLines.back()) += '^';
-									get<2>(this->vLines.back())++;
+					{
+						if (vLines.size() == 0) {
+							if (transfer->lastLine != "") {
+								auto lastLineKmerSize = calculatekMerCount(transfer->lastLine);
+								vLines.emplace_back(transfer->lastLine, 0ul, lastLineKmerSize);
+								if (_bSixFrames) {
+									vRCLines.emplace_back("", 0ul, 0);
+								}
+
+								if (input2.notNull()) {
+									auto lastLineKmerSize2 = calculatekMerCount(transfer->lastLine2);
+									vLines2.emplace_back(transfer->lastLine2, 0ul, lastLineKmerSize2);
+									if (_bSixFrames) {
+										vRCLines2.emplace_back("", 0ul, 0);
+									}
+									lastLineKmerSize += lastLineKmerSize2;
+								}
+
+								iSumOfkMers += lastLineKmerSize;
+								iSoftMaxSize -= lastLineKmerSize * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+								if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
+									bNotFull = false;
 								}
 							}
 							else {
-								while (get<0>(this->vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-									get<0>(this->vLines.back()) += 'X';
-									get<2>(this->vLines.back())++;
-								}
+								throw runtime_error("No overhang line was found, something went wrong while parsing the input!");
 							}
+						}
 
-							get<0>(this->vLines.back()) += sFalsekMerMarker; // add false marker
-							get<2>(this->vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
 
-							iSumOfkMers += sFalsekMerMarker.size();
-							iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+						if (bAddTail) {
+							// Pad very small reads
+							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
+								if (_bInputAreAAs) {
+									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+										get<0>(vLines.back()) += '^';
+										get<2>(vLines.back())++;
+									}
+								}
+								else {
+									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+										get<0>(vLines.back()) += 'X';
+										get<2>(vLines.back())++;
+									}
+								}
+
+								get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+								get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+								iSoftMaxSize -= sFalsekMerMarker.length() * sizeof(char);
+
+								iSumOfkMers += sFalsekMerMarker.size();
+								iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+							};
+							padding(vLines);
+							if (input2.notNull()) {
+								padding(vLines2);
+							}
 
 							if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 								bNotFull = false;
@@ -453,13 +576,21 @@ namespace kASA {
 						}
 
 						iQualityLength += resultChunkPair.first.length();
-						while (!resultChunkPair.second) {
+						if (input2.notNull()) {
+							iQualityLength += resultChunkPair2.first.length();
+						}
+						while (!resultChunkPair.second || iQualityLength < iDNALength) {
 							resultChunkPair.first = "";
 							iNumOfChars = 0;
 							input.getChunk(resultChunkPair, iNumOfChars); // get the whole quality string
 							transfer->iNumOfCharsRead += iNumOfChars;
 							transfer->iNumOfAllCharsRead += iNumOfChars;
 							iQualityLength += resultChunkPair.first.length();
+							if (input2.notNull()) {
+								resultChunkPair2.first = "";
+								input2.getChunk(resultChunkPair2, iNumOfChars);
+								iQualityLength += resultChunkPair2.first.length();
+							}
 						}
 
 						if (iQualityLength == iDNALength) {
@@ -476,17 +607,27 @@ namespace kASA {
 						// read completely parsed
 
 						break;
+					}
 					default:
 						break;
-					}
+					}///////////////////////////////////////////////// end
 
 					if (bAddTail) {
-						const auto& kMersForward = (this->vLines.size()) ? get<2>(this->vLines.back()) : 0;
-						const auto& kMersBackwards = (this->vRCLines.size()) ? get<2>(this->vRCLines.back()) : 0;
+						const auto& kMersForward = (vLines.size()) ? get<2>(vLines.back()) : 0;
+						const auto& kMersBackwards = (vRCLines.size()) ? get<2>(vRCLines.back()) : 0;
 						const auto& iNumOfkMers = kMersForward + kMersBackwards;
 						iSumOfkMers += iNumOfkMers;
 
-						iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, uint64_t, uint32_t, uint32_t>);
+						iSoftMaxSize -= iNumOfkMers * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+
+						if (input2.notNull()) {
+							const auto& kMersForward2 = (vLines2.size()) ? get<2>(vLines2.back()) : 0;
+							const auto& kMersBackwards2 = (vRCLines2.size()) ? get<2>(vRCLines2.back()) : 0;
+							const auto& iNumOfkMers2 = kMersForward2 + kMersBackwards2;
+							iSumOfkMers += iNumOfkMers2;
+
+							iSoftMaxSize -= iNumOfkMers2 * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+						}
 
 						if (iSoftMaxSize <= static_cast<int64_t>(14399756 + 4 * iAmountOfSpecies)) { // next chunk would at most need (100033 - 12 * 3 + 1) * 6 * 24 + 4 * iAmountOfSpecies + 40 + 4 bytes of memory
 							bNotFull = false;
@@ -496,20 +637,50 @@ namespace kASA {
 
 				if (input.eof()) {
 					if (bIsFasta) {
-						if (_bInputAreAAs) {
-							while (get<0>(this->vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-								get<0>(this->vLines.back()) += '^';
-							}
-						}
-						else {
-							while (get<0>(this->vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-								get<0>(this->vLines.back()) += 'X';
-							}
-						}
+						auto handleEOF = [&](const string& sDNA, vector<tuple<string, readIDType, int32_t>>& vLines, vector<tuple<string, readIDType, int32_t>>& vRCLines) {
+							if (bReadTooShort) {
+								if (bNewRead) {
+									bNewRead = false;
+									if (!_bInputAreAAs && _bSixFrames) {
+										string tempDNA = reverseComplement(sDNA);
+										while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+											tempDNA += 'X';
+										}
+										tempDNA += sFalsekMerMarker;
+										vRCLines.emplace_back(tempDNA, iLocalReadID, calculatekMerCount(tempDNA));
+										iSumOfkMers += get<2>(vRCLines.back());
+									}
+								}
+								else {
+									if (!_bInputAreAAs && _bSixFrames) {
+										const auto& rc = reverseComplement(sDNA);
+										vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
+										iSumOfkMers += get<2>(vRCLines.back());
+									}
+								}
 
-						get<0>(this->vLines.back()) += sFalsekMerMarker; // add false marker
-						get<2>(this->vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
-						iSumOfkMers += get<2>(this->vLines.back());
+								vLines.emplace_back(sDNA, iLocalReadID, calculatekMerCount(sDNA));
+							}
+
+							if (_bInputAreAAs) {
+								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+									get<0>(vLines.back()) += '^';
+								}
+							}
+							else {
+								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+									get<0>(vLines.back()) += 'X';
+								}
+							}
+
+							get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+							get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+							iSumOfkMers += get<2>(vLines.back());
+						};
+						handleEOF(sDNA, vLines, vRCLines);
+						if (input2.notNull()) {
+							handleEOF(sDNA2, vLines2, vRCLines2);
+						}
 
 						if (bReadIDsAreInteresting) {
 							transfer->finished = true;
@@ -519,13 +690,15 @@ namespace kASA {
 					transfer->addTail = false; //signal that all is done
 				}
 				else {
-					transfer->lastLine = get<0>(this->vLines.back());
+					transfer->lastLine = sOverhang;
+					transfer->lastLine2 = sOverhang2;
 					transfer->addTail = bAddTail;
 					transfer->bNewRead = bNewRead;
 					transfer->iExpectedInput = iExpectedInput;
 					transfer->lengthOfDNA = iDNALength;
 					transfer->name = sName;
 					transfer->overhang = sOverhang;
+					transfer->overhang2 = sOverhang2;
 				}
 
 #ifdef TIME
@@ -534,14 +707,41 @@ namespace kASA {
 				startTIME = std::chrono::high_resolution_clock::now();
 #endif
 
+				/*uint64_t checkNumOfkMers = 0;
+				for (const auto& entry : vLines) {
+					checkNumOfkMers += get<2>(entry);
+				}
+				for (const auto& entry : vRCLines) {
+					checkNumOfkMers += get<2>(entry);
+				}
+				if (checkNumOfkMers != iSumOfkMers) {
+					cout << iSumOfkMers << " " << checkNumOfkMers << endl;
+				}*/
+
+				// in case of paired-end reads, merge both vectors containing the reads
+				if (input2.notNull()) {
+					vLines.insert(vLines.end(), vLines2.begin(), vLines2.end());
+					vLines2.clear();
+					vRCLines.insert(vRCLines.end(), vRCLines2.begin(), vRCLines2.end());
+					vRCLines2.clear();
+				}
+
+
 				// convert it in parallel
 				//auto startTIME = std::chrono::high_resolution_clock::now();
 				try {
-					vOut.reserve(iSumOfkMers);
+					// should the capacity be smaller than iSumOfkMers after the first allocation, bad_alloc will probably be thrown because there will likely be no larger contiguous chunk of memory available
+					// this is mitigated by substracting 1% of the available memory after every time this is called (see Compare.hpp "reduce available memory")
+					vOut.reserve(iSumOfkMers); 
 					vOut.resize(iSumOfkMers);
 				}
 				catch (const bad_alloc&) {
-					cerr << "ERROR: Not enough memory available. Please try again with a lower number after - m" << endl;
+					int64_t triedToAllocate = iSumOfkMers * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>) / (1024 * 1024);
+					if (iAvailMemory < triedToAllocate) {
+						cerr << "ERROR: Your system does not have enough contiguous memory available (which happens if the system is powered on over a long period of time). You might try to restart or use a lower number after -m. FYI: You tried to use " + to_string(triedToAllocate) + " MB." << endl;	
+					} else {
+						cerr << "ERROR: Not enough memory available. You tried to use " + to_string(triedToAllocate) + " MB. Please try again with a lower number after -m." << endl;
+					}
 					throw;
 				}
 				const auto& chunkSize = iSumOfkMers / _iNumOfThreads;
@@ -556,31 +756,33 @@ namespace kASA {
 #endif
 
 				//vector<uint64_t> vRangesOfOutVec(_iNumOfThreads + 1);
-
-				for (size_t iLineIdx = 0; iLineIdx < this->vLines.size(); ++iLineIdx) {
+				//cout << "Memory left: " << iSoftMaxSize << endl;
+				for (size_t iLineIdx = 0; iLineIdx < vLines.size(); ++iLineIdx) {
 					if (iCurrentkMerCount >= chunkSize) {
 						//call function with start, iLineIdx, iTotalkMerCount
-						auto task = [&, start, iLineIdx, iTotalkMerCount, this](const int32_t&) { convertLinesTokMers_new(start, iLineIdx, iTotalkMerCount, ref(vOut)); };
+						auto task = [&, start, iLineIdx, iTotalkMerCount, this](const int32_t&) { convertLinesTokMers_new(vLines, vRCLines, start, iLineIdx, iTotalkMerCount, ref(vOut)); };
 						threadPool[iProcID].pushTask(task);
 						//vRangesOfOutVec[iProcID] = iTotalkMerCount;
-
+						//cout << iTotalkMerCount << endl;
 						start = iLineIdx;
 						iTotalkMerCount += iCurrentkMerCount;
 						iCurrentkMerCount = 0;
 						++iProcID;
 					}
 					if (!_bSixFrames) {
-						iCurrentkMerCount += uint64_t(get<2>(this->vLines[iLineIdx])); //+ get<2>(this->vRCLines[iLineIdx]);
+						iCurrentkMerCount += uint64_t(get<2>(vLines[iLineIdx])); //+ get<2>(vRCLines[iLineIdx]);
 					}
 					else {
-						iCurrentkMerCount += uint64_t(get<2>(this->vLines[iLineIdx])) + get<2>(this->vRCLines[iLineIdx]);
+						iCurrentkMerCount += uint64_t(get<2>(vLines[iLineIdx])) + get<2>(vRCLines[iLineIdx]);
 					}
 				}
-				// call function with start, this->vLines.size(), iTotalkMerCount
-				auto task = [&, start, iTotalkMerCount, this](const int32_t&) { convertLinesTokMers_new(start, this->vLines.size(), iTotalkMerCount, ref(vOut)); };
+				// call function with start, vLines.size(), iTotalkMerCount
+				auto task = [&, start, iTotalkMerCount, this](const int32_t&) { convertLinesTokMers_new(vLines, vRCLines, start, vLines.size(), iTotalkMerCount, ref(vOut)); };
 				threadPool[iProcID].pushTask(task);
+				//cout << iTotalkMerCount << endl;
 				//vRangesOfOutVec[iProcID] = iTotalkMerCount;
 				//vRangesOfOutVec[iProcID + 1] = vOut.size();
+				//transfer->vRangesOfOutVec = vRangesOfOutVec;
 
 				// start Threads, join threads
 				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
@@ -616,8 +818,8 @@ namespace kASA {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
 			////////////////////////////////////////////////////////
-			this->vLines.clear();
-			this->vRCLines.clear();
+			//this->vLines.clear();
+			//this->vRCLines.clear();
 			return iSumOfkMers;
 		}
 
@@ -644,8 +846,8 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// convert lines from fasta/fastq to kMers and save them in a (stxxl-)vector
-		inline void dnaTokMers(const string& sDna, const uint32_t& iID, unique_ptr<contentVecType_32p>& kMerVecOut, Build& vBricks, const float& fShrinkPercentage) {
-			vector<tuple<uint64_t, uint32_t>> vResultingkMers;
+		inline void dnaTokMers(const string& sDna, const uint32_t& iID, unique_ptr<vecType>& kMerVecOut, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
+			vector<tuple<intType, uint32_t>> vResultingkMers;
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
 
 			const int32_t& iMaxRange = int32_t(sDna.length()) - iMaxKTimes3 + 1;
@@ -658,12 +860,12 @@ namespace kASA {
 
 				// Frameshifting, so that only one amino acid has to be computed
 				// Compute initial frames
-				uint64_t sAAFrames[3] = { 0, 0, 0 };
+				intType sAAFrames[3] = { 0, 0, 0 };
 				uint32_t aDeletekMerCounter[3] = { 0, 0, 0 };
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
 					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
-					sAAFrames[j] = aminoacidTokMer(sTempFrame);
+					sAAFrames[j] = aminoacidTokMer<intType>(sTempFrame);
 					// if a character is 'illegal' then don't save the kMer containing it
 					const auto& iPosOfU = sTempFrame.find_last_of('_');
 					if (iPosOfU == string::npos) {
@@ -747,7 +949,7 @@ namespace kASA {
 				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
 						if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
-							if (bUnfunny) {
+							if (_bUnfunny) {
 								/*uint64_t tVal = 0;
 								for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
 									tVal |= (get<0>(element) & (31ULL << iLeftStart)) << iShifted;
@@ -779,7 +981,7 @@ namespace kASA {
 				}
 				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
-						if (bUnfunny) {
+						if (_bUnfunny) {
 							/*uint64_t tVal = 0;
 							for (int32_t iLeftStart = 55, iShifted = 0; iLeftStart >= 5; iLeftStart -= 10, iShifted += 5) {
 								tVal |= (get<0>(element) & (31ULL << iLeftStart)) << iShifted;
@@ -807,13 +1009,13 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// convert protein sequences to k-mers in the building step
-		inline void proteinTokMers(const string& sAASequence, const uint32_t& iIdx, unique_ptr<contentVecType_32p>& kMerVecOut, Build& vBricks, const float& fShrinkPercentage) {
-			vector<tuple<uint64_t, uint32_t>> vResultingkMers;
+		inline void proteinTokMers(const string& sAASequence, const uint32_t& iIdx, unique_ptr<vecType>& kMerVecOut, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
+			vector<tuple<intType, uint32_t>> vResultingkMers;
 			const int32_t& iMaxRange = int32_t(sAASequence.length()) - _iHighestK + 1;
 			if (iMaxRange > 0) {
 				vResultingkMers.resize(iMaxRange);
 				for (int32_t i = 0; i < iMaxRange; ++i) {
-					const auto& kMer = aminoacidTokMer(sAASequence.cbegin() + i, sAASequence.cbegin() + i + 12);
+					const auto& kMer = aminoacidTokMer<intType>(sAASequence.cbegin() + i, sAASequence.cbegin() + i + _iHighestK);
 					vResultingkMers[i] = make_tuple(kMer, iIdx);
 				}
 			}
@@ -836,7 +1038,7 @@ namespace kASA {
 				}
 				for (auto& element : vResultingkMers) {
 					if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
-						if (bUnfunny) {
+						if (_bUnfunny) {
 							get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 						}
 
@@ -860,7 +1062,7 @@ namespace kASA {
 					kMerVecOut->resize(iStart + iResultingSize);
 				}
 				for (auto& element : vResultingkMers) {
-					if (bUnfunny) {
+					if (_bUnfunny) {
 						get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 					}
 
@@ -880,7 +1082,7 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta and create a kMer-Vec, used in BuildAll(...)
 		template<typename T>
-		inline void readFasta(T& input, const unordered_map<string, uint32_t>& mAccToID, Build& vBricks, unique_ptr<contentVecType_32p>& vOut, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
+		inline void readFasta(T& input, const unordered_map<string, uint32_t>& mAccToID, Build<vecType, elemType>& vBricks, unique_ptr<vecType>& vOut, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
 			try {
 				if (!input.good()) {
 					throw runtime_error("No input found!");
@@ -1151,8 +1353,7 @@ namespace kASA {
 		}
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+		// Build the index from fasta files
 		void BuildAll(const string& fContentFile, const string& sDirectory, const string& fOutFile, const uint64_t& iMem, const float& fShrinkPercentage = 0.f) {
 			try {
 				// test if files exists
@@ -1207,10 +1408,10 @@ namespace kASA {
 					}
 				}
 
-				Build brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMem / (sizeof(packedBigPair)), iIdxCounter);
+				Build<vecType, elemType> brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMem / (sizeof(elemType)), iIdxCounter);
 
 				size_t overallCharsRead = 0;
-				unique_ptr<contentVecType_32p> dummy;
+				unique_ptr<vecType> dummy;
 
 				auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
 				for (auto& fileName : filesAndSize.first) {
@@ -1241,21 +1442,25 @@ namespace kASA {
 				// Finalize
 				brick.IntToExtPart();
 				const uint64_t& iSizeOfFinalIndex = brick.mergeTemporaries(fOutFile);
-				
+
+				if (iSizeOfFinalIndex == 0) {
+					throw runtime_error("Index is empty, maybe the input were translated sequences and you forgot -z?");
+				}
+
 				unique_ptr<uint64_t[]> arrFrequencies;
-				arrFrequencies.reset(new uint64_t[iIdxCounter * 12]);
-				for (uint64_t i = 0; i < iIdxCounter * 12; ++i) {
+				arrFrequencies.reset(new uint64_t[iIdxCounter * _iHighestK]);
+				for (uint64_t i = 0; i < iIdxCounter * _iHighestK; ++i) {
 					arrFrequencies[i] = 0;
 				}
 
 				// Create Trie and frequencies out of final file
 				stxxlFile* libFile = new stxxlFile(fOutFile, stxxlFile::RDONLY);
-				const contentVecType_32p* libVec = new const contentVecType_32p(libFile, iSizeOfFinalIndex);
-				Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-				T.SaveToStxxlVec(libVec, fOutFile, &arrFrequencies, mIDsAsIdx);
+				const vecType* libVec = new const vecType(libFile, iSizeOfFinalIndex);
+				Trie<intType> T(static_cast<int8_t>(((_iMaxK > 12) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(_iMinK), 6);
+				T.SaveToStxxlVec(libVec, fOutFile, &arrFrequencies, _iHighestK, mIDsAsIdx);
 
 				// If taxaOnly index is desired, create it here:
-				if (bUnfunny) {
+				if (_bUnfunny) {
 					Utilities::createFile(fOutFile+"_taxOnly");
 					stxxlFile* taxaOnlyFile = new stxxlFile(fOutFile+"_taxOnly", stxxlFile::RDWR);
 					taxaOnly* taxaOnlyFileVec = new taxaOnly(taxaOnlyFile, iSizeOfFinalIndex);
@@ -1280,9 +1485,9 @@ namespace kASA {
 				ofstream outFile(fOutFile + "_f.txt");
 				for (uint32_t j = 0; j < iIdxCounter; ++j) {
 					outFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-					outFile << arrFrequencies[j * 12];
-					for (int32_t k = 1; k < 12; ++k) {
-						outFile << "\t" << arrFrequencies[j * 12 + k];
+					outFile << arrFrequencies[j * _iHighestK];
+					for (int32_t k = 1; k < _iHighestK; ++k) {
+						outFile << "\t" << arrFrequencies[j * _iHighestK + k];
 					}
 					outFile << endl;
 				}
@@ -1290,6 +1495,104 @@ namespace kASA {
 			catch (invalid_argument&) {
 				cerr << "ERROR: content file doesn't have the right format. If you'd like to use non-numeric taxids, please apply the --taxidasstr flag." << endl;
 				return;
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Merge two existing indices into a new one
+		void MergeTwoIndices(const string& index_1, const string& index_2, const string& index_out, const string& contentFile) {
+			try {
+				// test if files exists
+				if (!ifstream(contentFile)) {
+					throw runtime_error("Content file not found.");
+				}
+
+				// content file
+				uint32_t iIdxCounter = 1;
+				unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
+				unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
+				ifstream content(contentFile);
+				string sDummy = "";
+				bool bTaxIdsAsStrings = false;
+				while (getline(content, sDummy)) {
+					if (sDummy != "") {
+						const auto& line = Utilities::split(sDummy, '\t');
+						if (line.size() >= 5 && !bTaxIdsAsStrings) {
+							bTaxIdsAsStrings = true;
+						}
+						if (line.size() >= 4) {
+							mIdxToName[iIdxCounter] = line[0];
+							if (bTaxIdsAsStrings) {
+								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
+							}
+							else {
+								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
+							}
+							++iIdxCounter;
+						}
+						else {
+							throw runtime_error("Content file contains less than 4 columns, it may be damaged...");
+						}
+					}
+				}
+
+				Build<vecType, elemType> brick;
+
+				// indices
+				ifstream fLibInfo(index_1 + "_info.txt");
+				uint64_t iSizeOfFirstLib = 0, iSizeOfSecondLib = 0;
+				fLibInfo >> iSizeOfFirstLib;
+				fLibInfo.close();
+				unique_ptr<stxxlFile> stxxlVecI1(new stxxlFile(index_1, stxxl::file::RDONLY));
+				unique_ptr<vecType> vec1(new vecType(stxxlVecI1.get(), iSizeOfFirstLib));
+				typename vecType::bufreader_type vec1Buff(*vec1);
+
+				fLibInfo.open(index_2 + "_info.txt");
+				fLibInfo >> iSizeOfSecondLib;
+				fLibInfo.close();
+				unique_ptr<stxxlFile> stxxlVecI2(new stxxlFile(index_2, stxxl::file::RDONLY));
+				unique_ptr<vecType> vec2(new vecType(stxxlVecI2.get(), iSizeOfSecondLib));
+				
+
+				Utilities::createFile(index_out);
+				unique_ptr<stxxlFile> stxxlVecOut(new stxxlFile(index_out, stxxl::file::RDWR));
+				unique_ptr<vecType> vecOut(new vecType(stxxlVecOut.get(), iSizeOfFirstLib + iSizeOfSecondLib));
+				typename vecType::bufwriter_type vecOutBuff(*vecOut);
+
+				//merge
+				unique_ptr<uint64_t[]> arrFrequencies;
+				arrFrequencies.reset(new uint64_t[iIdxCounter * _iHighestK]);
+				for (uint64_t i = 0; i < iIdxCounter * _iHighestK; ++i) {
+					arrFrequencies[i] = 0;
+				}
+
+				const auto& vOutSize = brick.merge(vecOutBuff, vec1Buff, iSizeOfFirstLib, vec2->cbegin(), vec2->cend(), arrFrequencies, mIDsAsIdx, true);
+				vecOut->resize(vOutSize, true);
+
+				// save additional stuff
+				vecOut->export_files("_");
+				ofstream fOutInfo(index_out + "_info.txt");
+				fOutInfo << vecOut->size();
+				if (is_same<vecType, contentVecType_128>::value) {
+					fOutInfo << endl << 128;
+				}
+
+				ofstream outFile(index_out + "_f.txt");
+				for (uint32_t j = 0; j < iIdxCounter; ++j) {
+					outFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
+					outFile << arrFrequencies[j * _iHighestK];
+					for (int32_t k = 1; k < _iHighestK; ++k) {
+						outFile << "\t" << arrFrequencies[j * _iHighestK + k];
+					}
+					outFile << endl;
+				}
+
+				// trie
+				Trie<intType> T(static_cast<int8_t>(((is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(_iMinK), 6);
+				T.SaveToStxxlVec(vecOut.get(), index_out);
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

@@ -31,8 +31,9 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// count occurrence of taxIDs per kMer and locate 99% of kMers cutoff. Most kMers have only one taxon.
-		inline uint32_t histogram(const unique_ptr<const contentVecType_32p>& vLib, const uint32_t& iNumOfTaxIDs) {
-			uint64_t iSeenkMer = (vLib->at(0)).first;
+		template<class vecType, class intType>
+		inline uint32_t histogram(const unique_ptr<const vecType>& vLib, const uint32_t& iNumOfTaxIDs) {
+			intType iSeenkMer = (vLib->at(0)).first;
 			vector<uint32_t> taxIDs(iNumOfTaxIDs + 1);
 			uint32_t iCounter = 0;
 			uint64_t iUniquekMerCounter = 0;
@@ -132,9 +133,14 @@ namespace kASA {
 
 		}
 
+		inline void putHalfInTrie(const unique_ptr<const contentVecType_128>& , unique_ptr<index_t_p>& , const unordered_map<uint32_t, uint32_t>& , const string& ) {
+			// dummy
+		}
+
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Delete via Entropy
-		inline void deleteViaEntropy(const unique_ptr<const contentVecType_32p>& vLib, unique_ptr<contentVecType_32p>& vOut, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
+		template<class vecType>
+		inline void deleteViaEntropy(const unique_ptr<const vecType>& vLib, unique_ptr<vecType>& vOut, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
 			try {
 				int64_t iCount = 1;
 				uint64_t iHigher6LettersBitmask = 31;
@@ -145,7 +151,7 @@ namespace kASA {
 
 				auto outIt = vOut->begin();
 
-				float summands[12];
+				unique_ptr<float[]> summands(new float[_iHighestK]);
 				uint8_t arrayIdx = 0;
 
 				uint64_t iCurrentPercentage = 0;
@@ -161,7 +167,7 @@ namespace kASA {
 					}
 
 					const auto& entry = *libIt;
-					string kMerAsAAString = kMerToAminoacid(entry.first, 12);
+					string kMerAsAAString = kMerToAminoacid(entry.first, _iHighestK);
 
 					// Entropy calculation
 					sort(kMerAsAAString.begin(), kMerAsAAString.end());
@@ -239,10 +245,11 @@ namespace kASA {
 		*/
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Count the frequencies as a helper function
-		inline void countFreqs(const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>& freqArray, const packedBigPair& pair) {
+		template<class elemType>
+		inline void countFreqs(const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>& freqArray, const elemType& pair) {
 			try {
-				const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * 12;
-				for (uint8_t k = 0; k < 12; ++k) {
+				const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * _iHighestK;
+				for (uint8_t k = 0; k < _iHighestK; ++k) {
 					if (((pair.first >> 5 * k) & 31) != 30) {
 						freqArray[idx + k]++;
 					}
@@ -255,7 +262,8 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Throw out kMers for every ID where fN is the percentage of how many are thrown out of the respective ID (e.g. fN = 60 -> throw out 60%, iCount[ID] = 1200 -> 480 stay, 720 are thrown away)
-		inline void deleteEveryNth(const unique_ptr<const contentVecType_32p>& vLib, unique_ptr<contentVecType_32p>& vOut, const float& fN, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
+		template<class vecType, class elemType>
+		inline void deleteEveryNth(const unique_ptr<const vecType>& vLib, unique_ptr<vecType>& vOut, const float& fN, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
 			try {
 				vector<uint64_t> vSteps(mContent.size(), 1);
 				const double& dStepSize = 100. / fN;
@@ -278,7 +286,7 @@ namespace kASA {
 					const auto& idx = Utilities::checkIfInMap(mContent, entry.second)->second;
 					if (vSteps[idx] != static_cast<uint64_t>(vNextThrowOutIdx[idx])) {
 						*itOut = entry;
-						countFreqs(mContent, freqArray, entry);
+						countFreqs<elemType>(mContent, freqArray, entry);
 						itOut++;
 						++iCounter;
 					}
@@ -300,6 +308,7 @@ namespace kASA {
 	public:
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Shrink the library by throwing all redundant kMers away
+		template<class vecType, class elemType, class intType>
 		void ShrinkLib(const string& sLibFile, const string& fOutFile, const ShrinkingStrategy& eDeleteStrategy, const string& sContentFile, const float& iPercOfThrownAway = 50.f) {
 			try {
 				// test if files exists
@@ -337,20 +346,26 @@ namespace kASA {
 
 				
 
-				unique_ptr<uint64_t[]> arrFrequencies(new uint64_t[iIdxCounter * 12]);
-				for (uint64_t i = 0; i < iIdxCounter * 12; ++i) {
+				unique_ptr<uint64_t[]> arrFrequencies(new uint64_t[iIdxCounter * _iHighestK]);
+				for (uint64_t i = 0; i < iIdxCounter * _iHighestK; ++i) {
 					arrFrequencies[i] = 0;
 				}
 
 				// get lib
 				fstream fLibInfo(sLibFile + "_info.txt", ios::in);
-				uint64_t iSizeOfLib = 0;
+				uint64_t iSizeOfLib = 0, iVecType = 0;
 				fLibInfo >> iSizeOfLib;
+				fLibInfo >> iVecType;
 				fLibInfo.close();
+
+				if (iVecType > 0 && eDeleteStrategy == TrieHalf) {
+					throw runtime_error("This index is either already halved or of a type which cannot be halved. Sorry...");
+				}
+
 				unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
-				unique_ptr<unique_ptr<const contentVecType_32p>[]> vLibIn(new unique_ptr<const contentVecType_32p>[_iNumOfThreads]);
+				unique_ptr<unique_ptr<const vecType>[]> vLibIn(new unique_ptr<const vecType>[_iNumOfThreads]);
 				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-					vLibIn[i].reset(new const contentVecType_32p(stxxlLibFile.get(), iSizeOfLib));
+					vLibIn[i].reset(new const vecType(stxxlLibFile.get(), iSizeOfLib));
 				}
 
 				// create reduced vec
@@ -358,7 +373,7 @@ namespace kASA {
 
 
 				unique_ptr<stxxlFile> stxxlOutFile;
-				unique_ptr<contentVecType_32p> vOutVec;
+				unique_ptr<vecType> vOutVec;
 
 				unique_ptr<stxxlFile> stxxlFileP;
 				unique_ptr<index_t_p> vOutPVec;
@@ -369,7 +384,7 @@ namespace kASA {
 				}
 				else {
 					stxxlOutFile.reset(new stxxlFile(fOutFile, stxxl::file::RDWR));
-					vOutVec.reset(new contentVecType_32p(stxxlOutFile.get(), iSizeOfLib));
+					vOutVec.reset(new vecType(stxxlOutFile.get(), iSizeOfLib));
 				}
 
 				// copy and rename in case of half
@@ -380,31 +395,42 @@ namespace kASA {
 				switch (eDeleteStrategy) {
 				case EveryNth:
 				{
-					deleteEveryNth(vLibIn[0], vOutVec, fabsf(iPercOfThrownAway), mIDsAsIdx, arrFrequencies);
+					deleteEveryNth<vecType, elemType>(vLibIn[0], vOutVec, fabsf(iPercOfThrownAway), mIDsAsIdx, arrFrequencies);
 
 					newFreqFile.open(fOutFile + "_f.txt");
 					for (uint32_t j = 0; j < iIdxCounter; ++j) {
 						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-						newFreqFile << arrFrequencies[j * 12];
-						for (int32_t k = 1; k < 12; ++k) {
-							newFreqFile << "\t" << arrFrequencies[j * 12 + k];
+						newFreqFile << arrFrequencies[j * _iHighestK];
+						for (int32_t k = 1; k < _iHighestK; ++k) {
+							newFreqFile << "\t" << arrFrequencies[j * _iHighestK + k];
 						}
 						newFreqFile << endl;
 					}
 
 					fLibInfo.open(fOutFile + "_info.txt", ios::out);
 					fLibInfo << vOutVec->size();
+					if (is_same<vecType, contentVecType_128>::value) {
+						fLibInfo << endl << 128;
+					}
 					vOutVec->export_files("_");
 
-					Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-					T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					if (is_same<vecType, contentVecType_128>::value) {
+						Trie<intType> T(static_cast<int8_t>(HIGHESTPOSSIBLEK), static_cast<int8_t>(_iMinK), 6);
+						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					}
+					else {
+						Trie<intType> T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
+						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					}
+					
 
 					break;
 				}
 				case TrieHalf:
 				{
-					assert(iIdxCounter <= 65535); // TODO: throw Error
-
+					if (iIdxCounter > 65535) {
+						throw runtime_error("Index can only be halved, if less than 65535 species are inside the index!");
+					}
 
 					putHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, fOutFile);
 
@@ -433,9 +459,9 @@ namespace kASA {
 					newFreqFile.open(fOutFile + "_f.txt");
 					for (uint32_t j = 0; j < iIdxCounter; ++j) {
 						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-						newFreqFile << arrFrequencies[j * 12];
-						for (int32_t k = 1; k < 12; ++k) {
-							newFreqFile << "\t" << arrFrequencies[j * 12 + k];
+						newFreqFile << arrFrequencies[j * _iHighestK];
+						for (int32_t k = 1; k < _iHighestK; ++k) {
+							newFreqFile << "\t" << arrFrequencies[j * _iHighestK + k];
 						}
 						newFreqFile << endl;
 					}
@@ -443,23 +469,32 @@ namespace kASA {
 					break;
 				}
 				case Entropy:
-					deleteViaEntropy(vLibIn[0], vOutVec, mIDsAsIdx, arrFrequencies);
+					deleteViaEntropy<vecType>(vLibIn[0], vOutVec, mIDsAsIdx, arrFrequencies);
 
 					newFreqFile.open(fOutFile + "_f.txt");
 					for (uint32_t j = 0; j < iIdxCounter; ++j) {
 						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-						newFreqFile << arrFrequencies[j * 12];
-						for (int32_t k = 1; k < 12; ++k) {
-							newFreqFile << "\t" << arrFrequencies[j * 12 + k];
+						newFreqFile << arrFrequencies[j * _iHighestK];
+						for (int32_t k = 1; k < _iHighestK; ++k) {
+							newFreqFile << "\t" << arrFrequencies[j * _iHighestK + k];
 						}
 						newFreqFile << endl;
 					}
 
-					Trie T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-					T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					if (is_same<vecType, contentVecType_128>::value) {
+						Trie<intType> T(static_cast<int8_t>(HIGHESTPOSSIBLEK), static_cast<int8_t>(_iMinK), 6);
+						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					}
+					else {
+						Trie<intType> T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
+						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					}
 
 					fLibInfo.open(fOutFile + "_info.txt", ios::out);
 					fLibInfo << vOutVec->size();
+					if (is_same<vecType, contentVecType_128>::value) {
+						fLibInfo << endl << 128;
+					}
 					vOutVec->export_files("_");
 					break;
 				};

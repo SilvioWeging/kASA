@@ -1,4 +1,4 @@
-### TODO: Test for equality of output files (with cmp -s $old $new), all modes, protein input, protein database, different alphabet, 
+### TODO: Test for equality of output files (with cmp -s $old $new)
 configfile: "snake_config.json"
 
 rule all:
@@ -8,11 +8,18 @@ rule all:
 		json3="work/results/example_u.json",
 		freq="work/index/exampleIndex_u_f.txt",
 		trie="work/index/exampleIndex_trie.txt",
-		red="work/results/redundancy.txt"
+		red="work/results/redundancy.txt",
+		mergedIndex="work/index/index_merged",
+		mergedIndex128="work/index/index_merged_128",
+		pE="work/results/pairedEnd.json",
+		jsonFromLarge="work/results/128.json",
+		jsonFromProtein="work/results/protein.json",
+		jsonFromTranslation="work/results/translate.json",
+		idMult="work/results/mult.done"
 
 rule generateCF:
 	input:
-		db="work/example.fasta",
+		db="work/db/example.fasta",
 		tax="taxonomy/",
 		att="taxonomy/acc2tax/acc2Tax.txt"
 	output:
@@ -28,7 +35,7 @@ rule generateCF:
 rule build:
 	input:
 		content=rules.generateCF.output.content,
-		db="work/example.fasta"
+		db="work/db/example.fasta"
 	output:
 		idx="work/index/exampleIndex",
 		trieOut="work/index/exampleIndex_trie"
@@ -55,7 +62,7 @@ rule identify:
 	input:
 		idx=rules.build.output.idx,
 		content=rules.cloneContent.output.contentOut,
-		fq="work/example.fastq.gz"
+		fq="work/input/example.fastq.gz"
 	output:
 		prof="work/results/example.csv",
 		json="work/results/example.json"
@@ -84,7 +91,7 @@ rule identify_s:
 	input:
 		content=rules.cloneContent.output.contentOut,
 		idx=rules.shrink.output.outIdx,
-		fq="work/example.fastq.gz"
+		fq="work/input/example.fastq.gz"
 	output:
 		prof="work/results/example_s.csv",
 		json2="work/results/example_s.json"
@@ -100,7 +107,7 @@ rule identify_s:
 rule update:
 	input:
 		dummyLink=rules.cloneContent.output.contentOut,
-		db="work/16S_NCBI.fasta",
+		db="work/db/16S_NCBI.fasta",
 		tax="taxonomy/",
 		att="taxonomy/acc2tax/acc2Tax.txt",
 		content=rules.generateCF.output.content,
@@ -122,7 +129,7 @@ rule identify_u:
 	input:
 		content="work/index/exampleIndex_content.txt",
 		idx=rules.update.output.index,
-		fq="work/exampleInput.fasta"
+		fq="work/input/exampleInput.fasta"
 	output:
 		prof="work/results/example_u.csv",
 		json3="work/results/example_u.json"
@@ -137,6 +144,7 @@ rule identify_u:
 
 rule reconstructFrequency:
 	input:
+		dummyLink=rules.identify_u.output.json3,
 		index="work/index/exampleIndex_u",
 		content="work/index/exampleIndex_content.txt"
 	output:
@@ -171,6 +179,7 @@ rule reconstructTrie:
 
 rule checkRedundancy:
 	input:
+		dummyLink=rules.identify_u.output.json3,
 		index=rules.update.output.index,
 		content=rules.generateCF.output.content
 	output:
@@ -181,3 +190,100 @@ rule checkRedundancy:
 	threads: config["threads"]
 	shell:
 		"{config[kASAExec]}kASA redundancy -c {input.content} -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx} > {output.red}"
+
+rule mergeIndices:
+	input:
+	output:
+		mergedIndex="work/index/index_merged",
+		mergedIndex128="work/index/index_merged_128"
+	params:
+		ram = config["ram"],
+		callIdx="11"
+	threads: config["threads"]
+	shell:
+		"""
+		{config[kASAExec]}kASA build -i work/db/example.fasta -d work/index/index_1 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species"
+		{config[kASAExec]}kASA build -i work/db/16S_NCBI.fasta -d work/index/index_2 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species"
+		
+		{config[kASAExec]}kASA merge -i work/index/index_1 -d work/index/index_2 -o work/index/index_merged -x {params.callIdx} -n {threads} -m {params.ram}
+		
+		{config[kASAExec]}kASA build -i work/db/example.fasta -d work/index/index_1_128 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species" --kH 25
+		{config[kASAExec]}kASA build -i work/db/16S_NCBI.fasta -d work/index/index_2_128 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species" --kH 25
+		
+		{config[kASAExec]}kASA merge -i work/index/index_1_128 -d work/index/index_2_128 -o work/index/index_merged_128 -x {params.callIdx} -n {threads} -m {params.ram}
+		"""
+
+rule pairedEnd:
+	input:
+		dummyLink=rules.identify_u.output.json3,
+		index=rules.update.output.index,
+		content=rules.generateCF.output.content
+	output:
+		pE="work/results/pairedEnd.json"
+	params:
+		ram = config["ram"],
+		callIdx="12"
+	threads: config["threads"]
+	shell:
+		"{config[kASAExec]}kASA identify -c {input.content} -d {input.index} -n {threads} -m {params.ram} -x {params.callIdx} -1 work/input/example.fastq.gz -2 work/input/example2.fastq.gz -q work/results/pairedEnd.json"
+
+rule LargeK:
+	input:
+	output:
+		jsonFromLarge="work/results/128.json"
+	params:
+		ram = config["ram"],
+		callIdx="13"
+	threads: config["threads"]
+	shell:
+		"""
+		{config[kASAExec]}kASA build -i work/db/16S_NCBI.fasta -d work/index/index_128 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species" --kH 25
+		{config[kASAExec]}kASA identify -d work/index/index_128 -n {threads} -m {params.ram} -x {params.callIdx} -i work/input/exampleInput.fasta -q work/results/128.json -k 25 7
+		"""
+
+rule Protein:
+	input:
+		content=rules.generateCF.output.content
+	output:
+		jsonFromProtein="work/results/protein.json"
+	params:
+		ram = config["ram"],
+		callIdx="14"
+	threads: config["threads"]
+	shell:
+		"""
+		{config[kASAExec]}kASA build -c {input.content} -i work/db/ProtVulg_protein.fasta -d work/index/index_prot -n {threads} -m {params.ram} -x {params.callIdx} -z
+		{config[kASAExec]}kASA identify -c {input.content} -d work/index/index_prot -n {threads} -m {params.ram} -x {params.callIdx} -z -i work/input/exampleProtein.fasta -q work/results/protein.json
+		"""
+
+rule ProteinWithAlphabet:
+	input:
+		content=rules.generateCF.output.content
+	output:
+		jsonFromTranslation="work/results/translate.json"
+	params:
+		ram = config["ram"],
+		callIdx="15"
+	threads: config["threads"]
+	shell:
+		"""
+		{config[kASAExec]}kASA build -c {input.content} -i work/db/example.fasta -d work/index/index_translate -n {threads} -m {params.ram} -x {params.callIdx} -a work/table.prt Standard
+		{config[kASAExec]}kASA identify -c {input.content} -d work/index/index_translate -n {threads} -m {params.ram} -x {params.callIdx} -z -i work/input/exampleProtein.fasta -q work/results/translate.json
+		"""
+
+rule IdentifyMultiple:
+	input:
+		dummyLink=rules.identify_u.output.json3,
+		content=rules.generateCF.output.content,
+		idx=rules.update.output.index
+	output:
+		touch("work/results/mult.done")
+	params:
+		ram = config["ram"],
+		callIdx="16"
+	threads: config["threads"]
+	shell:
+		"""
+		{config[kASAExec]}kASA identify_multiple -c {input.content} -d {input.idx} -i work/input/ -q work/results/mult_ -n {threads} -m {params.ram} -x {params.callIdx}
+		{config[kASAExec]}kASA identify_multiple -c {input.content} -d {input.idx} -i work/input/ -q work/results/mult_r_ -n {threads} -m {params.ram} -x {params.callIdx} -r
+		"""

@@ -30,7 +30,9 @@
     <ClInclude Include="..\..\source\utils\BitArray.hpp" />
     <ClInclude Include="..\..\source\utils\dToStr.h" />
     <ClInclude Include="..\..\source\utils\iToStr.hpp" />
+    <ClInclude Include="..\..\source\utils\packedPairs.hpp" />
     <ClInclude Include="..\..\source\utils\ParallelQuicksort.hpp" />
+    <ClInclude Include="..\..\source\utils\uint128_t.hpp" />
     <ClInclude Include="..\..\source\utils\Utilities.hpp" />
     <ClInclude Include="..\..\source\utils\WorkerThread.hpp" />
     <ClInclude Include="..\..\zlib\gzstream.hpp" />

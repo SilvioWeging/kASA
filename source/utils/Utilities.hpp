@@ -95,6 +95,12 @@ namespace Utilities {
 	}
 	///////////////////////////////////////////////////////
 	inline string lstrip(const string& sIn, const char& c) {
+		if (sIn.size() == 0) {
+			return sIn;
+		}
+		if (sIn.size() == 1 && sIn[0] == c) {
+			return "";
+		}
 		string sOut = sIn;
 		auto it = sOut.begin();
 		while (*it == c) {
@@ -105,6 +111,12 @@ namespace Utilities {
 
 	///////////////////////////////////////////////////////
 	inline string rstrip(const string& sIn, const char& c) {
+		if (sIn.size() == 0) {
+			return sIn;
+		}
+		if (sIn.size() == 1 && sIn[0] == c) {
+			return "";
+		}
 		string sOut = sIn;
 		auto it = sOut.end() - 1;
 		while (*it == c) {
@@ -228,6 +240,111 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	inline vector<pair<string, size_t>> gatherFilesAndSizesFromPath(const string& sPath) {
+		try {
+			vector<pair<string, size_t>> files;
+#if _WIN32 || _WIN64 
+			if (sPath.back() == '/' || sPath.back() == '\\') {
+				for (auto& fsPath : filesystem::directory_iterator(sPath)) {
+					const string& fileName = (fsPath.path()).string();
+
+					// read magic numbers at the beginning
+					ifstream prelimFile(fileName);
+					char firstByte;
+					prelimFile.read(&firstByte, 1);
+					prelimFile.close();
+					bool isGzipped = false;
+					if ((firstByte == 0x1f)) {
+						isGzipped = true;
+					}
+					if (firstByte == 0x42) {
+						throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the moment, sorry.");
+					}
+
+					if (!isGzipped) {
+						files.push_back(make_pair(fileName, filesystem::file_size(fsPath)));
+					}
+					else {
+						files.push_back(make_pair(fileName, filesystem::file_size(fsPath)));
+					}
+				}
+			}
+#else
+#if __GNUC__ || defined(__llvm__)
+			if (sPath.back() == '/') {
+				DIR* dirp;
+				struct dirent* directory;
+
+				dirp = opendir(sPath.c_str());
+				if (dirp) {
+					while ((directory = readdir(dirp)) != NULL)
+					{
+						const string fName(directory->d_name);
+						if (fName != "." && fName != "..") {
+							const string& fileName = sPath + fName;
+
+							ifstream prelimFile(fileName);
+							char firstByte;
+							prelimFile.read(&firstByte, 1);
+							prelimFile.close();
+							bool isGzipped = false;
+							if (firstByte == 0x1f) {
+								isGzipped = true;
+							}
+							if (firstByte == 0x42) {
+								throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the moment, sorry.");
+							}
+
+							if (!isGzipped) {
+								struct stat stat_buf;
+								stat(sPath.c_str(), &stat_buf);
+								files.push_back(make_pair(fileName, stat_buf.st_size));
+							}
+							else {
+								struct stat stat_buf;
+								stat(sPath.c_str(), &stat_buf);
+								files.push_back(make_pair(fileName, stat_buf.st_size));
+							}
+						}
+					}
+
+					closedir(dirp);
+				}
+			}
+#endif
+#endif
+			else {
+				ifstream prelimFile(sPath);
+				char firstByte;
+				prelimFile.read(&firstByte, 1);
+				prelimFile.close();
+				bool isGzipped = false;
+				if (firstByte == 0x1f) {
+					isGzipped = true;
+				}
+				if (firstByte == 0x42) {
+					throw runtime_error("ERROR: File was compressed with bzip2. kASA can't handle this at the moment, sorry.");
+				}
+				if (!isGzipped) {
+					struct stat stat_buf;
+					stat(sPath.c_str(), &stat_buf);
+					files.push_back(make_pair(sPath, stat_buf.st_size));
+				}
+				else {
+					struct stat stat_buf;
+					stat(sPath.c_str(), &stat_buf);
+					files.push_back(make_pair(sPath, stat_buf.st_size));
+				}
+			}
+
+			return files;
+		}
+		catch (...) {
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+		}
+	}
+
+	///////////////////////////////////////////////////////
 	template<typename Out>
 	inline void split(const string &s, char delim, Out result) {
 		stringstream ss;
@@ -299,6 +416,10 @@ namespace Utilities {
 
 		// Standard contructor is sufficient
 
+		inline bool notNull() {
+			return _file != nullptr;
+		}
+
 		inline void setFile(T* input) {
 			_file = input;
 			memset(_bufferArrayForInput, ' ', _bufferSize);
@@ -362,7 +483,9 @@ namespace Utilities {
 		}
 
 		inline void setZero() {
-			memset(&_vValues[0], 0, _vValues.size());
+			if (_vValues.size()) {
+				memset(&_vValues[0], 0, _vValues.size());
+			}
 		}
 
 		inline size_t size() {

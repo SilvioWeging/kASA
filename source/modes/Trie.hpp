@@ -16,7 +16,7 @@ namespace TrieSnG { // Statics and globals used inside this header
 	const uint8_t _iNumOfAminoAcids = 32; // convenience, better than looking through the list everytime
 
 	///DEBUG
-	//const uint8_t LISTOFAA[31] = { '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','[','\\', ']', '^' };
+	//const uint8_t LISTOFAA[32] = { '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','[','\\', ']', '^', '_' };
 
 	///
 
@@ -257,13 +257,12 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Prefix-tree for a logarithmic access of the first few letters
+template<class intType>
 class Trie {
 private:
 	
 	int8_t _iMaxK, _iMinK, _iMaxLevel, _ikForIsInTrie;
-	unique_ptr<uint64_t[]> _iTempKMer;
-	uint64_t _Bitmask = 31;
-	unique_ptr<std::tuple<uint64_t, uint32_t>[]> _tempTuple;
+	intType _Bitmask = 31;
 
 	// this counts the size of the trie in bytes to substract it later from the available memory in RAM
 	uint64_t iSizeOfTrie = 0;
@@ -277,16 +276,11 @@ private:
 public:
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const int32_t& iThreads = 1, const uint8_t& iPrefixCheckMode = 0) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
+	Trie(const int8_t& iMaxK, const int8_t& iMinK, const int8_t& iMaxLevel, const uint8_t& iPrefixCheckMode = 0) : _iMaxK(iMaxK), _iMinK(iMinK), _iMaxLevel(iMaxLevel), _ikForIsInTrie(6) {
 		for (uint8_t i = 1; i < iMaxLevel; ++i) {
 			_Bitmask |= 31ULL << (5 * i);
 		}
 		_Bitmask <<= (iMaxK - iMaxLevel) * 5;
-		_iTempKMer.reset(new uint64_t[iThreads]);
-		_tempTuple.reset(new std::tuple<uint64_t, uint32_t>[iThreads]);
-		for (int32_t i = 0; i < iThreads; ++i) {
-			_iTempKMer[i] = 0;
-		}
 
 		switch (iPrefixCheckMode) {
 		case 1:
@@ -331,48 +325,16 @@ public:
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Save to file
 	template<typename T>
-	inline void Save(const T* vKMerVec, const string& savePath) {
-		try {
-			fstream file(savePath, ios::out);
-			//ostream console(cout.rdbuf());
-			//_root->Save(file, _iMaxLevel);
-			//uint64_t itmpCount = 0;
-			uint64_t iCount = 1;
-			uint64_t iKnownShortMer = get<0>(vKMerVec->at(0)) & _Bitmask;
-			stxxl::vector_bufreader<typename T::const_iterator> bufferedReader(vKMerVec->cbegin() + 1, vKMerVec->cend(), 1);
-			for (; !bufferedReader.empty(); ++bufferedReader) {
-				const auto& entry = get<0>(*bufferedReader);
-				const uint64_t& iTemp = entry & _Bitmask;
-				if (iTemp != iKnownShortMer) {
-					file << (iKnownShortMer >> (_iMaxK - _iMaxLevel) * 5) << ' ' << iCount << endl;
-					iKnownShortMer = iTemp;
-					//cout << itmpCount << " " << itmpCount + iCount << endl;
-					//itmpCount += iCount;
-					iCount = 1;
-				}
-				else {
-					++iCount;
-				}
-			}
-			file << (iKnownShortMer >> (_iMaxK - _iMaxLevel) * 5) << ' ' << iCount << endl;
-			//cout << itmpCount << " " << itmpCount + iCount << endl;
-		}
-		catch (...) {
-			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
-		}
-	}
-	////////////////
-	template<typename T>
-	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath, unique_ptr<uint64_t[]>* arrOfFreqs = nullptr, const unordered_map<uint32_t, uint32_t>& mContent = unordered_map<uint32_t, uint32_t>()) { //passing a non-const reference with default value is a hassle
+	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath, unique_ptr<uint64_t[]>* arrOfFreqs = nullptr, const int32_t& _iHighestK = 12, const unordered_map<uint32_t, uint32_t>& mContent = unordered_map<uint32_t, uint32_t>()) { //passing a non-const reference with default value is a hassle
 		try {
 			Utilities::createFile(savePath + "_trie");
 			stxxlFile trieFile(savePath+"_trie", stxxl::file::RDWR);
 			trieVector trieVec(&trieFile, 0);
 			uint64_t iCount = 1;
-			uint64_t iKnownShortMer = vKMerVec->at(0).first & _Bitmask;
+			auto iKnownShortMer = vKMerVec->at(0).first & _Bitmask;
 			if (!mContent.empty()) {
-				const auto& idx = Utilities::checkIfInMap(mContent, vKMerVec->cbegin()->second)->second * 12;
-				for (uint8_t k = 0; k < 12; ++k) {
+				const auto& idx = Utilities::checkIfInMap(mContent, vKMerVec->cbegin()->second)->second * _iHighestK;
+				for (uint8_t k = 0; k < _iHighestK; ++k) {
 					if (((vKMerVec->cbegin()->first >> 5 * k) & 31) != 30) {
 						(*arrOfFreqs)[idx + k]++;
 					}
@@ -382,14 +344,14 @@ public:
 			for (; !bufferedReader.empty(); ++bufferedReader) {
 				const auto& entry = *bufferedReader;
 				if (!mContent.empty()) {
-					const auto& idx = Utilities::checkIfInMap(mContent, entry.second)->second * 12;
-					for (uint8_t k = 0; k < 12; ++k) {
+					const auto& idx = Utilities::checkIfInMap(mContent, entry.second)->second * _iHighestK;
+					for (uint8_t k = 0; k < _iHighestK; ++k) {
 						if (((entry.first >> 5 * k) & 31) != 30) {
 							(*arrOfFreqs)[idx + k]++;
 						}
 					}
 				}
-				const uint64_t& iTemp = entry.first & _Bitmask;
+				const auto& iTemp = entry.first & _Bitmask;
 				if (iTemp != iKnownShortMer) {
 					trieVec.push_back(packedBigPairTrie(uint32_t(iKnownShortMer >> (_iMaxK - _iMaxLevel) * 5), iCount));
 					iKnownShortMer = iTemp;

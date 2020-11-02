@@ -18,8 +18,10 @@ This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</
 	* [Build](#build)
 	* [Identify](#identify)
 		+ [Output](#output)
+	* [Identify multiple](#identify-multiple)
 	* [Update](#update)
 	* [Shrink](#shrink)
+	* [Merge](#merge)
 	* [Miscellaneous](#miscellaneous)
 - [Useful scripts](#useful-scripts)
 - [TODOS/Upcoming](#todos-and-upcoming)
@@ -37,6 +39,8 @@ Words like `<this>` are meant as placeholders to be filled with your specifics e
 
 Folders and paths are recognized as such by letting a parameter end with a "/". 
 
+k can range between 1 and 12 or 1 and 25. These values are determined by the bit size of the integers the k-mers are saved into (64 bit or 128 bit). The modes [build](#build) and [identify](#identify) determine this size by the maximum k you want to use so if you'd like to use a larger range of k's, the correct bit size is chosen. Choosing a k larger than 12 doubles the index size and impacts performance since 128 bit integers are not supported natively by current CPU architectures (two 64 bit integers substitute one 128 sized integer). Should you by accident try to use a larger k than supported (e.g. the index was built with 64 bit but you try to use 128/k=25 in `identify`), an error will be thrown.
+
 ## Prerequisites
 
 Some scripts in the `/scripts` folder need Python 3.*, others are shell scripts. Most can be used just for convenience (see [Useful scripts](#useful-scripts)) but are not necessary for kASA.
@@ -45,7 +49,7 @@ You can use the system specific pre-compiled binaries in the `/bin` folder but I
 
 Note, that kASA is a console application so if you want to use these binaries, you must either use a terminal (Linux, macOS, Linux Subsystem for Windows) or PowerShell (Windows). A GUI may be implemented, depending on the amount of requests in the [poll](https://github.com/SilvioWeging/kASA/issues/1). If you're using the PowerShell, don't forget to add ".exe" at the end of each call to kASA: `.\<path to kASA>\kASA.exe`.
 
-If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+11 or if possible C\+\+17 (for `filesystem` and `execution`). I successfully tested it with Visual Studio 2017/2019, GCC version 6.1, LLVM/Clang 9.0 and Apple Clang 9.0. [Here](https://en.cppreference.com/w/cpp/compiler_support) is a table showing if your version is sufficient. On Linux and macOS, cmake is needed as well.
+If you need to compile the code, you'll definitely need a C\+\+ compiler that supports C\+\+11 or if possible C\+\+17 (for `filesystem` and `execution`). I successfully tested it with Visual Studio 2017/2019 (using C\+\+17 is necessary for this since `experimental\filesystem` is deprecated), GCC version 6.1, LLVM/Clang 9.0 and Apple Clang 9.0. [Here](https://en.cppreference.com/w/cpp/compiler_support) is a table showing if your version is sufficient. On Linux and macOS, cmake is needed as well.
 
 kASA depends on the [STXXL](https://stxxl.org/) and [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) but contains all necessary files so you don't need to download those.
 
@@ -113,10 +117,10 @@ Run without debugging.
 ## TL;DR
 ```
 build/kASA build -d <path and name of index file to be build> -i <fasta or folder with fastas> -m <amount of memory in GB you want to use> -n <number of CPUs you want to use> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> <verbose>
-e.g.: [weging@example:/kASA$] build/kASA build -d example/work/index/exampleIndex -i example/work/example.fasta -m 8 -n 2 -f example/taxonomy/acc2Tax/ -y example/taxonomy/ -u species -v
+e.g.: [weging@example:/kASA$] build/kASA build -d example/work/index/exampleIndex -i example/work/db/example.fasta -m 8 -n 2 -f example/taxonomy/acc2Tax/ -y example/taxonomy/ -u species -v
 
 build/kASA identify -d <path and name of small index file> -i <input file> -p <path and name of profile output> -q <path and name of read wise output> -m <amount of memory in GB you want to use> -n <number of CPUs you want to use>
-e.g.: [weging@example:/kASA$] build/kASA identify -d example/work/index/exampleIndex -i example/work/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 5 -n 2
+e.g.: [weging@example:/kASA$] build/kASA identify -d example/work/index/exampleIndex -i example/work/input/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 5 -n 2
 ```
 
 ## Modes and parameters
@@ -177,7 +181,7 @@ No header line is necessary. This file can be given to `build` via the `-c` para
 ##### Example call 
 ```
 <path to kASA>/kASA generateCF -i <fastaFile(s)> -c <content file> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species> (-v )
-e.g.: [weging@example:/kASA$] build/kASA generateCF -i work/example.fasta -c work/content.txt -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+e.g.: [weging@example:/kASA$] build/kASA generateCF -i example/work/db/example.fasta -c example/work/content.txt -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 ```
 
 ### Build
@@ -197,12 +201,13 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences.
 * `--three`: Use only three reading frames instead of six. Halves index size but implies the usage of `--six` during identification if the orientation of the reads is unknown. Default: off.
 * `--taxidasstr`: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.
+* `--kH <12 or 25>`: Signal which bit size you want to use for the index (25 for 128, 12 for 64).
 ```
 <path to kASA>/kASA build -c <content file> -d <path and name of the index file> -i <folder or file> -t <temporary directory> -m <amount of RAM kASA can use> -n <number of threads>
-e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
+e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/db/example.fasta -m 8 -t example/work/tmp/ -n 2
 
 Create content file and index:
-[weging@example:/kASA$] build/kASA build -d  example/work/index/exampleIndex -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
+[weging@example:/kASA$] build/kASA build -d  example/work/index/exampleIndex -i example/work/db/example.fasta -m 8 -t example/work/tmp/ -n 2 -f taxonomy/acc2Tax/ -y taxonomy/ -u species -v
 ```
 
 ### Identify
@@ -211,11 +216,11 @@ This mode compares sequencing data with the built index.
 
 You can input fasta or fastq files (depending on whether the first symbol is a `>` or `@`), gzipped or not. If you want to put in multiple files, move them to a folder and place the path next to `-i`. The string given in `-p` and `-q` will then serve as a prefix concatenated with `"_<filename without path>.<csv or json>"`.
 
-Currently, kASA does NOT support paired-end reads.
+kASA supports paired-end files which are synchronous.
 
 To input translated sequences, add the `-z` flag. If you've used a custom alphabet for conversion, just use the same here by copying the `-a <file> <number>` part of your `build` call.
 
-Since kASA uses k-mers, a `k` can be given to influence accuracy. You can set these bounds by yourself with the `-k` parameter, the default lower bound is 7, the upper 12 (highest possible).
+Since kASA uses k-mers, a `k` can be given to influence accuracy. You can set these bounds by yourself with the `-k` parameter, the default lower bound is 7, the upper 12.
 Smaller `k`'s than 6 only make sense if your data is very noisy or you're working on amino acid level.
 If your read length is smaller than ![equation](http://www.sciweavers.org/tex2img.php?eq=%24k_%7Blower%7D%20%5Ccdot%203%24&bc=White&fc=Black&im=png&fs=12&ff=arev&edit=0) on DNA/RNA level, it will be padded. 
 
@@ -243,8 +248,8 @@ The first line of the profile is always "not identified" followed by zeroes for 
  converted via the same alphabet to amino acids.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-k <upper> <lower>`: Bounds for `k`, all `k`'s in between will be evaluated as well. If your intuition is more like `<lower> <upper>` then that's okay too. Default: 12 7.
-* `--kH <upper>`: Set only the upper bound
-* `--kL <lower>`: Set only the lower bound
+* `--kH <upper>`: Set only the upper bound. If the index has been built with 128 bit size, k can be up to 25.
+* `--kL <lower>`: Set only the lower bound.
 * `-b (--beasts) <number>`: Number of hit taxa shown for each read. Default: 3.
 * `-e (--unique)`: Ignores duplicates of `k`-mers in every read. This helps removing bias from repeats but messes with error scores, so consider it BETA.
 * `--json`: Sets the output format to json. Default.
@@ -253,10 +258,12 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--kraken`: Sets the output format to a kraken like tsv format.
 * `--threshold <float>:` Set a minimum relative score so that everything below it will not be included in the output. For not-so-noisy data and reads of length 100, we recommend a value of 0.4. Default: 0.0.
 * `--six`: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.
+* `-1`: First file in a paired-end pair.
+* `-2`: Second file in a paired-end pair. Both `-1` and `-2` must be used and `-i` will be ignored for this call. Paired-end can only be files, no folders.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
-e.g.: [weging@example:/kASA$] build/kASA identify -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 8 -t example/work/tmp/ -k 12 9 -n 2
+e.g.: [weging@example:/kASA$] build/kASA identify -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/input/example.fastq.gz -p example/work/results/example.csv -q example/work/results/example.json -m 8 -t example/work/tmp/ -k 12 9 -n 2
 ```
 #### Output
 ##### Normal:
@@ -306,6 +313,43 @@ To get a hint which one would be more relevant to you, check your index with a c
 Relative frequencies in the human readable profile are given for the largest k. The "Overall (unique) relative frequency" is calculated by dividing the (non-)unique counts by the total number of k-mers from the input.
 This is also printed in the verbose mode like: "OUT: Number of k-mers in input: ... of which ... % were identified." for the largest k.
 
+### Identify multiple
+##### Context
+This mode calls identify on multiple files at the same time.
+
+On a single CPU system, using all available cores for one file after another is the usual use case. On HPCCs however, it makes more sense to utilize the many-cores-many-files architecture so that multiple files can be processed concurrently. This mode does just that.
+
+If you e.g. provide 40 cores and have 30 files to process, the files will be sorted by file size and the largest 10 get two cores while the others get one. If we have e.g. 40 files and 30 cores, we first process 30 files with one core each and then the remaining 10. This way we approximate a solution to the job shop problem. It is implemented with a workqueue so no synchronisation apart from managing the queue is done.
+
+The index and trie is loaded once in the beginning and then all threads access that index (in RAM or not). Furthermore, you need to have at least two files in the folder of inputs (calling this on one file makes no sense).
+
+##### Necessary paramameters
+* `-i (--input) <folder>`: Folder containing fastq or fasta files, can be gzipped. No default.
+* `-p (--profile) <file>`: Path and prefix of the profiles which will be put out.
+* `-q (--rtt) <file>`: Path and prefix of the read ID to tax IDs output files.
+##### Optional paramameters
+* `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
+* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
+ converted via the same alphabet to amino acids.
+* `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
+* `-k <upper> <lower>`: Bounds for `k`, all `k`'s in between will be evaluated as well. If your intuition is more like `<lower> <upper>` then that's okay too. Default: 12 7.
+* `--kH <upper>`: Set only the upper bound. If the index has been built with 128 bit size, k can be up to 25.
+* `--kL <lower>`: Set only the lower bound
+* `-b (--beasts) <number>`: Number of hit taxa shown for each read. Default: 3.
+* `-e (--unique)`: Ignores duplicates of `k`-mers in every read. This helps removing bias from repeats but messes with error scores, so consider it BETA.
+* `--json`: Sets the output format to json. Default.
+* `--jsonl`: Sets the output format to json lines.
+* `--tsv`: Sets the output format to a tab separated, per line format.
+* `--kraken`: Sets the output format to a kraken like tsv format.
+* `--threshold <float>:` Set a minimum relative score so that everything below it will not be included in the output. For not-so-noisy data and reads of length 100, we recommend a value of 0.4. Default: 0.0.
+* `--six`: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.
+##### Example call
+```
+<path to kASA>/kASA identify_multiple -c <content file> -d <path and name of index file> -i <folder> -p <path and prefix of profile outputs> -q <path and prefix of read wise analyses> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
+e.g.: [weging@example:/kASA$] build/kASA identify_multiple -c example/work/content.txt -d  example/work/index/exampleIndex -i example/work/input/ -p example/work/results/example_ -q example/work/results/example_ -m 8 -t example/work/tmp/ -k 12 9 -n 4
+```
+
+
 ### Update
 ##### Context
 Keeping the same index for years may not be that good an idea so kASA gives you the possibility to add genomic material to an existing index.
@@ -330,10 +374,10 @@ If you've created the content file together with the index, this default content
 ##### Example calls
 ```
 <path to kASA>/kASA update -d <path and name of the index file> -o <path and name of the new index> -i <folder or file> -t <temporary directory> -m <amount of RAM> -f <accToTaxFile(s)> -y <folder with nodes.dmp and names.dmp> -u <taxonomic level, e.g. species>
-e.g.: [weging@example:/kASA$] build/kASA update -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/updatedIndex -i example/work/newStuff.fasta -t example/work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
+e.g.: [weging@example:/kASA$] build/kASA update -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/index/updatedIndex -i example/work/db/16S_NCBI.fasta -t example/work/tmp/ -m 8 -f taxonomy/acc2Tax/ -y taxonomy/ -u species
 
 <path to kASA>/kASA delete -c <content file> -d <path and name of the index file> -o <path and name of the new index> -l <delnodes.dmp> -t <temporary directory> -m <amount of RAM>
-e.g.: [weging@example:/kASA$] build/kASA delete -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/updatedIndex -l taxonomy/delnodes.dmp -t example/work/tmp/ -m 8
+e.g.: [weging@example:/kASA$] build/kASA delete -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/index/updatedIndex -l taxonomy/delnodes.dmp -t example/work/tmp/ -m 8
 ``` 
 
 ### Shrink
@@ -352,9 +396,29 @@ The parameter `-o` also decides here, where to put your new index.
 ##### Example call
 ```
 <path to kASA>/kASA shrink -c <content file> -d <path and name of the index file> -o <path and name of the new index> -s <1 or 2> -g <percentage> -t <temporary directory>
-e.g.: [weging@example:/kASA$] build/kASA shrink -c example/work/content.txt -d  example/work/index/exampleIndex -o  example/work/index/exampleIndex_s -s 2 -t example/work/tmp/
+e.g.: [weging@example:/kASA$] build/kASA shrink -c example/work/content.txt -d  example/work/index/exampleIndex -o example/work/index/exampleIndex_s -s 2 -t example/work/tmp/
 e.g.: [weging@example:/kASA$] build/kASA shrink -c example/work/content.txt -d  example/work/index/exampleIndex -s 1 -g 25 -t example/work/tmp/
-e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -g 50 -i example/work/example.fasta -m 8 -t example/work/tmp/ -n 2
+e.g.: [weging@example:/kASA$] build/kASA build -c example/work/content.txt -d  example/work/index/exampleIndex -g 50 -i example/work/db/example.fasta -m 8 -t example/work/tmp/ -n 2
+``` 
+
+### Merge
+##### Context 
+This mode merges two indices into one.
+
+Both indices must have been created with the same bit size (64 or 128). The content files are also merged. You cannot overwrite indices this way.
+
+##### Necessary paramameters
+* `-c1 <file>`: Content file of the first index. Default: <index>_content.txt
+* `-c2 <file>`: Content file of the second index. Default: Same as above.
+* `-c (--content) <file>`: Content file in which the two will be merged. Default: Same as above.
+* `-d (--database) <file>`: First index.
+* `-i (--input) <file>`: Second index.
+* `-o (--outgoing) <file>`: Resulting merged index. Default: None.
+
+##### Example call
+``` 
+<path to kASA>/kASA merge -c <content file> -d <path and name of the first index file> -i <path and name of the second index> -o <path and name of the new index>
+e.g.: [weging@example:/kASA$] build/kASA merge -c example/work/content_merged.txt -c1 example/work/index/index_1_content.txt -d example/work/index/index_1 -i example/work/index/index_2 -o example/work/index/index_merged
 ``` 
 
 ### Miscellaneous
@@ -394,20 +458,20 @@ This gives you a hint whether you should look at the unique relative frequencies
 ## Todos and upcoming
 - ~~Kraken-like output out of kASAs identification file~~
 - ~~Reworked building algorithm~~
-- Join two built indices
-- Profiles normalized to genome length, for now you could hack that with the frequency file
+- ~~Join two built indices~~
 - ~~New shrink mode deleting k-mers that are overrepresented~~
 - ~~Native support of the nr and other translated sequences~~
 - ~~Allow gzipped files as input for `build`~~
 - ~~RAM mode~~
-- ~~Omission of the prefix trie if enough RAM (ca 12GB) is available~~
 - ~~Support of Clang (macOS)~~
 - ~~Snakemake pipeline for quality control~~
 - ~~TaxIDs can now be strings as well~~
+- ~~Consideration of paired-end information~~
+- ~~Larger k's than 12~~
+- Profiles normalized to genome length, for now you could hack that with the frequency file
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - small collection of adapter sequences
-- consideration of paired-end information
 - bzip2 support
 - live streaming of .bcl files
 
