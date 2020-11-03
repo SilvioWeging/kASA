@@ -937,7 +937,10 @@ int main(int argc, char* argv[]) {
 				kASAObj->index.set(bRAM, false, iNumOfThreads);
 				kASAObj->index.loadTrie(indexFile, iHigherK, iLowerK);
 				kASAObj->index.setHasBeenLoadedFromOutside();
+
+
 				iMemorySizeAvail -= kASAObj->index.getTrie()->GetSize();
+
 				debugBarrier
 				unordered_map<uint32_t, uint32_t> dummyObj;
 				kASAObj->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn, dummyObj);

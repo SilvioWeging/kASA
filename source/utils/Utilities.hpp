@@ -484,7 +484,7 @@ namespace Utilities {
 
 		inline void setZero() {
 			if (_vValues.size()) {
-				memset(&_vValues[0], 0, _vValues.size());
+				memset(&_vValues[0], 0, sizeof(T)*_vValues.size());
 			}
 		}
 
