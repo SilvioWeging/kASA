@@ -471,3 +471,10 @@ MigrationBackup/
 /example/work/index/index_f.txt
 /example/work/index/index_content.txt
 /example/work/index/index
+/example/work/index/idx
+/example/work/index/idx_f.txt
+/example/work/index/idx_info.txt
+/example/work/index/idx_trie
+/example/work/index/idx_trie.txt
+/example/work/results/testStuff.json
+/example/work/results/testStuff2.json

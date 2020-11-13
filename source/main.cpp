@@ -62,6 +62,7 @@ Optional parameters:\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
 --three: Use only three reading frames instead of six. Halves index size but may lead to artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
 --taxidasstr: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.\n\
+--kH <12 or 25>: Signal which bit size you want to use for the index (25 for 128, 12 for 64).\n\
 ";
 		}
 		else if (m == "identify") {
@@ -76,7 +77,7 @@ Necessary parameters:\n\
 Optional parameters:\n\
 -r (--ram): Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.\n\
 -k <upper> <lower>: Bounds for `k`, all `k`'s in between will be evaluated as well.If your intuition is more like `<lower > <upper>` then that's okay too. Default: 12 7.\n\
---kH <upper>: Set only the upper bound.\n\
+--kH <upper>: Set only the upper bound. If the index has been built with 128 bit size, k can be up to 25.\n\
 --kL <lower>: Set only the lower bound.\n\
 -b (--beasts) <number>: Number of hit taxa shown for each read. Default: 3.\n\
 --json: Sets the output format to json. Default.\n\
@@ -94,7 +95,12 @@ Optional parameters:\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
 --threshold <float>: Set a minimum relative score so that everything below it will not be included in the output. Default: 0.0.\n\
 --six: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+-1: First file in a paired-end pair.\n\
+-2: Second file in a paired - end pair.Both `-1` and `-2` must be used and `-i` will be ignored for this call.Paired - end can only be files, no folders.\n\
 ";
+		}
+		else if (m == "identify_multiple") {
+			out = "This function similar to \"identify\" although on a whole folder with at least two files. Same parameters as in the other mode except for the paired-end mode.\n";
 		}
 		else if (m == "update") {
 			out = "This mode updates an existing index with new genomic data.\n\
@@ -186,6 +192,16 @@ Optional parameters:\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 ";
 		}
+		else if (m == "merge") {
+		out = "This mode merged two indices together into one. Both indices must have been created with the same bit size (64 or 128). The content files are also merged. You cannot overwrite indices this way.\n\
+Necessary parameters:\n\
+-c1 <file>: Content file of the first index. Default: <index>_content.txt\n\
+-c2 <file>: Content file of the second index.Default: Same as above.\n\
+-c(--content) < file > : Content file in which the two will be merged.Default: Same as above.\n\
+-d(--database) < file > : First index.\n\
+-i(--input) < file > : Second index.\n\
+-o(--outgoing) < file > : Resulting merged index.Default: None.\n";
+		}
 		return out;
 	}
 }
@@ -196,7 +212,7 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		kASA::OutputFormat eOutputFormat = kASA::OutputFormat::Json;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
@@ -334,6 +350,7 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "--kH") {
 				iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
 				iHigherK = (iHigherK > HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : iHigherK;
+				bHighKSetByUser = true;
 			}
 			else if (sParameter == "--kL") {
 				iLowerK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
@@ -833,6 +850,10 @@ int main(int argc, char* argv[]) {
 				kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode, threshold);
 			}
 			else {
+				if (!bHighKSetByUser) {
+					iHigherK = HIGHESTPOSSIBLEK;
+				}
+
 				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny);
 
 				if (bVisualize) {
@@ -952,6 +973,11 @@ int main(int argc, char* argv[]) {
 			}
 			else {
 				debugBarrier
+
+				if (!bHighKSetByUser) {
+					iHigherK = HIGHESTPOSSIBLEK;
+				}
+
 				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny) );
 
 				if (codonTable != "") {

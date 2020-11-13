@@ -393,7 +393,7 @@ namespace kASA {
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const int32_t& iThreadID, const int32_t& iThreadIDOffset, const vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, Utilities::Vector2D<float>& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const int32_t& iThreadID, const int32_t& iThreadIDOffset, const vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, Utilities::Non_contiguousArray& vReadIDtoGenID, const uint32_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 				debugBarrier
@@ -402,7 +402,7 @@ namespace kASA {
 					position++;
 				};
 
-				function<void(const uint64_t&, const size_t&, const uint64_t&, const uint64_t&, const std::vector<uint64_t>&)> linkReadIDToTaxID = [](const uint64_t&, const size_t&, const uint64_t&, const uint64_t&, const vector<uint64_t>&) {};
+				function<void(const uint64_t&, const float&, const uint64_t&, const std::vector<uint64_t>&)> linkReadIDToTaxID = [](const uint64_t&, const float&, const uint64_t&, const vector<uint64_t>&) {};
 
 				// In case read IDs are relevant
 				if (vReadIDtoGenID.size()) {
@@ -416,12 +416,10 @@ namespace kASA {
 						position++;
 					};
 
-					linkReadIDToTaxID = [&vReadIDtoGenID, &iSpecIDRange, this] (const uint64_t& taxID, const size_t& weightIdx, const uint64_t& numOfEntries, const uint64_t& numOfHits, const vector<uint64_t>& vReadIDs) {
-						const auto& weight = arrWeightingFactors[weightIdx];
-						const auto& score = weight * (1.f / numOfEntries);
-
+					linkReadIDToTaxID = [&vReadIDtoGenID, &iSpecIDRange, this](const uint64_t& taxID, const float& score, const uint64_t& numOfHits, const vector<uint64_t>& vReadIDs) { // TODO This takes time because its n*m with n = #tax ids and m = #read ids
 						for (uint64_t pos = 0; pos < numOfHits; ++pos) {
 							vReadIDtoGenID[vReadIDs[pos]][taxID] += score;
+
 						}
 					};
 				}
@@ -606,18 +604,22 @@ namespace kASA {
 											debugBarrier
 											// For this k, the kmer is different. Save the gathered information.
 											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
-											auto it = vMemoryOfTaxIDs[ikLengthCounter].begin();
-											it.SetNumOfEntries(numOfEntries);
-											for (; it != vMemoryOfTaxIDs[ikLengthCounter].end() && numOfEntries != 0; ++it) {
-												const auto& tempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID - iThreadIDOffset) + iSpecIDRange * uint64_t(ikLengthCounter) + (*it);
-												const auto& numOfHits = vPositions[ikLengthCounter];
+											const uint64_t& iPartialTempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID - iThreadIDOffset) + iSpecIDRange * uint64_t(ikLengthCounter);
+											const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
+											const auto& score = weight * (1.f / numOfEntries);
+
+											const auto& numOfHits = vPositions[ikLengthCounter];
+											
+											for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) { // TODO this takes time, maybe hash table and forward iterate through it?
+												const auto& tempIndex = iPartialTempIndex + (*it);
+
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
 												if (numOfEntries == 1) {
 													vCountUnique[tempIndex] += numOfHits;
 												}
 
-												linkReadIDToTaxID(*it, ikDifferenceTop + ikLengthCounter, numOfEntries, numOfHits, vReadIDs[ikLengthCounter]);
+												linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLengthCounter]);
 											}
 
 											vPositions[ikLengthCounter] = 0;
@@ -706,20 +708,23 @@ namespace kASA {
 					for (int16_t ikLC = static_cast<int16_t>(Base::_iNumOfK - 1); ikLC >= 0; --ikLC) {
 
 						const auto& numOfEntries = vMemoryOfTaxIDs[ikLC].numOfEntries();
-						auto it = vMemoryOfTaxIDs[ikLC].begin();
-						it.SetNumOfEntries(numOfEntries);
-						for (; it != vMemoryOfTaxIDs[ikLC].end() && numOfEntries != 0; ++it) {
-							const auto& tempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID - iThreadIDOffset) + uint64_t(iSpecIDRange) * ikLC + (*it);
-							const auto& numOfHits = vPositions[ikLC];//vReadIDs[ikLC].size();
-							//#pragma omp atomic
+						const auto& numOfHits = vPositions[ikLC];
+						const uint64_t& iPartialTempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID - iThreadIDOffset) + uint64_t(iSpecIDRange) * ikLC;
+						const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLC];
+						const auto& score = weight * (1.f / numOfEntries);
+
+						for (auto it = vMemoryOfTaxIDs[ikLC].begin(); it != vMemoryOfTaxIDs[ikLC].end(); ++it) {
+							const auto& tempIndex = iPartialTempIndex + (*it);
+							
 							vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
 							if (numOfEntries == 1) {
 								vCountUnique[tempIndex] += numOfHits;
 							}
 
-							linkReadIDToTaxID(*it, ikDifferenceTop + ikLC, numOfEntries, numOfHits, vReadIDs[ikLC]);
+							linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLC]);
 						}
+
 					}
 					debugBarrier
 				}
@@ -737,7 +742,8 @@ namespace kASA {
 		}
 
 
-
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Sort input (in parallel)
 		inline void sortInputAndCheckInvalidkMers(vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vInputVec, const bool& bPartitioned, const Trie<intType>& T, const int32_t& iLocalNumOfThreads) {
 
 			if (iLocalNumOfThreads == 1) {
@@ -928,7 +934,7 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Score all of them
-		inline void scoringFunc(const Utilities::Vector2D<float>& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const unique_ptr<uint64_t[]>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
+		inline void scoringFunc(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const unique_ptr<uint64_t[]>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
 			try {
 
 				const size_t& iAmountOfSpecies = mIdxToTax.size();
@@ -1593,9 +1599,9 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// save results from read to tax ID
-		inline void saveResults(const bool transferBetweenRuns_finished, const bool transferBetweenRuns_addTail, vector<tuple<readIDType, float, double>>& vSavedScores, const Utilities::Vector2D<float>& vReadIDtoTaxID, list<pair<string, uint32_t>> vReadNameAndLength, const uint32_t& iAmountOfSpecies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const unique_ptr<uint64_t[]>& mFrequencies, uint64_t& iNumOfReadsSum, uint64_t& iNumOfReadsOld, uint64_t iNumOfReads, const float& fThreshold, ofstream& fOut) {
+		inline void saveResults(const bool transferBetweenRuns_finished, const bool transferBetweenRuns_addTail, vector<tuple<readIDType, float, double>>& vSavedScores, const Utilities::Non_contiguousArray& vReadIDtoTaxID, list<pair<string, uint32_t>> vReadNameAndLength, const uint32_t& iAmountOfSpecies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const unique_ptr<uint64_t[]>& mFrequencies, uint64_t& iNumOfReadsSum, uint64_t& iNumOfReadsOld, uint64_t iNumOfReads, const float& fThreshold, ofstream& fOut) {
 
-			auto getVecOfScored = [&iAmountOfSpecies](const Utilities::Vector2D<float>& vReadIDtoGenID, const uint64_t& iIdx) {
+			auto getVecOfScored = [&iAmountOfSpecies](const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iIdx) {
 				try {
 					vector<tuple<uint32_t, float, double>> output;
 					for (uint32_t i = 1; i < iAmountOfSpecies; ++i) {
@@ -2076,7 +2082,8 @@ namespace kASA {
 				debugBarrier
 				const bool& bReadIDsAreInteresting = fOutFile != "";
 
-				Utilities::Vector2D<float> vReadIDtoTaxID; // Array of #species times #reads with scores as values
+				//Utilities::Vector2D<float> vReadIDtoTaxID; // Array of #species times #reads with scores as values
+				Utilities::Non_contiguousArray vReadIDtoTaxID;
 
 				list<pair<string, uint32_t>> vReadNameAndLength;
 
@@ -2316,7 +2323,7 @@ namespace kASA {
 							}
 
 							// This holds the mapping read ID -> Genus ID
-							vReadIDtoTaxID.setSize(iNumOfReads, iAmountOfSpecies);
+							vReadIDtoTaxID.generate(iNumOfReads, iAmountOfSpecies);
 
 						}
 						else {

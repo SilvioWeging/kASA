@@ -1408,6 +1408,7 @@ namespace kASA {
 					}
 				}
 
+
 				Build<vecType, elemType> brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, iMem / (sizeof(elemType)), iIdxCounter);
 
 				size_t overallCharsRead = 0;

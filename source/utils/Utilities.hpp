@@ -381,7 +381,7 @@ namespace Utilities {
 		static const size_t _bufferSize = 2048;
 		char _bufferArrayForInput[_bufferSize];
 		char* _startOfBuffer = &_bufferArrayForInput[0];
-		const string _newlineCharacters = "\r\n";
+		const string _newlineCharacters = "\n";
 		size_t _currendPosition = 0, _maxCharsRead = 0;
 		T* _file = nullptr;
 
@@ -443,10 +443,6 @@ namespace Utilities {
 			if (readFromFile()) {
 				auto newlineCharPos = find_first_of(_startOfBuffer + _currendPosition, _startOfBuffer + _bufferSize, _newlineCharacters.cbegin(), _newlineCharacters.cend());
 				if (newlineCharPos != _startOfBuffer + _bufferSize) {
-					if (*newlineCharPos == '\r' && *(newlineCharPos + 1) == '\n') {
-						*newlineCharPos = '\0';
-						newlineCharPos++;
-					}
 					outPair.first.append(_startOfBuffer + _currendPosition, newlineCharPos);
 					iNumOfChars = newlineCharPos - &_bufferArrayForInput[_currendPosition] + 1;
 					_currendPosition = newlineCharPos - _startOfBuffer + 1;
@@ -498,6 +494,44 @@ namespace Utilities {
 
 		inline const T* operator[](const size_t& row) const {
 			return _vPointers[row];
+		}
+
+	};
+
+	class Non_contiguousArray {
+	private:
+		vector<unique_ptr<float[]>> _vPointers;
+
+	public:
+		// we must assume, that cols stays constant
+		inline void generate(const size_t& rows, const size_t& cols) {
+			if (_vPointers.size()) {
+				while (rows >= _vPointers.size()) {
+					_vPointers.push_back(unique_ptr<float[]>(new float[cols]));
+				}
+				for (size_t i = 0; i < rows; ++i) {
+					memset(_vPointers[i].get(), 0, sizeof(float) * cols);
+				}
+			}
+			else {
+				_vPointers.resize(rows);
+				for (size_t i = 0; i < rows; ++i) {
+					_vPointers[i].reset(new float[cols]);
+					memset(_vPointers[i].get(), 0, sizeof(float) * cols);
+				}
+			}
+		}
+
+		inline size_t size() {
+			return _vPointers.size();
+		}
+
+		inline float* operator[](const size_t& row) {
+			return _vPointers[row].get();
+		}
+
+		inline const float* operator[](const size_t& row) const {
+			return _vPointers[row].get();
 		}
 
 	};
