@@ -143,6 +143,9 @@
       <AdditionalLibraryDirectories>$(SolutionDir)zlibLibs\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>..\..\stxxl\build_vs\Debug\stxxl.lib;..\zlibLibs\Debug\zlibwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(SolutionDir)..\binaries\zlibwapi.dll" "$(SolutionDir)x64\Debug\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -187,6 +190,9 @@
       <AdditionalLibraryDirectories>$(SolutionDir)zlibLibs\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>..\..\stxxl\build_vs\Release\stxxl.lib;..\zlibLibs\Release\zlibwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(SolutionDir)..\binaries\zlibwapi.dll" "$(SolutionDir)x64\Release\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

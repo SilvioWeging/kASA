@@ -21,6 +21,7 @@ namespace kASA {
 		const bool _bUnfunny;
 	public:
 		bool _bVisualize = false;
+		bool _bOnlyOneFrame = false;
 		vector<string> _translatedFramesForVisualization;
 
 	public:
@@ -160,6 +161,36 @@ namespace kASA {
 		}
 
 		/////////////////////////////////
+		inline void convert_dnaTokMerOneFrame(const string& sDna, const readIDType& iID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& resultsVec) {
+			// This value gives the remaining length of the read which is the number of k-mers created
+			const int32_t& iMaxRange = iNumberOfkMers;
+
+			if (iMaxRange > 0) {
+				// go through the dna, convert it to an aminoacid string and then to its coded k-mer representation
+				if (_bVisualize && _translatedFramesForVisualization.size() == 0) {
+					_translatedFramesForVisualization.push_back("");
+				}
+
+				string sAA(sDna.length() / 3, ' ');
+				dnaToAminoacid(sDna, static_cast<int32_t>(sDna.length()), 0, &sAA);
+				sAA = Utilities::rstrip(sAA, ' ');
+
+				//cout << sDna.length() << " " << sDna.length() / 3 << " " << sAA.length() << " " << iMaxRange << endl;
+
+				for (int32_t iCurrentkMerCounter = 0; iCurrentkMerCounter < iMaxRange; ++iCurrentkMerCounter) {
+					auto kMer = aminoacidTokMer<intType>(sAA.cbegin() + iCurrentkMerCounter, sAA.cbegin() + iCurrentkMerCounter + _iHighestK);
+
+					if (_bUnfunny) {
+						kMer = aminoAcidsToAminoAcid(kMer);
+					}
+
+					get<1>(resultsVec[iPositionForOut]) = kMer;
+					get<3>(resultsVec[iPositionForOut++]) = iID;
+				}
+			}
+		}
+
+		/////////////////////////////////
 		inline void convertLinesTokMers_new(const vector<tuple<string, readIDType, int32_t>>& vLines, const vector<tuple<string, readIDType, int32_t>>& vRCLines, const size_t& start, const size_t& end, uint64_t iPositionForOut, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& kMerVecOut) {
 
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
@@ -170,9 +201,14 @@ namespace kASA {
 						convert_alreadyTranslatedTokMers(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, kMerVecOut);
 					}
 					else {
-						convert_dnaTokMer(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
-						if (_bSixFrames) {
-							convert_dnaTokMer(get<0>(vRCLines[i]), get<1>(vRCLines[i]), get<2>(vRCLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
+						if (_bOnlyOneFrame) {
+							convert_dnaTokMerOneFrame(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, kMerVecOut);
+						}
+						else {
+							convert_dnaTokMer(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
+							if (_bSixFrames) {
+								convert_dnaTokMer(get<0>(vRCLines[i]), get<1>(vRCLines[i]), get<2>(vRCLines[i]), iPositionForOut, iMaxKTimes3, kMerVecOut);
+							}
 						}
 					}
 				}
@@ -183,9 +219,54 @@ namespace kASA {
 			
 		}
 
-
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	public:
+		void translateFileInOneFrame(const string& sFilename, const string& sOutput) {
+			ifstream inFile(sFilename);
+			ofstream outFile(sOutput);
+			size_t iQualiLength = 0;
+			int32_t iWhatNext = 0;
+			while (inFile) {
+				string sDummyString = "";
+				getline(inFile, sDummyString);
+				if (sDummyString != "") {
+					switch (iWhatNext) {
+					case 0:
+						outFile << sDummyString << "\n";
+						iWhatNext = 1;
+						break;
+					case 1:
+						{
+							for (char& c : sDummyString) {
+								if (c != 'A' && c != 'C' && c != 'G' && c != 'T' && c != 'a' && c != 'c' && c != 'g' && c != 't') {
+									c = 'Z';
+								}
+							}
+							string sAA(sDummyString.length() / 3, ' ');
+							dnaToAminoacid(sDummyString, static_cast<int32_t>(sDummyString.length()), 0, &sAA);
+							sAA = Utilities::rstrip(sAA, ' ');
+							iQualiLength = sAA.length();
+							outFile << sAA << "\n";
+							iWhatNext = 2;
+						}
+						break;
+					case 2:
+						outFile << sDummyString << "\n";
+						iWhatNext = 3;
+						break;
+					case 3:
+						{
+							outFile << string(iQualiLength, 'I') << "\n";
+							iWhatNext = 0;
+						}
+						break;
+					};
+				}
+			}
+		}
+
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 		struct strTransfer {
 			string name = "", overhang = "", overhang2 = "";
 			size_t lengthOfDNA = 0;
@@ -223,7 +304,12 @@ namespace kASA {
 						return static_cast<int32_t>(str.length() - _iHighestK + 1);
 					}
 					else {
-						return static_cast<int32_t>(str.length() - 3*_iHighestK + 1);
+						if (_bOnlyOneFrame) {
+							return static_cast<int32_t>(str.length() / 3 - _iHighestK + 1);
+						}
+						else {
+							return static_cast<int32_t>(str.length() - 3 * _iHighestK + 1);
+						}
 					}
 				};
 
@@ -318,21 +404,30 @@ namespace kASA {
 								if (_bInputAreAAs) {
 									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
 										get<0>(vLines.back()) += '^';
-										get<2>(vLines.back())++;
 									}
 								}
 								else {
-									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-										get<0>(vLines.back()) += 'X';
-										get<2>(vLines.back())++;
+									if (_bOnlyOneFrame) {
+										while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length())/3 < size_t(_iHighestK)) {
+											get<0>(vLines.back()) += 'X';
+										}
+									}
+									else {
+										while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+											get<0>(vLines.back()) += 'X';
+										}
 									}
 								}
 
 								get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
-								get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
 
-								iSumOfkMers += sFalsekMerMarker.size();
-								iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+								iSumOfkMers -= get<2>(vLines.back());
+								iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+
+								get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
+								
+								iSumOfkMers += get<2>(vLines.back());
+								iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 							};
 							padding(vLines);
 							if (input2.notNull()) {
@@ -539,22 +634,30 @@ namespace kASA {
 								if (_bInputAreAAs) {
 									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
 										get<0>(vLines.back()) += '^';
-										get<2>(vLines.back())++;
 									}
 								}
 								else {
-									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-										get<0>(vLines.back()) += 'X';
-										get<2>(vLines.back())++;
+									if (_bOnlyOneFrame) {
+										while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length()) / 3 < size_t(_iHighestK)) {
+											get<0>(vLines.back()) += 'X';
+										}
+									}
+									else {
+										while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+											get<0>(vLines.back()) += 'X';
+										}
 									}
 								}
 
 								get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
-								get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
-								iSoftMaxSize -= sFalsekMerMarker.length() * sizeof(char);
 
-								iSumOfkMers += sFalsekMerMarker.size();
-								iSoftMaxSize -= sFalsekMerMarker.size() * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+								iSumOfkMers -= get<2>(vLines.back());
+								iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+
+								get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
+
+								iSumOfkMers += get<2>(vLines.back());
+								iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 							};
 							padding(vLines);
 							if (input2.notNull()) {
@@ -668,14 +771,27 @@ namespace kASA {
 								}
 							}
 							else {
-								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-									get<0>(vLines.back()) += 'X';
+								if (_bOnlyOneFrame) {
+									while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length()) / 3 < size_t(_iHighestK)) {
+										get<0>(vLines.back()) += 'X';
+									}
+								}
+								else {
+									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+										get<0>(vLines.back()) += 'X';
+									}
 								}
 							}
 
 							get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
-							get<2>(vLines.back()) += static_cast<int32_t>(sFalsekMerMarker.size());
+
+							iSumOfkMers -= get<2>(vLines.back());
+							iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+
+							get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
+
 							iSumOfkMers += get<2>(vLines.back());
+							iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 						};
 						handleEOF(sDNA, vLines, vRCLines);
 						if (input2.notNull()) {

@@ -258,6 +258,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--kraken`: Sets the output format to a kraken like tsv format.
 * `--threshold <float>:` Set a minimum relative score so that everything below it will not be included in the output. For not-so-noisy data and reads of length 100, we recommend a value of 0.4. Default: 0.0.
 * `--six`: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.
+* `--one`: Use only one reading frame instead of three. Speeds up the tool significantly but sacrifices robustness. Default: off.
 * `-1`: First file in a paired-end pair.
 * `-2`: Second file in a paired-end pair. Both `-1` and `-2` must be used and `-i` will be ignored for this call. Paired-end can only be files, no folders.
 ##### Example call
@@ -343,6 +344,7 @@ The index and trie is loaded once in the beginning and then all threads access t
 * `--kraken`: Sets the output format to a kraken like tsv format.
 * `--threshold <float>:` Set a minimum relative score so that everything below it will not be included in the output. For not-so-noisy data and reads of length 100, we recommend a value of 0.4. Default: 0.0.
 * `--six`: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.
+* `--one`: Use only one reading frame instead of three. Speeds up the tool significantly but sacrifices robustness. Default: off.
 ##### Example call
 ```
 <path to kASA>/kASA identify_multiple -c <content file> -d <path and name of index file> -i <folder> -p <path and prefix of profile outputs> -q <path and prefix of read wise analyses> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>

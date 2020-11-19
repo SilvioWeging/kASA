@@ -95,6 +95,7 @@ Optional parameters:\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
 --threshold <float>: Set a minimum relative score so that everything below it will not be included in the output. Default: 0.0.\n\
 --six: Use all six reading frames instead of three. Doubles number of input k-mers but avoids artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+--one: Use only one reading frame instead of three. Speeds the tool up significantly but sacrifices robustness. Default: off.\n\
 -1: First file in a paired-end pair.\n\
 -2: Second file in a paired - end pair.Both `-1` and `-2` must be used and `-i` will be ignored for this call.Paired - end can only be files, no folders.\n\
 ";
@@ -212,7 +213,7 @@ int main(int argc, char* argv[]) {
 		vector<string> vParameters(argv, argv + argc);
 
 		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false;
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		kASA::OutputFormat eOutputFormat = kASA::OutputFormat::Json;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
@@ -475,6 +476,9 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "--visualize") {
 				bVisualize = true;
+			}
+			else if (sParameter == "--one") {
+				bOnlyOneFrame = true;
 			}
 			else {
 				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
@@ -836,6 +840,10 @@ int main(int argc, char* argv[]) {
 					kASAObj._bVisualize = true;
 				}
 
+				if (bOnlyOneFrame) {
+					kASAObj._bOnlyOneFrame = true;
+				}
+
 				if (codonTable != "") {
 					kASAObj.setCodonTable(codonTable, sCodonID);
 				}
@@ -858,6 +866,10 @@ int main(int argc, char* argv[]) {
 
 				if (bVisualize) {
 					kASAObj._bVisualize = true;
+				}
+
+				if (bOnlyOneFrame) {
+					kASAObj._bOnlyOneFrame = true;
 				}
 
 				if (codonTable != "") {
@@ -949,6 +961,10 @@ int main(int argc, char* argv[]) {
 					kASAObj->setCodonTable(codonTable, sCodonID);
 				}
 
+				if (bOnlyOneFrame) {
+					kASAObj->_bOnlyOneFrame = true;
+				}
+
 				// Content file was created together with the index
 				if (contentFileIn == "") {
 					contentFileIn = indexFile + "_content.txt";
@@ -958,7 +974,6 @@ int main(int argc, char* argv[]) {
 				kASAObj->index.set(bRAM, false, iNumOfThreads);
 				kASAObj->index.loadTrie(indexFile, iHigherK, iLowerK);
 				kASAObj->index.setHasBeenLoadedFromOutside();
-
 
 				iMemorySizeAvail -= kASAObj->index.getTrie()->GetSize();
 
@@ -982,6 +997,10 @@ int main(int argc, char* argv[]) {
 
 				if (codonTable != "") {
 					kASAObj128->setCodonTable(codonTable, sCodonID);
+				}
+
+				if (bOnlyOneFrame) {
+					kASAObj128->_bOnlyOneFrame = true;
 				}
 
 				// Content file was created together with the index
@@ -1184,6 +1203,10 @@ int main(int argc, char* argv[]) {
 			//UnitTests.testC2V_7();
 			//UnitTests.testC2V_8();
 			//UnitTests.testC2V_9();
+		}
+		else if (cMode == "translate") {
+			kASA::Read<contentVecType_32p, packedBigPair, uint64_t> derpObj(sTempPath,1,12,7,0);
+			derpObj.translateFileInOneFrame(sInput, sDBPathOut);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "test") {
