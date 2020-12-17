@@ -22,7 +22,7 @@ namespace kASA {
 
 		string _sTempPath = "";
 		//uint64_t _iConstSize = 0;
-		int16_t _iCounterOfContainers = 0;
+		int32_t _iCounterOfContainers = 0;
 
 		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
 
@@ -289,12 +289,12 @@ namespace kASA {
 				int16_t iCurrentIdx = 0;
 				vector<typename vecType::const_iterator> vCurrentIterators;
 				
-
+				auto maxNrOfFiles = remainingFiles;
 				while (remainingFiles != 1) {
 					// first gather as many files as permitted
 					vector<unique_ptr<stxxlFile>> currentFiles(FOPEN_MAX - 1);
 					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
-					auto maxNrOfFiles = remainingFiles;
+
 					uint64_t iSumSize = 0;
 					for (int16_t i=0; i < (FOPEN_MAX - 1) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
 						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDONLY));
@@ -348,11 +348,14 @@ namespace kASA {
 					vNC->export_files("_");
 					++_iCounterOfContainers;
 					remainingFiles++;
+					++maxNrOfFiles;
 				}
 
 				// move the last temporary file to the given path
 				remove(sOutPath.c_str());
-				Utilities::copyFile(_sTempPath + to_string(_iCounterOfContainers - 1), sOutPath);
+				// attempt to move, if that fails, copy it
+				Utilities::moveFile(_sTempPath + to_string(_iCounterOfContainers - 1), sOutPath);
+				remove((_sTempPath + to_string(_iCounterOfContainers - 1)).c_str());
 				ofstream fLibInfo(sOutPath + "_info.txt");
 				fLibInfo << vVectorSizes[_iCounterOfContainers - 1];
 				if (is_same<vecType,contentVecType_128>::value) {

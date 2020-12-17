@@ -610,7 +610,7 @@ namespace kASA {
 
 											const auto& numOfHits = vPositions[ikLengthCounter];
 											
-											for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) { // TODO this takes time, maybe hash table and forward iterate through it?
+											for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) {
 												const auto& tempIndex = iPartialTempIndex + (*it);
 
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
@@ -936,10 +936,10 @@ namespace kASA {
 		// Score all of them
 		inline void scoringFunc(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const unique_ptr<uint64_t[]>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
 			try {
-
+				debugBarrier
 				const size_t& iAmountOfSpecies = mIdxToTax.size();
 				vector<tuple<size_t, float, double>> resultVec(iAmountOfSpecies);
-				int16_t iOldCountOfHits = 0;
+				int64_t iOldCountOfHits = 0;
 				Utilities::BufferedWriter outStreamer(fOut, 524288ull);
 
 				for (uint64_t readIdx = iStart; readIdx < iEnd; ++readIdx) {
@@ -950,29 +950,34 @@ namespace kASA {
 						bestScore += (currentReadLengthAndName.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i];
 					}
 
-
+					debugBarrier
 					float kMerScore = 0.f;
 					double relativeScore = 0.0;
-					int16_t iCountOfHits = 0;
+					int64_t iCountOfHits = 0;
 					for (size_t iSpecIdx = 1; iSpecIdx < iAmountOfSpecies; ++iSpecIdx) {
 						if (vReadIDtoGenID[readIdx][iSpecIdx] > 0.f) {
+							debugBarrier
 							kMerScore = vReadIDtoGenID[readIdx][iSpecIdx];
-
+							debugBarrier
 							if (_bTranslated) {
 								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK + 1)));
 							}
 							else {
 								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK * 3 + 1)));
 							}
+							debugBarrier
+								
 							if (relativeScore >= fThreshold) {
 								get<0>(resultVec[iCountOfHits]) = iSpecIdx;
 								get<1>(resultVec[iCountOfHits]) = kMerScore;
 								get<2>(resultVec[iCountOfHits]) = relativeScore;
 								++iCountOfHits;
 							}
+							debugBarrier
 						}
 					}
 
+					debugBarrier
 					if (iCountOfHits == 0) {
 						switch (format) {
 						case OutputFormat::tsv:
@@ -1015,7 +1020,7 @@ namespace kASA {
 
 					}
 					else {
-
+						debugBarrier
 						if (iCountOfHits < iOldCountOfHits) {
 							fill(resultVec.begin() + iCountOfHits, resultVec.begin() + iOldCountOfHits, tuple<size_t, float, double>(0, 0.f, 0.0));
 						}
@@ -1024,10 +1029,10 @@ namespace kASA {
 
 						sort(resultVec.begin(), resultVec.begin() + iCountOfHits, [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<2>(a) > get<2>(b); });
 
-
+						debugBarrier
 						auto maxValue = get<1>(*(max_element(resultVec.begin(), resultVec.end(), [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<1>(a) < get<1>(b); })));
-						int16_t iTopHitCounter = 1;
-						for (int16_t i = 1; i < iCountOfHits && i < iNumOfBeasts; ++i) {
+						int64_t iTopHitCounter = 1;
+						for (int64_t i = 1; i < iCountOfHits && i < iNumOfBeasts; ++i) {
 							if ((get<1>(resultVec[i])) / (maxValue) > 0.8f) { // determine "close enough" with normalization relative to the highest score
 								++iTopHitCounter;
 							}
@@ -1040,6 +1045,7 @@ namespace kASA {
 						auto it = resultVec.begin();
 						float iValueBefore = 0;
 
+						debugBarrier
 						switch (format) {
 						case OutputFormat::tsv:
 							// tsv
@@ -1048,7 +1054,7 @@ namespace kASA {
 							sOut += "\t";
 							sOut += currentReadLengthAndName.first + "\t";
 
-							for (int16_t j = 0, i = 0; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+							for (int64_t j = 0, i = 0; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								Utilities::itostr(mIdxToTax[get<0>(*it)], sOut);
 								sOut += ";";
 								sOut2 += mOrganisms[get<0>(*it)];
@@ -1083,6 +1089,7 @@ namespace kASA {
 								dtoa_milo((bestScore - get<1>(resultVec[0])) / bestScore, outStreamer.getString());
 								outStreamer += "\n";
 							}
+							debugBarrier
 							break;
 
 						case OutputFormat::Json:
@@ -1101,7 +1108,7 @@ namespace kASA {
 							outStreamer += currentReadLengthAndName.first;
 							outStreamer += "\",\n\t\"Top hits\": [\n";
 
-							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+							for (int64_t i = 0; i < iTopHitCounter; ++i, ++it) {
 								if (i == 0) {
 									outStreamer += "\t{\n";
 								}
@@ -1128,7 +1135,7 @@ namespace kASA {
 
 							outStreamer += "\n\t],\n\t\"Further hits\": [\n";
 
-							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+							for (int64_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								if (j == iTopHitCounter) {
 									outStreamer += "\t{\n";
 								}
@@ -1158,6 +1165,7 @@ namespace kASA {
 								}
 							}
 
+							debugBarrier
 							outStreamer += "\n\t]\n}";
 							break;
 
@@ -1169,7 +1177,7 @@ namespace kASA {
 							outStreamer += currentReadLengthAndName.first;
 							outStreamer += "\", \"Top hits\": [";
 
-							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+							for (int64_t i = 0; i < iTopHitCounter; ++i, ++it) {
 								if (i == 0) {
 									outStreamer += "{";
 								}
@@ -1196,7 +1204,7 @@ namespace kASA {
 
 							outStreamer += "], \"Further hits\": [";
 
-							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+							for (int64_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								if (j == iTopHitCounter) {
 									outStreamer += "{";
 								}
@@ -1226,6 +1234,7 @@ namespace kASA {
 								}
 							}
 
+							debugBarrier
 							outStreamer += "] }\n";
 							break;
 
@@ -1239,14 +1248,14 @@ namespace kASA {
 							Utilities::itostr(currentReadLengthAndName.second, outStreamer.getString());
 							outStreamer += "\t";
 
-							for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+							for (int64_t i = 0; i < iTopHitCounter; ++i, ++it) {
 								Utilities::itostr(mIdxToTax[get<0>(*it)], outStreamer.getString());
 								outStreamer += ":";
 								dtoa_milo(get<1>(*it), outStreamer.getString());
 								outStreamer += " ";
 							}
 
-							for (int16_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
+							for (int64_t j = iTopHitCounter, i = iTopHitCounter; i < iCountOfHits && j < iNumOfBeasts; ++it, ++i) {
 								Utilities::itostr(mIdxToTax[get<0>(*it)], outStreamer.getString());
 								outStreamer += ":";
 								dtoa_milo(get<1>(*it), outStreamer.getString());
@@ -1257,6 +1266,7 @@ namespace kASA {
 								}
 							}
 
+							debugBarrier
 							outStreamer += "\n";
 							break;
 						};
@@ -1271,6 +1281,7 @@ namespace kASA {
 
 					vReadNameAndLength.pop_front();
 				}
+				debugBarrier
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl;
@@ -1282,13 +1293,14 @@ namespace kASA {
 		// Score one of them
 		inline void scoringFunc(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, const unique_ptr<uint64_t[]>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
 			try {
-
+				debugBarrier
 				Utilities::BufferedWriter outStreamer(fOut, 524288ull);
 				float bestScore = 0.f;
 				for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
 					bestScore += (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i];
 					//cout << (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i] << " " << vReadNameAndLength.second << " " << i << " " << vReadNameAndLength.second - i * 3 + 1 <<" " << arrWeightingFactors[Base::_iHighestK - i] << endl;
 				}
+				debugBarrier
 
 				for (auto it = vTempResultVec.begin(); it != vTempResultVec.end();) {
 					double relativeScore = 0.0;
@@ -1306,6 +1318,7 @@ namespace kASA {
 						it = vTempResultVec.erase(it);
 					}
 				}
+				debugBarrier
 
 				if (vTempResultVec.size() == 0) {
 					switch (format) {
@@ -1347,14 +1360,15 @@ namespace kASA {
 						outStreamer += "\tA:00\n";
 						break;
 					};
+					debugBarrier
 				}
 				else {
-
+					debugBarrier
 					sort(vTempResultVec.begin(), vTempResultVec.end(), [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<2>(a) > get<2>(b); });
 
 					auto maxValue = get<1>(*(max_element(vTempResultVec.begin(), vTempResultVec.end(), [](const tuple<size_t, float, double>& a, const tuple<size_t, float, double>& b) {return get<1>(a) < get<1>(b); })));
 					int32_t iTopHitCounter = 1;
-					for (int16_t i = 1; i < static_cast<int16_t>(vTempResultVec.size()) && i < iNumOfBeasts; ++i) {
+					for (int64_t i = 1; i < static_cast<int64_t>(vTempResultVec.size()) && i < iNumOfBeasts; ++i) {
 						if ((get<1>(vTempResultVec[i])) / (maxValue) > 0.8f) {
 							++iTopHitCounter;
 						}
@@ -1362,6 +1376,7 @@ namespace kASA {
 							break;
 						}
 					}
+					debugBarrier
 					string sOut = "", sOut2 = "", sOut3 = "";
 					sOut.reserve(1000);
 					auto it = vTempResultVec.begin();
@@ -1377,7 +1392,7 @@ namespace kASA {
 						sOut += vReadNameAndLength.first;
 						sOut += "\t";
 
-						for (int16_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
+						for (int64_t j = 0; it != vTempResultVec.end() && j < iNumOfBeasts; ++it) {
 							Utilities::itostr(mIdxToTax[get<0>(*it)], sOut);
 							sOut += ";";
 							sOut2 += mOrganisms[get<0>(*it)];
@@ -1412,6 +1427,7 @@ namespace kASA {
 							dtoa_milo((bestScore - get<1>(vTempResultVec[0])) / bestScore, outStreamer.getString());
 							outStreamer += "\n";
 						}
+						debugBarrier
 						break;
 
 					case OutputFormat::Json:
@@ -1429,7 +1445,7 @@ namespace kASA {
 						outStreamer += vReadNameAndLength.first;
 						outStreamer += "\",\n\t\"Top hits\": [\n";
 
-						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+						for (int64_t i = 0; i < iTopHitCounter; ++i, ++it) {
 							if (i == 0) {
 								outStreamer += "\t{\n";
 							}
@@ -1485,7 +1501,7 @@ namespace kASA {
 								++j;
 							}
 						}
-
+						debugBarrier
 						outStreamer += "\n\t]\n}";
 						break;
 
@@ -1498,7 +1514,7 @@ namespace kASA {
 						outStreamer += vReadNameAndLength.first;
 						outStreamer += "\", \"Top hits\": [";
 
-						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+						for (int64_t i = 0; i < iTopHitCounter; ++i, ++it) {
 							if (i == 0) {
 								outStreamer += "{";
 							}
@@ -1554,7 +1570,7 @@ namespace kASA {
 								++j;
 							}
 						}
-
+						debugBarrier
 						outStreamer += "] }\n";
 						break;
 
@@ -1567,7 +1583,7 @@ namespace kASA {
 						Utilities::itostr(vReadNameAndLength.second, outStreamer.getString());
 						outStreamer += "\t";
 
-						for (int16_t i = 0; i < iTopHitCounter; ++i, ++it) {
+						for (int64_t i = 0; i < iTopHitCounter; ++i, ++it) {
 							Utilities::itostr(mIdxToTax[get<0>(*it)], outStreamer.getString());
 							outStreamer += ":";
 							dtoa_milo(get<1>(*it), outStreamer.getString());
@@ -1584,11 +1600,12 @@ namespace kASA {
 								++j;
 							}
 						}
-
+						debugBarrier
 						outStreamer += "\n";
 						break;
 					};
 				}
+				debugBarrier
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl;
@@ -1615,12 +1632,11 @@ namespace kASA {
 					cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 				}
 			};
-
+			debugBarrier
 
 			uint64_t iReadIDStart = 0;
 			// check if there is still some unfinished read which is now complete
 			if (vSavedScores.size() && transferBetweenRuns_finished) {
-				;
 				auto lastScoreVec = getVecOfScored(vReadIDtoTaxID, 0);
 				vSavedScores.insert(vSavedScores.end(), lastScoreVec.cbegin(), lastScoreVec.cend());
 				lastScoreVec.clear();
@@ -1637,11 +1653,13 @@ namespace kASA {
 				}
 				lastScoreVec.push_back(seen);
 				vSavedScores.swap(lastScoreVec);
+				debugBarrier
 				scoringFunc(move(vSavedScores), (iReadIDStart++) + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, fThreshold, move(fOut));
 				vSavedScores.clear();
 
 				vReadNameAndLength.pop_front();
 			}
+			debugBarrier
 
 			if (transferBetweenRuns_addTail) {
 				// last read is not yet finished
@@ -1665,6 +1683,7 @@ namespace kASA {
 					vSavedScores.swap(resultOfUnfinished);
 				}
 
+				debugBarrier
 				// save the finished ones
 				scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, mFrequencies, mIdxToTax, mOrganisms, fThreshold, move(fOut));
 
@@ -1673,12 +1692,14 @@ namespace kASA {
 				iNumOfReadsOld = (iNumOfReads - 1 < iNumOfReadsOld) ? iNumOfReadsOld : iNumOfReads - 1;
 			}
 			else {
+				debugBarrier
 				// reads finished
 				scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, mFrequencies, mIdxToTax, mOrganisms, fThreshold, move(fOut));
 
 				iNumOfReadsSum += iNumOfReads;
 				iNumOfReadsOld = iNumOfReads;
 			}
+			debugBarrier
 		}
 
 
@@ -1775,6 +1796,8 @@ namespace kASA {
 				}*/
 
 				debugBarrier
+
+				bool bShrinkAvailMemoryAfterFirstStepOnce = true;
 				// get names of idxes
 				ifstream fContent(contentFile);
 				uint32_t iAmountOfSpecies = 1;
@@ -2282,8 +2305,9 @@ namespace kASA {
 						// reduce available memory
 						// context: should the input vector increase in size after the first call, bad_alloc will probably be thrown because there will likely be no larger contiguous chunk of memory available
 						// this is mitigated by substracting 0.1% of the available memory after every time this is called
-						if (iSoftMaxMemoryAvailable - static_cast<int64_t>(iSoftMaxMemoryAvailable * 0.001) > 0) {
+						if (iSoftMaxMemoryAvailable - static_cast<int64_t>(iSoftMaxMemoryAvailable * 0.001) > 0 && bShrinkAvailMemoryAfterFirstStepOnce) {
 							iSoftMaxMemoryAvailable -= static_cast<int64_t>(iSoftMaxMemoryAvailable * 0.001);
+							bShrinkAvailMemoryAfterFirstStepOnce = false;
 						}
 						debugBarrier
 						//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
@@ -2311,7 +2335,7 @@ namespace kASA {
 							auto newEnd = unique(vInputVec.begin(), vInputVec.end());
 							vInputVec.resize(newEnd - vInputVec.begin());
 						}
-
+						debugBarrier
 						auto end = std::chrono::high_resolution_clock::now();
 						iTimeFastq += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
@@ -2321,8 +2345,9 @@ namespace kASA {
 							if (tOutputThread) {
 								tOutputThread->join();
 							}
+							debugBarrier
+								// This holds the mapping read ID -> Genus ID
 
-							// This holds the mapping read ID -> Genus ID
 							vReadIDtoTaxID.generate(iNumOfReads, iAmountOfSpecies);
 
 						}

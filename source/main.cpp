@@ -61,6 +61,7 @@ Optional parameters:\n\
 -x (--callidx) <number>: Number given to this call of kASA so that no problems with temporary files occur if multiple instances of kASA are running at the same time. Default: 0.\n\
 -v (--verbose): Prints out a little more information e.g.how much percent of your input was already read and analysed (if your input is not gzipped). Default: off.\n\
 --three: Use only three reading frames instead of six. Halves index size but may lead to artifacts due to additional reverse complement DNA inside some genomes. Default: off.\n\
+--one: Use only one reading frame instead of six. Reduces final index size significantly but sacrifices accuracy and robustness. Default: off.\n\
 --taxidasstr: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.\n\
 --kH <12 or 25>: Signal which bit size you want to use for the index (25 for 128, 12 for 64).\n\
 ";
@@ -514,6 +515,11 @@ int main(int argc, char* argv[]) {
 		if (thread::hardware_concurrency() < static_cast<uint32_t>(iNumOfThreads)) {
 			cout << "OUT: WARNING! The requested number of " << iNumOfThreads << " threads is too much for your system (" << thread::hardware_concurrency() << " cores available). kASA may crash or slow down to a crawl..." << endl;
 		}
+
+		if (int(bOnlyOneFrame) + int(bThreeFrames) + int(bSixFrames) >= 2) {
+			throw runtime_error("You'll have to decide between using one, three, or six frames. Currently, more than one option was chosen. Please check your parameters!");
+		}
+
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		if (cMode == "build") {
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
@@ -544,10 +550,20 @@ int main(int argc, char* argv[]) {
 
 			if (iHigherK <= 12) {
 				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bTranslated, bUnfunny);
+				
+				if (bOnlyOneFrame) {
+					readObj._bOnlyOneFrame = true;
+				}
+				
 				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 			}
 			else {
 				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bTranslated, bUnfunny);
+
+				if (bOnlyOneFrame) {
+					readObj._bOnlyOneFrame = true;
+				}
+
 				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 			}
 			

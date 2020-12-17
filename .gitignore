@@ -478,3 +478,8 @@ MigrationBackup/
 /example/work/index/idx_trie.txt
 /example/work/results/testStuff.json
 /example/work/results/testStuff2.json
+/example/work/index/idx_one
+/example/work/index/idx_one_f.txt
+/example/work/index/idx_one_info.txt
+/example/work/index/idx_one_trie
+/example/work/index/idx_one_trie.txt

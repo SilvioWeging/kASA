@@ -526,6 +526,10 @@ namespace Utilities {
 			return _vPointers.size();
 		}
 
+		inline size_t size() const {
+			return _vPointers.size();
+		}
+
 		inline float* operator[](const size_t& row) {
 			return _vPointers[row].get();
 		}
@@ -620,8 +624,8 @@ namespace Utilities {
 	///////////////////////////////////////////////////////
 
 	inline void copyFile(const string& sIn, const string& sOut) {
-		// rename is bugging under linux in that it creates a segmentation fault if the file is on another drive
-		// so we just take this solution from https://stackoverflow.com/users/1054324/peter: https://stackoverflow.com/questions/10195343/copy-a-file-in-a-sane-safe-and-efficient-way
+		// if rename is not working 
+		// I took this solution from https://stackoverflow.com/users/1054324/peter: https://stackoverflow.com/questions/10195343/copy-a-file-in-a-sane-safe-and-efficient-way
 		createFile(sOut);
 		ifstream source(sIn, ios::binary);
 		ofstream dest(sOut, ios::binary);
@@ -634,6 +638,16 @@ namespace Utilities {
 		source.close();
 		dest.close();
 	}
+
+	///////////////////////////////////////////////////////
+	inline void moveFile(const string& sIn, const string& sOut) {
+		if (rename(sIn.c_str(), sOut.c_str())) { // in C++17 we can change that to filesystem::rename
+			cerr << "ERROR: Moving the file did not work, attempting to copy..." << endl;
+			remove(sOut.c_str());
+			Utilities::copyFile(sIn, sOut);
+		}
+	}
+
 
 	///////////////////////////////////////////////////////
 	inline uint64_t countBits(uint64_t val) {

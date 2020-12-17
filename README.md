@@ -200,6 +200,7 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-z (--translated)`: Tell kASA, that the input consists of protein sequences.
 * `--three`: Use only three reading frames instead of six. Halves index size but implies the usage of `--six` during identification if the orientation of the reads is unknown. Default: off.
+* `--one`: Use only one reading frame instead of six. Reduces final index size significantly but sacrifices accuracy and robustness. Default: off.
 * `--taxidasstr`: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.
 * `--kH <12 or 25>`: Signal which bit size you want to use for the index (25 for 128, 12 for 64).
 ```
