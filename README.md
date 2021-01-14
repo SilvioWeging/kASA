@@ -474,9 +474,10 @@ This gives you a hint whether you should look at the unique relative frequencies
 - Profiles normalized to genome length, for now you could hack that with the frequency file
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
-- small collection of adapter sequences
+- Small collection of adapter sequences
 - bzip2 support
-- live streaming of .bcl files
+- Live streaming of .bcl files
+- Support of ARM64 architecture
 
 ## License
 

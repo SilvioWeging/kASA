@@ -469,7 +469,7 @@ namespace kASA {
 
 				}
 				else {
-					cerr << "ERROR: codon table not found in file. Using built-in." << endl;
+					cerr << "WARNING: codon table not found in file. Using built-in." << endl;
 				}
 			}
 			catch (...) {
@@ -693,7 +693,7 @@ namespace kASA {
 						sTaxonomicLevel == "superkingdom" ||
 						sTaxonomicLevel == "domain"
 						)) {
-						cerr << "ERROR: No known tax. level specified. I'll just go with species..." << endl;
+						cerr << "WARNING: No known tax. level specified. I'll just go with species..." << endl;
 						sTaxonomicLevel = "species";
 					}
 

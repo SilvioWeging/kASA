@@ -143,6 +143,7 @@ namespace kASA {
 				unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
 				unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
 				unordered_map<string, uint32_t> mAccToID;
+				int64_t iAvailableMemory = static_cast<int64_t>(iMemory);
 				ifstream content(contentFile);
 				string sDummy = "";
 				bool bTaxIdsAsStrings = false;
@@ -154,17 +155,20 @@ namespace kASA {
 						}
 						if (line.size() >= 4) {
 							mIdxToName[iIdxCounter] = line[0];
+							iAvailableMemory -= sizeof(char) * line[0].length();
 							const auto& vAccessionNumbers = Utilities::split(line[3], ';');
 							if (bTaxIdsAsStrings) {
 								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
 								for (const auto& acc : vAccessionNumbers) {
 									mAccToID.insert(make_pair(acc, stoul(line[4])));
+									iAvailableMemory -= sizeof(char) * acc.length();
 								}
 							}
 							else {
 								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
 								for (const auto& acc : vAccessionNumbers) {
 									mAccToID.insert(make_pair(acc, stoul(line[1])));
+									iAvailableMemory -= sizeof(char) * acc.length();
 								}
 							}
 							++iIdxCounter;
@@ -174,10 +178,12 @@ namespace kASA {
 						}
 					}
 				}
+				// hash tables do cost some memory!
+				iAvailableMemory -= Utilities::calculateSizeInByteOfUnorderedMap(mIDsAsIdx) + Utilities::calculateSizeInByteOfUnorderedMap(mIdxToName) + Utilities::calculateSizeInByteOfUnorderedMap(mAccToID);
 
-				unique_ptr<uint64_t[]> arrFrequencies_(new uint64_t[iIdxCounter * Base::_iHighestK]);
-				for (uint64_t i = 0; i < iIdxCounter * Base::_iHighestK; ++i) {
-					arrFrequencies_[i] = 0;
+				if (iAvailableMemory < 0) {
+					cerr << "WARNING: Not enough memory given, the content file and/or number of taxa is quite large. Trying with 1GB but may lead to bad_alloc errors..." << endl;
+					iAvailableMemory = static_cast<int64_t>(1024ull * 1024ull * 1024ull);
 				}
 
 				// Create new index
@@ -200,7 +206,7 @@ namespace kASA {
 					// add kMers from fasta
 					Utilities::createFile(Base::_sTemporaryPath + "_tempUpdate_" + to_string(Base::_iNumOfCall));
 
-					Build<vecType, elemType> brick(Base::_sTemporaryPath, Base::_iNumOfCall, Base::_iNumOfThreads, iMemory / (sizeof(elemType)), iIdxCounter);
+					Build<vecType, elemType> brick(Base::_sTemporaryPath, Base::_iNumOfCall, Base::_iNumOfThreads, iAvailableMemory / (sizeof(elemType)), iIdxCounter);
 
 					size_t overallCharsRead = 0;
 					unique_ptr<vecType> dummy;
@@ -232,6 +238,12 @@ namespace kASA {
 
 					// Finalize
 					brick.IntToExtPart();
+
+					unique_ptr<uint64_t[]> arrFrequencies_(new uint64_t[iIdxCounter * Base::_iHighestK]);
+					for (uint64_t i = 0; i < iIdxCounter * Base::_iHighestK; ++i) {
+						arrFrequencies_[i] = 0;
+					}
+
 					const uint64_t& iSizeOfFinalIndex = brick.mergeTemporaries(Base::_sTemporaryPath + "_tempUpdate_" + to_string(Base::_iNumOfCall));
 					{ // new scope for merging so that the temporary can be removed afterwards
 						unique_ptr<stxxlFile> stxxlTempVec(new stxxlFile(Base::_sTemporaryPath + "_tempUpdate_" + to_string(Base::_iNumOfCall), stxxl::file::RDONLY));

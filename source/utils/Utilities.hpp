@@ -642,7 +642,7 @@ namespace Utilities {
 	///////////////////////////////////////////////////////
 	inline void moveFile(const string& sIn, const string& sOut) {
 		if (rename(sIn.c_str(), sOut.c_str())) { // in C++17 we can change that to filesystem::rename
-			cerr << "ERROR: Moving the file did not work, attempting to copy..." << endl;
+			cerr << "WARNING: Moving the file did not work, attempting to copy..." << endl;
 			remove(sOut.c_str());
 			Utilities::copyFile(sIn, sOut);
 		}
@@ -695,7 +695,7 @@ namespace Utilities {
 	template<typename T1, typename T2, typename E>
 	inline typename unordered_map<T1,T2>::const_iterator checkIfInMap(const unordered_map<T1,T2>& map, const E& element) {
 		try {
-			auto res = map.find(element);
+			typename unordered_map<T1, T2>::const_iterator res = map.find(element);
 			if (res != map.end()) {
 				return res;
 			}
@@ -708,6 +708,22 @@ namespace Utilities {
 		catch (...) {
 			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 		}
+	}
+
+	///////////////////////////////////////////////////////
+	template<typename T1, typename T2>
+	inline uint64_t calculateSizeInByteOfUnorderedMap(const unordered_map<T1,T2>& map) {
+		uint64_t iSizeInBytes = 0;
+		for (size_t i = 0; i < map.bucket_count(); ++i) {
+			const size_t& bucket_size = map.bucket_size(i);
+			if (bucket_size == 0) {
+				iSizeInBytes += sizeof(pair<T1, T2>);
+			}
+			else {
+				iSizeInBytes += sizeof(pair<T1, T2>) * bucket_size;
+			}
+		}
+		return iSizeInBytes;
 	}
 
 	///////////////////////////////////////////////////////

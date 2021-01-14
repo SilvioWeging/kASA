@@ -290,10 +290,14 @@ public:
 			_prefixArray.resize(1);
 			break;
 		case 3:
+#if (__aarch64__ || _M_ARM)
+			break;
+#else
 			_prefixLookuptable.reset(new packedBigPair[754137931]);
 			fill(_prefixLookuptable.get(), _prefixLookuptable.get() + 754137931, packedBigPair(numeric_limits<uint64_t>::max(), 0)); // 754137930 = 30+30*30+30*30^2+30*30^3+30*30^4+30*30^5 = "]^^^^^" as integer without spaces
 			iSizeOfTrie = 754137931 * sizeof(packedBigPair);
 			break;
+#endif
 		default:
 			break;
 		};

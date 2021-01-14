@@ -362,6 +362,10 @@ namespace kASA {
 					throw runtime_error("This index is either already halved or of a type which cannot be halved. Sorry...");
 				}
 
+				if (iIdxCounter > 65535 && eDeleteStrategy == TrieHalf) {
+					throw runtime_error("Index can only be halved, if less than 65535 species are inside the index!");
+				}
+
 				unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
 				unique_ptr<unique_ptr<const vecType>[]> vLibIn(new unique_ptr<const vecType>[_iNumOfThreads]);
 				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
@@ -428,9 +432,6 @@ namespace kASA {
 				}
 				case TrieHalf:
 				{
-					if (iIdxCounter > 65535) {
-						throw runtime_error("Index can only be halved, if less than 65535 species are inside the index!");
-					}
 
 					putHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, fOutFile);
 

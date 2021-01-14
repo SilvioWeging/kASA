@@ -67,8 +67,13 @@ using namespace std;
 	#else
 		#include <experimental/filesystem>
 	#endif
-#include <zlib.h>
-#include <gzstream.hpp>
+
+	#if (__aarch64__ || _M_ARM)
+		typename std::ifstream igzstream;
+	#else
+		#include <zlib.h>
+		#include <gzstream.hpp>
+	#endif
 #define _SILENCE_PARALLEL_ALGORITHMS_EXPERIMENTAL_WARNING
 
 #if _WIN64
@@ -98,7 +103,11 @@ using namespace std;
 #include <unistd.h>
 #include <stxxl/bits/io/syscall_file.h>
 #include <dirent.h>
-#include <gzstream.hpp>
+	#if (__aarch64__ || _M_ARM64)
+		typename ifstream igzstream;
+	#else
+		#include <gzstream.hpp>
+	#endif
 #include <pthread.h>
 
 #if __x86_64__ || __ppc64__

@@ -275,7 +275,8 @@ rule IdentifyMultiple:
 	input:
 		dummyLink=rules.identify_u.output.json3,
 		content=rules.generateCF.output.content,
-		idx=rules.update.output.index
+		idx=rules.update.output.index,
+		derp=rules.reconstructFrequency.output.freqRec
 	output:
 		touch("work/results/mult.done")
 	params:

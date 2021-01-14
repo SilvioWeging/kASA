@@ -1650,18 +1650,16 @@ namespace kASA {
 							const auto& vAccessionNumbers = Utilities::split(line[3], ';');
 							if (bTaxIdsAsStrings) {
 								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
-								iMem -= sizeof(pair<uint32_t,uint32_t>);
 								for (const auto& acc : vAccessionNumbers) {
 									mAccToID.insert(make_pair(acc, stoul(line[4])));
-									iMem -= sizeof(pair<string, uint32_t>) + sizeof(char) * acc.length();
+									iMem -= sizeof(char) * acc.length();
 								}
 							}
 							else {
 								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
-								iMem -= sizeof(pair<uint32_t, uint32_t>);
 								for (const auto& acc : vAccessionNumbers) {
 									mAccToID.insert(make_pair(acc, stoul(line[1])));
-									iMem -= sizeof(pair<string, uint32_t>) + sizeof(char) * acc.length();
+									iMem -= sizeof(char) * acc.length();
 								}
 							}
 							++iIdxCounter;
@@ -1671,10 +1669,12 @@ namespace kASA {
 						}
 					}
 				}
-				iMem -= sizeof(unordered_map<string, uint32_t>) + sizeof(unordered_map<uint32_t, pair<uint32_t, string>>);
+				
+				iMem -= Utilities::calculateSizeInByteOfUnorderedMap(mAccToID);
+				iMem -= Utilities::calculateSizeInByteOfUnorderedMap(mIDsAsIdx);
 
 				if (iMem < 0) {
-					cerr << "ERROR: Your content file is quite large and keeping the hash tables generated from it in memory consumes more memory than given.\
+					cerr << "WARNING: Your content file is quite large and keeping the hash tables generated from it in memory consumes more memory than given.\
 							 kASA might therefore consume more than anticipated and thus crash. If you can, reduce the number of entries in the content file or abstract to a higher taxonomic rank and generate it anew.\
 							Sorry!" << endl;
 					iMem = 1073741824; // 1024^3

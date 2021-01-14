@@ -616,10 +616,16 @@ int main(int argc, char* argv[]) {
 			
 			if (iVecType != 128) {
 				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bTranslated, bUnfunny);
+				if (bOnlyOneFrame) {
+					updateObj._bOnlyOneFrame = true;
+				}
 				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 			}
 			else {
 				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bTranslated, bUnfunny);
+				if (bOnlyOneFrame) {
+					updateObj._bOnlyOneFrame = true;
+				}
 				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
@@ -692,7 +698,7 @@ int main(int argc, char* argv[]) {
 
 			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			if (iVecType == 0) {
-				if (bCustomMemorySet && fPercentageOfThrowAway == 0.f) {
+				if (bCustomMemorySet && fPercentageOfThrowAway == 0.f && eShrinkingStrategy == kASA::Shrink::ShrinkingStrategy::EveryNth) {
 					// index shall be of a maximum size
 					fPercentageOfThrowAway = 100.f - 100.f * float(iMemorySizeAvail) / (iSizeOfLib * sizeof(packedBigPair));
 					if (bVerbose) {
@@ -843,11 +849,11 @@ int main(int argc, char* argv[]) {
 
 			if (iVecType != 128) {
 				if (iHigherK > 12) {
-					cerr << "This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
+					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
 					iHigherK = 12;
 				}
 				if (iLowerK > 12) {
-					cerr << "This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
+					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
 					iLowerK = 12;
 				}
 				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny);
@@ -962,11 +968,11 @@ int main(int argc, char* argv[]) {
 
 			if (iVecType != 128) {
 				if (iHigherK > 12) {
-					cerr << "This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
+					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
 					iHigherK = 12;
 				}
 				if (iLowerK > 12) {
-					cerr << "This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
+					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
 					iLowerK = 12;
 				}
 
@@ -994,8 +1000,12 @@ int main(int argc, char* argv[]) {
 				iMemorySizeAvail -= kASAObj->index.getTrie()->GetSize();
 
 				debugBarrier
-				unordered_map<uint32_t, uint32_t> dummyObj;
-				kASAObj->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn, dummyObj);
+				kASAObj->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn);
+
+				if (iMemorySizeAvail < 0) {
+					cerr << "WARNING: Not enough memory given, try to download more RAM. Adding 1GB. May lead to bad_alloc errors..." << endl;
+					iMemorySizeAvail = static_cast<int64_t>(1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
+				}
 
 				iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
 
@@ -1031,8 +1041,13 @@ int main(int argc, char* argv[]) {
 				kASAObj128->index.setHasBeenLoadedFromOutside();
 				iMemorySizeAvail -= kASAObj128->index.getTrie()->GetSize();
 				debugBarrier
-				unordered_map<uint32_t, uint32_t> dummyObj;
-				kASAObj128->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn, dummyObj);
+				kASAObj128->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn);
+
+				if (iMemorySizeAvail < 0) {
+					cerr << "WARNING: Not enough memory given, try to download more RAM. Adding 1GB. May lead to bad_alloc errors..." << endl;
+					iMemorySizeAvail = static_cast<int64_t>(1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
+				}
+
 				iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
 
 				kASAObj128->format = eOutputFormat;
