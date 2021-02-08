@@ -216,6 +216,9 @@ namespace kASA {
 
 			
 			//sort(kMerVecOut.begin() + iStartPositionForOut, kMerVecOut.begin() + iPositionForOut);
+			/*std::sort(kMerVecOut.begin() + iStartPositionForOut, kMerVecOut.begin() + iPositionForOut, [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
+					return get<1>(p1) < get<1>(p2);
+					});*/
 			
 		}
 
@@ -276,7 +279,8 @@ namespace kASA {
 			//list<readIDType> vReadIDs;
 			//readIDType iCurrentReadID = 0;
 			//unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
-			uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iNumOfAllCharsRead = 0, iCurrentOverallPercentage = 0, iNumOfNewReads = 0;
+			uint64_t iNumOfCharsRead = 0, iNumOfAllCharsRead = 0, iCurrentOverallPercentage = 0, iNumOfNewReads = 0;
+			double  iCurrentPercentage = 0.0;
 			//vector<uint64_t> vRangesOfOutVec;
 		};
 
@@ -362,9 +366,9 @@ namespace kASA {
 						transfer->iNumOfCharsRead += iNumOfChars;
 						transfer->iNumOfAllCharsRead += iNumOfChars;
 						double dPercentageOfInputRead = transfer->iNumOfCharsRead / double(iFileLength) * 100.;
-						if (static_cast<uint64_t>(dPercentageOfInputRead) != transfer->iCurrentPercentage) {
-							transfer->iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
-							cout << "OUT: Progress of current file " << transfer->iCurrentPercentage << "%" << endl;
+						if (static_cast<uint64_t>(dPercentageOfInputRead) != static_cast<uint64_t>(transfer->iCurrentPercentage)) {
+							transfer->iCurrentPercentage = dPercentageOfInputRead;
+							cout << "OUT: Progress of current file " << static_cast<uint64_t>(transfer->iCurrentPercentage) << "%" << endl;
 						}
 						if (iFileLength != overallFilesSize) {
 							dPercentageOfInputRead = transfer->iNumOfAllCharsRead / double(overallFilesSize) * 100.;
@@ -847,7 +851,7 @@ namespace kASA {
 				//auto startTIME = std::chrono::high_resolution_clock::now();
 				try {
 					// should the capacity be smaller than iSumOfkMers after the first allocation, bad_alloc will probably be thrown because there will likely be no larger contiguous chunk of memory available
-					// this is mitigated by substracting 1% of the available memory after every time this is called (see Compare.hpp "reduce available memory")
+					// this is mitigated by substracting 1% of the available memory once after this is called (see Compare.hpp "reduce available memory")
 					vOut.reserve(iSumOfkMers); 
 					vOut.resize(iSumOfkMers);
 				}
@@ -1758,10 +1762,11 @@ namespace kASA {
 				// write frequency file
 				/// first line
 				ofstream outFile(fOutFile + "_f.txt");
-				outFile << "non_unique" << "\t0";
+				outFile << "non_unique";
 				for (int32_t k = 0; k < _iHighestK; ++k) {
 					outFile << "\t" << arrFrequencies[k];
 				}
+				outFile << endl;
 				/// rest
 				content.clear();
 				content.seekg(0);

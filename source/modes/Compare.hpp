@@ -492,8 +492,6 @@ namespace kASA {
 				int32_t shift = 5 * (Base::_iHighestK - Base::_aOfK[ikLengthCounter]);
 				const auto shiftVal = [&shift](const intType& val) { return val >> shift; };
 
-
-
 				auto vInIndex = vInStart;
 				while (vInIndex < vInEnd) {
 					// determining the range once is better than checking everytime if its still the same
@@ -694,6 +692,7 @@ namespace kASA {
 										uint64_t iTempCounter = 1;
 										while (seenResultIt + iTempCounter != rangeEndIt + 1) {
 											const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
+											//cout << kASA::kMerToAminoacid(iCurrentkMerShifted, 12) << " " << kASA::kMerToAminoacid(iNextLibSuffix, 12) << endl;
 											if (iCurrentkMerShifted > (iNextLibSuffix >> shift)) {
 												int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 												for (; iUntilK > -1; --iUntilK) {
@@ -711,6 +710,9 @@ namespace kASA {
 													++iTempCounter;
 												}
 												else {
+													auto nextValuablekMer = lower_bound(seenResultIt + iTempCounter, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const decltype(iCurrentkMerShifted)& val) { return (a.first >> shift) < val; });
+													//cout << kASA::kMerToAminoacid((nextValuablekMer - 1)->first, 12) << " " << kASA::kMerToAminoacid(nextValuablekMer->first, 12) << " " << nextValuablekMer - seenResultIt << endl;
+													iTempCounter = nextValuablekMer - seenResultIt;
 													break;
 												}
 											}
@@ -1760,7 +1762,7 @@ namespace kASA {
 	public:
 
 		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t&, const int64_t& iMemory, const bool& bSpaced, bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode, const float& fThreshold, int32_t iLocalNumOfThreads = 0, const int32_t& iLocalThreadIdx = 0 ) {
+		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t&, const int64_t& iMemory, const bool&, bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode, const float& fThreshold, int32_t iLocalNumOfThreads = 0, const int32_t& iLocalThreadIdx = 0 ) {
 			try {
 				if (iLocalNumOfThreads == 0) {
 					iLocalNumOfThreads = Base::_iNumOfThreads;
@@ -2225,6 +2227,7 @@ namespace kASA {
 					unique_ptr<typename Base::strTransfer> transferBetweenRuns(new typename Base::strTransfer);
 					transferBetweenRuns->iCurrentOverallPercentage = allFilesProgress;
 					transferBetweenRuns->iNumOfAllCharsRead = charsReadOverall;
+					double iLastProgressInPercent = 0.0;
 					vector<tuple<readIDType, float, double>> vSavedScores;
 					//readIDType iReadIDofSavedScores = 0;
 
@@ -2232,7 +2235,8 @@ namespace kASA {
 					while (bIsGood) {
 						ios::sync_with_stdio(false);
 						std::cin.tie(nullptr);
-						auto start = std::chrono::high_resolution_clock::now();
+						auto timeInputStart = std::chrono::high_resolution_clock::now();
+						auto timeWholePartStart = std::chrono::high_resolution_clock::now();
 
 						//iSoftMaxMemoryUsage = 19199040;
 
@@ -2278,8 +2282,8 @@ namespace kASA {
 							vInputVec.resize(newEnd - vInputVec.begin());
 						}
 						debugBarrier
-						auto end = std::chrono::high_resolution_clock::now();
-						iTimeFastq += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+						auto timeInputEnd = std::chrono::high_resolution_clock::now();
+						iTimeFastq += chrono::duration_cast<std::chrono::nanoseconds>(timeInputEnd - timeInputStart).count();
 
 
 						if (bReadIDsAreInteresting) {
@@ -2300,7 +2304,7 @@ namespace kASA {
 						function<void(const int32_t&, const uint64_t&, const uint64_t&)> foo;
 
 						// now compare with index
-						start = std::chrono::high_resolution_clock::now();
+						auto timeCompareStart = std::chrono::high_resolution_clock::now();
 
 
 						if (bRAM) {
@@ -2356,8 +2360,8 @@ namespace kASA {
 							}
 						}
 						debugBarrier
-
-						/*size_t iStart = 0, iEnd = transferBetweenRuns->vRangesOfOutVec[1];
+						/*
+						size_t iStart = 0, iEnd = transferBetweenRuns->vRangesOfOutVec[1];
 						for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
 
 							//cout << iStart << " " << iEnd << endl;
@@ -2472,12 +2476,15 @@ namespace kASA {
 #endif
 
 						//iterate until no dna is left
-						end = std::chrono::high_resolution_clock::now();
-						iTimeCompare += chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+						auto timeCompareEnd = std::chrono::high_resolution_clock::now();
+						auto timeWholePartEnd = std::chrono::high_resolution_clock::now();
+						iTimeCompare += chrono::duration_cast<std::chrono::nanoseconds>(timeCompareEnd - timeCompareStart).count();
 
 						if (Base::_bVerbose) {
-							cout << "OUT: Estimated remaining time needed for this file: " << (100.0 - static_cast<double>(transferBetweenRuns->iCurrentPercentage)) / static_cast<double>(transferBetweenRuns->iCurrentPercentage) * static_cast<double>(chrono::duration_cast<std::chrono::seconds>(end - start).count()) << "s" << endl;
+							cout << "OUT: Estimated remaining time needed for this file: " << (100.0 - transferBetweenRuns->iCurrentPercentage) / (transferBetweenRuns->iCurrentPercentage - iLastProgressInPercent) * static_cast<double>(chrono::duration_cast<std::chrono::seconds>(timeWholePartEnd - timeWholePartStart).count()) << "s" << endl;
 						}
+
+						iLastProgressInPercent = transferBetweenRuns->iCurrentPercentage;
 
 					}
 					debugBarrier
@@ -2638,8 +2645,8 @@ namespace kASA {
 								}
 								// non-unique rel freq
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									if (bSpaced) {
-										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
+									if (get<1>(entry)[ikMerlength].first == 0) {
+										sOutStr << "," << 0.0;
 									}
 									else {
 										//sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (Base::_iMaxK - Base::_iMinK - ikMerlength) * 6 * iNumOfReadsSum);

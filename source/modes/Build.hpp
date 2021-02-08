@@ -286,9 +286,10 @@ namespace kASA {
 				vInternal.reset(); //not needed anymore
 
 				auto remainingFiles = _iCounterOfContainers;
-				int16_t iCurrentIdx = 0;
-				vector<typename vecType::const_iterator> vCurrentIterators;
-				
+				int32_t iCurrentIdx = 0;
+				auto comparisonFunction = [](const pair<typename vecType::const_iterator, uint32_t>& it1, const pair<typename vecType::const_iterator, uint32_t>& it2) { return *(it1.first) < *(it2.first); };
+				priority_queue<pair<typename vecType::const_iterator,uint32_t>, vector<pair<typename vecType::const_iterator, uint32_t>>, decltype(comparisonFunction)> vCurrentIterators(comparisonFunction);
+
 				auto maxNrOfFiles = remainingFiles;
 				while (remainingFiles != 1) {
 					// first gather as many files as permitted
@@ -296,10 +297,10 @@ namespace kASA {
 					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
 
 					uint64_t iSumSize = 0;
-					for (int16_t i=0; i < (FOPEN_MAX - 1) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
+					for (int32_t i = 0; i < (FOPEN_MAX - 1) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
 						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDONLY));
 						currentVecs[i].reset(new vecType(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
-						vCurrentIterators.push_back(currentVecs[i]->cbegin());
+						vCurrentIterators.push(make_pair(currentVecs[i]->cbegin(), i));
 						iSumSize += vVectorSizes[iCurrentIdx];
 						remainingFiles--;
 					}
@@ -315,31 +316,36 @@ namespace kASA {
 					uint64_t iSizeOfNewVec = 0;
 					while (!vCurrentIterators.empty()) {
 						// take smallest value and check if that has been seen before
-						auto it = std::min_element(vCurrentIterators.begin(), vCurrentIterators.end(), [](const typename vecType::const_iterator& it1, const typename vecType::const_iterator& it2) { return *it1 < *it2; });
-						auto& it2 = *it; 
-						
-						if (!(*it2 == pSeen)) {
+						auto it = vCurrentIterators.top();
+
+						if (!(*(it.first) == pSeen)) {
 							// if not: write it to the output
-							pSeen = *it2;
+							pSeen = *(it.first);
 							vNCIt << pSeen;
 							++iSizeOfNewVec;
 						}
-						it2++;
-						
+						it.first++;
+
 						// The end of that vector has been reached: take this iterator (and temporary vector) out of consideration
-						if (it2 == currentVecs[distance(vCurrentIterators.begin(), it)]->cend()) {
-							const auto& whichOne = distance(vCurrentIterators.begin(), it);
+						if (it.first == currentVecs[it.second]->cend()) {
+							const auto& whichOne = it.second;
 							currentVecs[whichOne].reset();
-							currentVecs.erase(currentVecs.begin() + whichOne);
+							//currentVecs.erase(currentVecs.begin() + whichOne);
 							currentFiles[whichOne]->close_remove();
 							currentFiles[whichOne].reset();
-							currentFiles.erase(currentFiles.begin() + whichOne);
-							vCurrentIterators.erase(it); 
+							//currentFiles.erase(currentFiles.begin() + whichOne);
+							vCurrentIterators.pop();
 							//cout << whichOne;
 							//for (size_t i = 0; i < vCurrentIterators.size(); ++i) {
 							//	cout << " " << currentVecs[i]->size() << endl;
 							//}
 						}
+						else {
+							vCurrentIterators.pop();
+							vCurrentIterators.push(it);
+						}
+
+
 					}
 					vNCIt.finish();
 					vVectorSizes.push_back(iSizeOfNewVec);
@@ -358,7 +364,7 @@ namespace kASA {
 				remove((_sTempPath + to_string(_iCounterOfContainers - 1)).c_str());
 				ofstream fLibInfo(sOutPath + "_info.txt");
 				fLibInfo << vVectorSizes[_iCounterOfContainers - 1];
-				if (is_same<vecType,contentVecType_128>::value) {
+				if (is_same<vecType, contentVecType_128>::value) {
 					fLibInfo << endl << 128;
 				}
 

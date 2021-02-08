@@ -223,7 +223,7 @@ int main(int argc, char* argv[]) {
 		uint8_t iTrieDepth = 6, iPrefixCheckMode = 0;
 
 		auto timeRightNow = chrono::system_clock::to_time_t(chrono::system_clock::now());
-		cout << "OUT: " << "kASA version " << kASA_VERSION << " ran on " <<
+		cout << "OUT: " << "kASA version " << kASA_VERSION_MAJOR << "." << kASA_VERSION_MINOR << "." << kASA_VERSION_PATCH << " ran on " <<
 #if  _WIN64
 			"Windows "
 #elif __linux__

@@ -9,7 +9,9 @@
 **************************************************************************/
 #pragma once
 
-#define kASA_VERSION 1.4
+#define kASA_VERSION_MAJOR 1
+#define kASA_VERSION_MINOR 4
+#define kASA_VERSION_PATCH 1
 
 #include <iostream>
 #include <cstdint>
@@ -34,6 +36,7 @@
 #include <typeinfo>
 #include <thread>
 #include <mutex>
+#include <queue>
 
 #include "utils/packedPairs.hpp"
 
