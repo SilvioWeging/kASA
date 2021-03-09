@@ -133,10 +133,10 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Creates default config for stxxl, only called once
 		inline void createConfig(const string& tempFileName, const int32_t& iNumCall, const string& mode = "", const bool& bDelete = true) {
-#if (_WIN32 || _WIN64) && !defined(__llvm__)
+#if (_WIN32 || _WIN64) && !__APPLE__
 			string IOCall = (mode != "") ? mode : "wincall autogrow";
 #endif
-#if __GNUC__ || defined(__llvm__)
+#if (__GNUC__ || defined(__llvm__)) && !_MSC_VER
 			string IOCall = (mode != "") ? mode : "syscall unlink autogrow"; 
 #endif
 			if (bDelete) {

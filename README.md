@@ -11,7 +11,7 @@ This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</
 	* [Linux](#linux)
 	* [macOS](#macOS)
 	* [Windows](#windows)
-- [TL;DR](#tl;dr)
+- [TL;DR](#tldr)
 - [Modes and paramameters](#modes-and-parameters)
 	* [Basic](#basic)
 	* [Content file](#generate-a-content-file)
@@ -99,6 +99,10 @@ and proceed as in the Linux part starting from "Clone ...".
 
 
 ### Windows
+
+If you only wish to use the .exe, you still need the Visual C++ Redistributable from [here](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0).
+It can then be called via the PowerShell since it has no GUI (yet). 
+If you want to build the project with Visual Studio instead, please do the following:
 
 Clone the repository and open the file `slnForVS/kASA.sln` with Visual Studio 2019.
 

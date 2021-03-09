@@ -14,7 +14,7 @@
 #include "uint128_t.hpp"
 
 // Check windows
-#if _WIN32 || _WIN64
+#if (_WIN32 || _WIN64) && !__APPLE__
 
 #pragma pack(push, 1)
 struct packedPair {
@@ -88,7 +88,7 @@ struct packedBigPairTrie {
 
 
 // Check GCC or Clang
-#if __GNUC__ || __clang__
+#if (__GNUC__ || __clang__) && !_MSC_VER
 struct __attribute__((packed)) packedPair {
 	uint32_t first = 0;
 	uint16_t second = 0;

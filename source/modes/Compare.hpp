@@ -451,6 +451,9 @@ namespace kASA {
 
 			try {
 				debugBarrier
+
+				//double dAverageLoopCount = 0.;
+				//size_t iNumOfLoops = 0;
 				// In case of profiling only, this is the default
 				function<void(vector<uint64_t>&, uint64_t&, const uint64_t&)> addToMatchedReadID = [](vector<uint64_t>&, uint64_t& position, const uint64_t&) {
 					position++;
@@ -470,10 +473,9 @@ namespace kASA {
 						position++;
 					};
 
-					linkReadIDToTaxID = [&vReadIDtoGenID, &iSpecIDRange, this](const uint64_t& taxID, const float& score, const uint64_t& numOfHits, const vector<uint64_t>& vReadIDs) { // TODO This takes time because its n*m with n = #tax ids and m = #read ids
-						for (uint64_t pos = 0; pos < numOfHits; ++pos) {
-							vReadIDtoGenID[vReadIDs[pos]][taxID] += score;
-
+					linkReadIDToTaxID = [&vReadIDtoGenID](const uint64_t& taxID, const float& score, const uint64_t& numOfHits, const vector<uint64_t>& vReadIDs) { // TODO This takes time because its n*m with n = #tax ids and m = #read ids
+						for (auto readIDIt = vReadIDs.cbegin(); readIDIt != vReadIDs.cbegin() + numOfHits; readIDIt++) {
+							vReadIDtoGenID[*readIDIt][taxID] += score;
 						}
 					};
 				}
@@ -662,6 +664,9 @@ namespace kASA {
 											const auto& score = weight * (1.f / numOfEntries);
 
 											const auto& numOfHits = vPositions[ikLengthCounter];
+
+											//dAverageLoopCount += numOfEntries * numOfHits;
+											//iNumOfLoops++;
 											
 											for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) {
 												const auto& tempIndex = iPartialTempIndex + (*it);
@@ -780,12 +785,15 @@ namespace kASA {
 							}
 
 							linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLC]);
+							
 						}
-
 					}
 					debugBarrier
 				}
 				debugBarrier
+					//m_exceptionLock.lock();
+					//cout << "Loops: " << dAverageLoopCount / iNumOfLoops  << " " << dAverageLoopCount << " " << iNumOfLoops << " " << vInEnd - vInStart << endl;
+					//m_exceptionLock.unlock();
 			}
 			catch (...) {
 				if (someThingWentWrong == nullptr) {
@@ -900,10 +908,11 @@ namespace kASA {
 #else					
 #if __has_include(<execution>)
 
-				std::sort(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
+
+			std::sort(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [](const tuple<uint64_t, intType, uint32_t, uint32_t>& p1, const tuple<uint64_t, intType, uint32_t, uint32_t>& p2) {
 					return get<1>(p1) < get<1>(p2);
-					});
-				
+			});
+
 
 				if (bPartitioned) {
 					for_each(std::execution::par_unseq, vInputVec.begin(), vInputVec.end(), [this, &T](tuple<uint64_t, intType, uint32_t, uint32_t>& a) {
@@ -996,7 +1005,7 @@ namespace kASA {
 				debugBarrier
 				vector<tuple<size_t, float, double>> resultVec(iNumberOfSpecies);
 				int64_t iOldCountOfHits = 0;
-				Utilities::BufferedWriter outStreamer(fOut, 524288ull);
+				Utilities::BufferedWriter outStreamer(fOut, 104857600ull);
 
 				for (uint64_t readIdx = iStart; readIdx < iEnd; ++readIdx) {
 					auto currentReadLengthAndName = vReadNameAndLength.front();
@@ -1762,7 +1771,7 @@ namespace kASA {
 	public:
 
 		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t&, const int64_t& iMemory, const bool&, bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode, const float& fThreshold, int32_t iLocalNumOfThreads = 0, const int32_t& iLocalThreadIdx = 0 ) {
+		void CompareWithLib_partialSort(const string& contentFile, const string& sLibFile, const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t&, const int64_t& iMemory, const bool& , bool bRAM, const bool& bUnique, const uint8_t& iPrefixCheckMode, const float& fThreshold, int32_t iLocalNumOfThreads = 0, const int32_t& iLocalThreadIdx = 0 ) {
 			try {
 				if (iLocalNumOfThreads == 0) {
 					iLocalNumOfThreads = Base::_iNumOfThreads;
@@ -1901,6 +1910,7 @@ namespace kASA {
 				for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 					workerThreadPool[i].setID(i + iLocalThreadIdx);
 				}
+
 
 				// load index
 				if (!index.bIndexHasBeenLoaded) {
@@ -2187,8 +2197,8 @@ namespace kASA {
 					// output file
 					ofstream fOut;
 					// a larger buffer works better for SSDs or HPCCs
-					vector<char> outFilebuffer(2097152);
-					fOut.rdbuf()->pubsetbuf(&outFilebuffer[0], 2097152);
+					vector<char> outFilebuffer(104857600); // 104857600 = 100MB, 2097152 = 2MB
+					fOut.rdbuf()->pubsetbuf(&outFilebuffer[0], 104857600);
 					//fOut.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					if (bReadIDsAreInteresting) {
 						fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + outputFormatFileEnding() : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
@@ -2227,7 +2237,8 @@ namespace kASA {
 					unique_ptr<typename Base::strTransfer> transferBetweenRuns(new typename Base::strTransfer);
 					transferBetweenRuns->iCurrentOverallPercentage = allFilesProgress;
 					transferBetweenRuns->iNumOfAllCharsRead = charsReadOverall;
-					double iLastProgressInPercent = 0.0;
+					uint64_t iLastProgress = 0;
+					auto timeWholePartStart = std::chrono::high_resolution_clock::now();
 					vector<tuple<readIDType, float, double>> vSavedScores;
 					//readIDType iReadIDofSavedScores = 0;
 
@@ -2236,7 +2247,7 @@ namespace kASA {
 						ios::sync_with_stdio(false);
 						std::cin.tie(nullptr);
 						auto timeInputStart = std::chrono::high_resolution_clock::now();
-						auto timeWholePartStart = std::chrono::high_resolution_clock::now();
+						
 
 						//iSoftMaxMemoryUsage = 19199040;
 
@@ -2301,6 +2312,20 @@ namespace kASA {
 							iNumOfReadsSum += transferBetweenRuns->iNumOfNewReads - transferBetweenRuns->addTail;
 						}
 						debugBarrier
+
+						
+						auto timeWholePartEnd = std::chrono::high_resolution_clock::now();
+						if (Base::_bVerbose) {
+							if (iLastProgress != 0) {
+								cout << "OUT: Estimated remaining time needed for this file: " << static_cast<double>(iFileLength - transferBetweenRuns->iNumOfCharsRead) / (transferBetweenRuns->iNumOfCharsRead - iLastProgress) * static_cast<double>(chrono::duration_cast<std::chrono::seconds>(timeWholePartEnd - timeWholePartStart).count()) << "s" << endl;
+								timeWholePartStart = std::chrono::high_resolution_clock::now();
+							}
+						}
+
+						iLastProgress = transferBetweenRuns->iNumOfCharsRead;
+
+
+						debugBarrier
 						function<void(const int32_t&, const uint64_t&, const uint64_t&)> foo;
 
 						// now compare with index
@@ -2333,7 +2358,6 @@ namespace kASA {
 								}
 							}
 						}
-
 
 
 						// because the stxxl is not threadsafe (as in two threads cannot access the same location on the drive), 
@@ -2372,6 +2396,7 @@ namespace kASA {
 								iEnd = transferBetweenRuns->vRangesOfOutVec[iThreadID + 2];
 							}
 						}*/
+
 						
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
@@ -2389,6 +2414,7 @@ namespace kASA {
 						if (someThingWentWrong) {
 							rethrow_exception(someThingWentWrong);
 						}
+
 
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
@@ -2474,18 +2500,9 @@ namespace kASA {
 						cout << "Saving results_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
 						startTIME = std::chrono::high_resolution_clock::now();
 #endif
-
-						//iterate until no dna is left
 						auto timeCompareEnd = std::chrono::high_resolution_clock::now();
-						auto timeWholePartEnd = std::chrono::high_resolution_clock::now();
 						iTimeCompare += chrono::duration_cast<std::chrono::nanoseconds>(timeCompareEnd - timeCompareStart).count();
-
-						if (Base::_bVerbose) {
-							cout << "OUT: Estimated remaining time needed for this file: " << (100.0 - transferBetweenRuns->iCurrentPercentage) / (transferBetweenRuns->iCurrentPercentage - iLastProgressInPercent) * static_cast<double>(chrono::duration_cast<std::chrono::seconds>(timeWholePartEnd - timeWholePartStart).count()) << "s" << endl;
-						}
-
-						iLastProgressInPercent = transferBetweenRuns->iCurrentPercentage;
-
+						//iterate until no dna is left
 					}
 					debugBarrier
 					///////////////////////////////////////////////////////////////////////////////////////////////

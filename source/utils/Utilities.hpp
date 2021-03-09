@@ -20,6 +20,7 @@
 #include <iterator>
 #include <utility>
 #include <unordered_map>
+#include <chrono>
 
 #include "WorkerThread.hpp"
 #include "BitArray.hpp"
@@ -142,7 +143,7 @@ namespace Utilities {
 					prelimFile.read(&firstByte, 1);
 					prelimFile.close();
 					bool isGzipped = false;
-					if ((firstByte == 0x1f)) {
+					if (firstByte == 0x1f) {
 						isGzipped = true;
 					}
 					if (firstByte == 0x42) {
@@ -163,7 +164,7 @@ namespace Utilities {
 				}
 			}
 #else
-#if __GNUC__ || defined(__llvm__)
+#if (__GNUC__ || defined(__llvm__)) && !_MSC_VER
 			if (sPath.back() == '/') {
 				DIR           *dirp;
 				struct dirent *directory;
@@ -243,7 +244,7 @@ namespace Utilities {
 	inline vector<pair<string, size_t>> gatherFilesAndSizesFromPath(const string& sPath) {
 		try {
 			vector<pair<string, size_t>> files;
-#if _WIN32 || _WIN64 
+#if (_WIN32 || _WIN64) && !__APPLE__ 
 			if (sPath.back() == '/' || sPath.back() == '\\') {
 				for (auto& fsPath : filesystem::directory_iterator(sPath)) {
 					const string& fileName = (fsPath.path()).string();
@@ -254,7 +255,7 @@ namespace Utilities {
 					prelimFile.read(&firstByte, 1);
 					prelimFile.close();
 					bool isGzipped = false;
-					if ((firstByte == 0x1f)) {
+					if (firstByte == 0x1f) {
 						isGzipped = true;
 					}
 					if (firstByte == 0x42) {
@@ -270,7 +271,7 @@ namespace Utilities {
 				}
 			}
 #else
-#if __GNUC__ || defined(__llvm__)
+#if (__GNUC__ || defined(__llvm__)) && !_MSC_VER
 			if (sPath.back() == '/') {
 				DIR* dirp;
 				struct dirent* directory;
@@ -561,12 +562,15 @@ namespace Utilities {
 		}
 
 		inline void writeToFile() {
+			//auto start = std::chrono::high_resolution_clock::now();
 			_file->write(&_sStringToBeWritten[0], _sStringToBeWritten.size());
+			//auto end = std::chrono::high_resolution_clock::now();
+			//cout << "Written with " << _sStringToBeWritten.size() / (1024.0*1024.0*(chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(1000000000))) << " MB/s" << endl;
 			_sStringToBeWritten = "";
 		}
 
 		inline void operator+=(const string& str) {
-			_sStringToBeWritten.append(str);
+			_sStringToBeWritten += str;
 			if (_sStringToBeWritten.size() >= _iMaxBufferSize) {
 				writeToFile();
 			}
@@ -755,6 +759,7 @@ namespace Utilities {
 		}
 		return static_cast<T2>(0);
 	}
+
 
 
 } // namespace

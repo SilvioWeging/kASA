@@ -62,7 +62,7 @@
 using namespace std;
 
 // Check windows
-#if _WIN32 || _WIN64
+#if (_WIN32 || _WIN64) && !__APPLE__
 #include <stxxl/bits/io/wincall_file.h>
 #include <Windows.h>
 	#if __has_include(<filesystem>)
@@ -101,7 +101,7 @@ using namespace std;
 #endif
 
 // Check GCC or Clang
-#if __GNUC__ || __clang__
+#if (__GNUC__ || __clang__) && !_MSC_VER 
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stxxl/bits/io/syscall_file.h>
@@ -121,11 +121,11 @@ using namespace std;
 #endif
 
 
-#if (_WIN32 || _WIN64) && !defined(__llvm__)
+#if (_WIN32 || _WIN64) && !__APPLE__
 typedef stxxl::wincall_file stxxlFile;
 #define __PRETTY_FUNCTION__ __FUNCSIG__ 
 #endif
-#if __GNUC__ || defined(__llvm__)
+#if (__GNUC__ || defined(__llvm__)) && !_MSC_VER
 typedef stxxl::syscall_file stxxlFile;
 #endif
 

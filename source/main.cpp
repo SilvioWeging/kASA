@@ -494,7 +494,7 @@ int main(int argc, char* argv[]) {
 
 		debugBarrier
 
-#if _WIN32 || _WIN64
+#if (_WIN32 || _WIN64) && !__APPLE__
 		MEMORYSTATUSEX statex;
 		statex.dwLength = sizeof(statex);
 		GlobalMemoryStatusEx(&statex);
@@ -502,7 +502,7 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail/(1024ull*1024ull*1024ull) << "GB RAM is too much for your system (" << statex.ullTotalPhys / (1024ull * 1024ull * 1024ull) <<"GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
 		}
 
-#elif __GNUC__ || __clang__
+#elif (__GNUC__ || __clang__) && !_MSC_VER
 		unsigned long long pages = sysconf(_SC_PHYS_PAGES);
 		unsigned long long page_size = sysconf(_SC_PAGE_SIZE);
 		unsigned long long iMaxPhysMemory = pages * page_size;
