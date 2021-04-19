@@ -4,6 +4,8 @@
 
 This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</u>equences based on <u>A</u>mino acid-like encoding, the preprint can be found [here](https://doi.org/10.1101/713966).
 
+If this file is too long or cumbersome, please have a look at the wiki :)
+
 ## Table of content
 - [Things to know](#things-to-know-before-you-start)
 - [Prerequisites](#prerequisites)
@@ -67,9 +69,9 @@ Clone the repository with `git clone https://github.com/SilvioWeging/kASA.git`.
 
 First, build the zlib by going into the folder `zlib`.
 
-Call `chmod +x configure` to give the file execution rights.
+Call `chmod +x configure` to give the file `configure` execution rights.
 
-Create the folder `zlibBuild` and `cd` into it.
+Create the folder `zlibBuild` with `mkdir zlibBuild` and `cd` into it.
 
 Type `../configure` and after that `make`.
 
@@ -173,6 +175,8 @@ Proteus vulgaris	585	585	CP023965.1;NZ_NBUT01000031.1
 Hyphomicrobium denitrificans	53399	582899;670307	NC_014313.1;NC_021172.1
 ```
 No header line is necessary. This file can be given to `build` via the `-c` parameter.
+
+Note that the taxids in the second column must be sorted either numerically or lexicographically. In Unix systems, a call to `sort -t$'\t' -n -k2 <content file> > <sorted content file>` does the trick.
 
 ##### Necessary parameters
 * `-i (--input) <file/folder>`: Fasta file(s), can be gzipped. If you want to process multiple files at once, put them inside a folder and let the path end with `/`. No default.

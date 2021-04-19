@@ -12,6 +12,7 @@
 #include "modes/Shrink.hpp"
 #include "modes/Compare.hpp"
 #include "modes/Update.hpp"
+#include "modes/GenerateContentFile.hpp"
 
 #include "utils/dToStr.h"
 
@@ -540,7 +541,9 @@ int main(int argc, char* argv[]) {
 					if (bVerbose) {
 						cout << "OUT: Creating content file: " << contentFileIn << endl;
 					}
-					kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings);
+
+					kASA::ContentFile genCFObj(kASAObj);
+					genCFObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings, iMemorySizeAvail);
 				}
 			}
 			if (iMemorySizeAvail*0.9 < 1024ull * 1024ull * 1024ull) {
@@ -579,8 +582,8 @@ int main(int argc, char* argv[]) {
 			if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
 				throw runtime_error("No acc2Tax file or taxonomy path given...");
 			}
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);
-			kASAObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings);
+			kASA::ContentFile CFObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);
+			CFObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings, iMemorySizeAvail);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "update") {
@@ -598,8 +601,10 @@ int main(int argc, char* argv[]) {
 			}
 
 			// get taxIds that are new and map the accession numbers to those
+			pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> mapsForDummys;
 			if (sAccToTaxFiles != "" && sTaxonomyPath != "") {
-				kASAObj.addToContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sTaxLevel, contentFileIn);
+				kASA::ContentFile genCFObj(kASAObj);
+				mapsForDummys = genCFObj.addToContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sTaxLevel, contentFileIn, bTaxIdsAsStrings, iMemorySizeAvail);
 			}
 
 			ifstream fLibInfo(indexFile + "_info.txt");
@@ -619,14 +624,14 @@ int main(int argc, char* argv[]) {
 				if (bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
-				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
+				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, mapsForDummys);
 			}
 			else {
 				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bTranslated, bUnfunny);
 				if (bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
-				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
+				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, mapsForDummys);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -792,8 +797,9 @@ int main(int argc, char* argv[]) {
 				}
 
 				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bTranslated, bUnfunny);
-				readObj.mergeContentFiles(contentFile1, contentFile2, contentFileIn);
-				readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn);
+				kASA::ContentFile genCFObj(kASAObj);
+				auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileIn);
+				readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, res);
 				// call merge
 			}
 			else {
@@ -805,8 +811,9 @@ int main(int argc, char* argv[]) {
 				kASAObj._iHighestK = 25;
 				kASAObj._iMaxK = 25;
 				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bTranslated, bUnfunny);
-				readObj.mergeContentFiles(contentFile1, contentFile2, contentFileIn);
-				readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn);
+				kASA::ContentFile genCFObj(kASAObj);
+				auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileIn);
+				readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, res);
 				
 			}
 			auto end = std::chrono::high_resolution_clock::now();
@@ -1214,6 +1221,11 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		else if (cMode == "checkContentFile") {
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			Utilities::checkIfContentFileIsCorrupted(contentFile1, contentFile2);
+		}
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "half") {
 			if (indexFile == sDBPathOut) {
 				throw runtime_error("Paths and names of input and output are the same!");
@@ -1342,8 +1354,8 @@ int main(int argc, char* argv[]) {
 
 			const contentVecType_32p tempV(&temp, iSize);
 
-			Utilities::createFile(sDBPathOut);
-			Utilities::createFile(sDBPathOut + "_2");
+			Utilities::checkIfFileCanBeCreated(sDBPathOut);
+			Utilities::checkIfFileCanBeCreated(sDBPathOut + "_2");
 
 			stxxlFile tempOut(sDBPathOut, stxxl::file::RDWR);
 			stxxl::VECTOR_GENERATOR<uint64_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV(&tempOut, iSize);
@@ -1405,7 +1417,7 @@ int main(int argc, char* argv[]) {
 			stxxlFile temp(indexFile, stxxl::file::RDONLY);
 			const contentVecType_32p tempV(&temp, iSize);
 
-			Utilities::createFile(sTempPath + "_tmp");
+			Utilities::checkIfFileCanBeCreated(sTempPath + "_tmp");
 
 			stxxlFile tempOut(sTempPath + "_tmp", stxxl::file::RDWR);
 			contentVecType_32p tempPV(&tempOut, iSize);
@@ -1436,7 +1448,7 @@ int main(int argc, char* argv[]) {
 
 			stxxl::sort(tempPV.begin(), tempPV.end(), SCompareStructForSTXXLSort(), iMemorySizeAvail);
 
-			Utilities::createFile(sDBPathOut);
+			Utilities::checkIfFileCanBeCreated(sDBPathOut);
 			stxxlFile realOut(sDBPathOut, stxxl::file::RDWR);
 			taxaOnly realIdx(&realOut, iSize);
 

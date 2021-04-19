@@ -217,7 +217,8 @@ rule pairedEnd:
 	input:
 		dummyLink=rules.identify_u.output.json3,
 		index=rules.update.output.index,
-		content=rules.generateCF.output.content
+		content=rules.generateCF.output.content,
+		freq=rules.reconstructFrequency.output.freqRec
 	output:
 		pE="work/results/pairedEnd.json"
 	params:
@@ -267,7 +268,7 @@ rule ProteinWithAlphabet:
 	threads: config["threads"]
 	shell:
 		"""
-		{config[kASAExec]}kASA build -c {input.content} -i work/db/example.fasta -d work/index/index_translate -n {threads} -m {params.ram} -x {params.callIdx} -a work/table.prt Standard
+		{config[kASAExec]}kASA build -c {input.content} -i work/db/example.fasta -d work/index/index_translate -n {threads} -m {params.ram} -x {params.callIdx} -a work/table.prt 1
 		{config[kASAExec]}kASA identify -c {input.content} -d work/index/index_translate -n {threads} -m {params.ram} -x {params.callIdx} -z -i work/input/exampleProtein.fasta -q work/results/translate.json
 		"""
 

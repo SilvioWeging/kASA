@@ -110,4 +110,10 @@ namespace Utilities {
 			u64toa_naive(val, s);
 		}
 	}
+
+	inline string itostr(const uint64_t& val) {
+		string s = "";
+		itostr(val, s);
+		return s;
+	}
 }

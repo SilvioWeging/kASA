@@ -20,7 +20,7 @@ namespace kASA {
 		//uint64_t iInternalCounter = 0;
 		vector<uint64_t> vVectorSizes;
 
-		string _sTempPath = "";
+		string _sTempPath = string("");
 		//uint64_t _iConstSize = 0;
 		int32_t _iCounterOfContainers = 0;
 
@@ -104,19 +104,17 @@ namespace kASA {
 		/////////////////////////////////////////////////////////////////////////////////////////
 		// It's like merging two sorted decks of cards into one
 		template<typename W, typename R, typename I>
-		inline uint64_t merge(W& vNCIt, R& it, const uint64_t& vecSize, I&& vIntItC, const I&& vIntEndItC, unique_ptr<uint64_t[]>& freqArray, const unordered_map<uint32_t, uint32_t>& mContent, const bool& bLastCall = false) {
+		inline uint64_t merge(W& vNCIt, R& it, const uint64_t& vecSize, I&& vIntItC, const I&& vIntEndItC, unique_ptr<uint64_t[]>& freqArray, const unordered_map<uint32_t, uint32_t>& mContent, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
 			try {
 				elemType tSeenInt; //eliminate duplicates
 				bool bIndexIntChanged = false;
 				int32_t iLocalHighestK = (is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12;
 
-				auto countFreqs = [&mContent,&freqArray,&bLastCall,&iLocalHighestK](const elemType& pair) {
-					if (bLastCall) {
-						const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * iLocalHighestK;
-						for (uint8_t k = 0; k < iLocalHighestK; ++k) {
-							if (((pair.first >> 5 * k) & 31) != 30) {
-								freqArray[idx + k]++;
-							}
+				auto countFreqs = [&mContent,&freqArray,&iLocalHighestK](const elemType& pair) {
+					const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * iLocalHighestK;
+					for (uint8_t k = 0; k < iLocalHighestK; ++k) {
+						if (((pair.first >> 5 * k) & 31) != 30) {
+							freqArray[idx + k]++;
 						}
 					}
 				};
@@ -137,9 +135,13 @@ namespace kASA {
 					}
 
 					if (it->first < vIntItC->first) {
-						//*(vNCIt++) = *it;
-						vNCIt << *(it);
-						countFreqs(*it);
+						elemType pair = *it;
+						auto res = mapsForDummys.first.find(pair.second);
+						if (res != mapsForDummys.first.end()) {
+							pair.second = res->second;
+						}
+						vNCIt << pair;
+						countFreqs(pair);
 						++it;
 						++ivCSizeCounter;
 						++iElemCounter;
@@ -148,9 +150,13 @@ namespace kASA {
 					else {
 						if (it->first == vIntItC->first) {
 							if (it->second < vIntItC->second) {
-								//*(vNCIt++) = *it;
-								vNCIt << *(it);
-								countFreqs(*it);
+								elemType pair = *it;
+								auto res = mapsForDummys.first.find(pair.second);
+								if (res != mapsForDummys.first.end()) {
+									pair.second = res->second;
+								}
+								vNCIt << pair;
+								countFreqs(pair);
 								++it;
 								++ivCSizeCounter;
 								++iElemCounter;
@@ -158,17 +164,25 @@ namespace kASA {
 							}
 							else {
 								if (it->second > vIntItC->second) {
-									//*(vNCIt++) = *vIntItC;
-									vNCIt << *(vIntItC);
-									countFreqs(*vIntItC);
+									elemType pair = *vIntItC;
+									auto res = mapsForDummys.second.find(pair.second);
+									if (res != mapsForDummys.second.end()) {
+										pair.second = res->second;
+									}
+									vNCIt << pair;
+									countFreqs(pair);
 									++vIntItC;
 									++iElemCounter;
 									bIndexIntChanged = true;
 								}
 								else {
-									//*(vNCIt++) = *vIntItC;
-									vNCIt << *(vIntItC);
-									countFreqs(*vIntItC);
+									elemType pair = *vIntItC;
+									auto res = mapsForDummys.second.find(pair.second);
+									if (res != mapsForDummys.second.end()) {
+										pair.second = res->second;
+									}
+									vNCIt << pair;
+									countFreqs(pair);
 									++it;
 									++ivCSizeCounter;
 									++vIntItC;
@@ -178,9 +192,13 @@ namespace kASA {
 							}
 						}
 						else {
-							//*(vNCIt++) = *vIntItC;
-							vNCIt << *(vIntItC);
-							countFreqs(*vIntItC); 
+							elemType pair = *vIntItC;
+							auto res = mapsForDummys.second.find(pair.second);
+							if (res != mapsForDummys.second.end()) {
+								pair.second = res->second;
+							}
+							vNCIt << pair;
+							countFreqs(pair);
 							++vIntItC;
 							++iElemCounter;
 							bIndexIntChanged = true;
@@ -191,9 +209,13 @@ namespace kASA {
 				// Send the rest into the other vector respectively
 				//while (it != vC->cend()) {
 				while (ivCSizeCounter < vecSize) {
-					//*(vNCIt++) = *it;
-					vNCIt << *(it);
-					countFreqs(*it);
+					elemType pair = *it;
+					auto res = mapsForDummys.first.find(pair.second);
+					if (res != mapsForDummys.first.end()) {
+						pair.second = res->second;
+					}
+					vNCIt << pair;
+					countFreqs(pair);
 					++it;
 					++iElemCounter;
 					++ivCSizeCounter;
@@ -209,9 +231,13 @@ namespace kASA {
 						bIndexIntChanged = false;
 					}
 
-					//*(vNCIt++) = *vIntItC;
-					vNCIt << *(vIntItC);
-					countFreqs(*vIntItC);
+					elemType pair = *vIntItC;
+					auto res = mapsForDummys.second.find(pair.second);
+					if (res != mapsForDummys.second.end()) {
+						pair.second = res->second;
+					}
+					vNCIt << pair;
+					countFreqs(pair);
 					++vIntItC;
 					++iElemCounter;
 				}
@@ -255,7 +281,7 @@ namespace kASA {
 				// else:
 
 				// save to external vector
-				Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
+				Utilities::checkIfFileCanBeCreated(_sTempPath + to_string(_iCounterOfContainers));
 
 				unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
 				unique_ptr<vecType> vNC(new vecType(fNCFile.get(),vInternal->size()));
@@ -306,7 +332,7 @@ namespace kASA {
 					}
 
 					// create merge-file
-					Utilities::createFile(_sTempPath + to_string(_iCounterOfContainers));
+					Utilities::checkIfFileCanBeCreated(_sTempPath + to_string(_iCounterOfContainers));
 
 					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
 					unique_ptr<vecType> vNC(new vecType(fNCFile.get(), iSumSize));

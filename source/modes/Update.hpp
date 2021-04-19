@@ -126,7 +126,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Update an existing library with a fasta file
-		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, string fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway) {
+		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, string fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
 			try {
 
 				// test if files exists
@@ -198,13 +198,13 @@ namespace kASA {
 					unique_ptr<const vecType> vLibIn(new vecType(stxxlLibFile.get(), iSizeOfLib));
 					typename vecType::bufreader_type vCBuff(*vLibIn);
 
-					Utilities::createFile((bOverwrite) ? sTempFile : fOutFile);
+					Utilities::checkIfFileCanBeCreated((bOverwrite) ? sTempFile : fOutFile);
 					unique_ptr<stxxlFile> stxxlOutVec(new stxxlFile((bOverwrite) ? sTempFile : fOutFile, stxxl::file::RDWR));
 					unique_ptr<vecType> vOutVec(new vecType(stxxlOutVec.get(), 0));
 					typename vecType::bufwriter_type vNCBuff(*vOutVec);
 
 					// add kMers from fasta
-					Utilities::createFile(Base::_sTemporaryPath + "_tempUpdate_" + to_string(Base::_iNumOfCall));
+					Utilities::checkIfFileCanBeCreated(Base::_sTemporaryPath + "_tempUpdate_" + to_string(Base::_iNumOfCall));
 
 					Build<vecType, elemType> brick(Base::_sTemporaryPath, Base::_iNumOfCall, Base::_iNumOfThreads, iAvailableMemory / (sizeof(elemType)), iIdxCounter);
 
@@ -250,7 +250,7 @@ namespace kASA {
 						unique_ptr<vecType> vTempVec(new vecType(stxxlTempVec.get(), iSizeOfFinalIndex));
 
 						// Merge existing db and new one
-						const auto& vOutSize = this->merge(vNCBuff, vCBuff, iSizeOfLib, vTempVec->cbegin(), vTempVec->cend(), arrFrequencies_, mIDsAsIdx, true);
+						const auto& vOutSize = this->merge(vNCBuff, vCBuff, iSizeOfLib, vTempVec->cbegin(), vTempVec->cend(), arrFrequencies_, mIDsAsIdx, mapsForDummys);
 						vOutVec->resize(vOutSize, true);
 
 

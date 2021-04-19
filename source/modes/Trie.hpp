@@ -331,7 +331,7 @@ public:
 	template<typename T>
 	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath, unique_ptr<uint64_t[]>* arrOfFreqs = nullptr, const int32_t& _iHighestK = 12, const unordered_map<uint32_t, uint32_t>& mContent = unordered_map<uint32_t, uint32_t>()) { //passing a non-const reference with default value is a hassle
 		try {
-			Utilities::createFile(savePath + "_trie");
+			Utilities::checkIfFileCanBeCreated(savePath + "_trie");
 			stxxlFile trieFile(savePath+"_trie", stxxl::file::RDWR);
 			trieVector trieVec(&trieFile, 0);
 			uint64_t iCount = 1;

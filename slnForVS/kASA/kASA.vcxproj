@@ -23,6 +23,7 @@
     <ClInclude Include="..\..\source\MetaHeader.h" />
     <ClInclude Include="..\..\source\modes\Build.hpp" />
     <ClInclude Include="..\..\source\modes\Compare.hpp" />
+    <ClInclude Include="..\..\source\modes\GenerateContentFile.hpp" />
     <ClInclude Include="..\..\source\modes\Read.hpp" />
     <ClInclude Include="..\..\source\modes\Shrink.hpp" />
     <ClInclude Include="..\..\source\modes\Trie.hpp" />

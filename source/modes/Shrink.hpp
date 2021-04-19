@@ -68,7 +68,7 @@ namespace kASA {
 		// Put first six letters in Trie, the others in index and restrict number of taxa to 2^16 - 1
 		inline void putHalfInTrie(const unique_ptr<const contentVecType_32p>& vLib, unique_ptr<index_t_p>& vOut, const unordered_map<uint32_t, uint32_t>& mIDsAsIdx, const string& sOutfile) {
 			try {
-				Utilities::createFile(sOutfile + "_trie");
+				Utilities::checkIfFileCanBeCreated(sOutfile + "_trie");
 				unique_ptr<stxxlFile> trieFile(new stxxlFile(sOutfile + "_trie", stxxl::file::RDWR));
 				unique_ptr<trieVector> trieVec(new trieVector(trieFile.get(), 0));
 
@@ -373,7 +373,7 @@ namespace kASA {
 				}
 
 				// create reduced vec
-				Utilities::createFile(fOutFile);
+				Utilities::checkIfFileCanBeCreated(fOutFile);
 
 
 				unique_ptr<stxxlFile> stxxlOutFile;

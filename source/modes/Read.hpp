@@ -271,11 +271,11 @@ namespace kASA {
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		struct strTransfer {
-			string name = "", overhang = "", overhang2 = "";
+			string name = string(""), overhang = string(""), overhang2 = string("");
 			size_t lengthOfDNA = 0;
 			bool finished = true, addTail = false, bNewRead = true;
 			uint8_t iExpectedInput = 0;
-			string lastLine = "", lastLine2 = "";
+			string lastLine = string(""), lastLine2 = string("");
 			//list<readIDType> vReadIDs;
 			//readIDType iCurrentReadID = 0;
 			//unordered_map<readIDType, uint64_t> mReadIDToArrayIdx;
@@ -1631,7 +1631,7 @@ namespace kASA {
 					vDivisionArray[i] = (i + 1) * iStep;
 				}*/
 
-				Utilities::createFile(fOutFile);
+				Utilities::checkIfFileCanBeCreated(fOutFile);
 				
 				//stxxlFile* stxxlOutFile = new stxxlFile(fOutFile, stxxl::file::RDWR);
 				//contentVecType_32p* vOutVec = new contentVecType_32p(stxxlOutFile, 0);
@@ -1738,7 +1738,7 @@ namespace kASA {
 
 				// If taxaOnly index is desired, create it here:
 				if (_bUnfunny) {
-					Utilities::createFile(fOutFile+"_taxOnly");
+					Utilities::checkIfFileCanBeCreated(fOutFile+"_taxOnly");
 					stxxlFile* taxaOnlyFile = new stxxlFile(fOutFile+"_taxOnly", stxxlFile::RDWR);
 					taxaOnly* taxaOnlyFileVec = new taxaOnly(taxaOnlyFile, iSizeOfFinalIndex);
 
@@ -1791,7 +1791,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Merge two existing indices into a new one
-		void MergeTwoIndices(const string& index_1, const string& index_2, const string& index_out, const string& contentFile) {
+		void MergeTwoIndices(const string& index_1, const string& index_2, const string& index_out, const string& contentFile, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
 			try {
 				// test if files exists
 				if (!ifstream(contentFile)) {
@@ -1845,7 +1845,7 @@ namespace kASA {
 				unique_ptr<vecType> vec2(new vecType(stxxlVecI2.get(), iSizeOfSecondLib));
 				
 
-				Utilities::createFile(index_out);
+				Utilities::checkIfFileCanBeCreated(index_out);
 				unique_ptr<stxxlFile> stxxlVecOut(new stxxlFile(index_out, stxxl::file::RDWR));
 				unique_ptr<vecType> vecOut(new vecType(stxxlVecOut.get(), iSizeOfFirstLib + iSizeOfSecondLib));
 				typename vecType::bufwriter_type vecOutBuff(*vecOut);
@@ -1857,7 +1857,7 @@ namespace kASA {
 					arrFrequencies[i] = 0;
 				}
 
-				const auto& vOutSize = brick.merge(vecOutBuff, vec1Buff, iSizeOfFirstLib, vec2->cbegin(), vec2->cend(), arrFrequencies, mIDsAsIdx, true);
+				const auto& vOutSize = brick.merge(vecOutBuff, vec1Buff, iSizeOfFirstLib, vec2->cbegin(), vec2->cend(), arrFrequencies, mIDsAsIdx, mapsForDummys);
 				vecOut->resize(vOutSize, true);
 
 				// save additional stuff

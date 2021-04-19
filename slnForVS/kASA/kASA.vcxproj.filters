@@ -72,6 +72,9 @@
     <ClInclude Include="..\..\source\utils\uint128_t.hpp">
       <Filter>Header Files\utils</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\modes\GenerateContentFile.hpp">
+      <Filter>Header Files\modes</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\main.cpp">

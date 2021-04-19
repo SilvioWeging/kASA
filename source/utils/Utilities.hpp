@@ -382,7 +382,7 @@ namespace Utilities {
 		static const size_t _bufferSize = 2048;
 		char _bufferArrayForInput[_bufferSize];
 		char* _startOfBuffer = &_bufferArrayForInput[0];
-		const string _newlineCharacters = "\n";
+		const string _newlineCharacters = string("\n");
 		size_t _currendPosition = 0, _maxCharsRead = 0;
 		T* _file = nullptr;
 
@@ -547,7 +547,7 @@ namespace Utilities {
 	private:
 		ofstream* _file = nullptr;
 		size_t _iMaxBufferSize = 0;
-		string _sStringToBeWritten = "";
+		string _sStringToBeWritten = string("");
 	
 	public:
 
@@ -619,10 +619,18 @@ namespace Utilities {
 
 	///////////////////////////////////////////////////////
 
-	inline void createFile(const string& s) {
+	inline void checkIfFileCanBeCreated(const string& s) {
 		if (!ofstream(s)) {
 			throw runtime_error("File couldn't be created, maybe a wrong path was used?");
 		}
+	}
+
+	inline ofstream createFileAndGetIt(const string& s) {
+		ofstream f(s);
+		if (!f) {
+			throw runtime_error("File couldn't be created, maybe a wrong path was used?");
+		}
+		return f;
 	}
 
 	///////////////////////////////////////////////////////
@@ -630,7 +638,7 @@ namespace Utilities {
 	inline void copyFile(const string& sIn, const string& sOut) {
 		// if rename is not working 
 		// I took this solution from https://stackoverflow.com/users/1054324/peter: https://stackoverflow.com/questions/10195343/copy-a-file-in-a-sane-safe-and-efficient-way
-		createFile(sOut);
+		checkIfFileCanBeCreated(sOut);
 		ifstream source(sIn, ios::binary);
 		ofstream dest(sOut, ios::binary);
 
@@ -649,6 +657,7 @@ namespace Utilities {
 			cerr << "WARNING: Moving the file did not work, attempting to copy..." << endl;
 			remove(sOut.c_str());
 			Utilities::copyFile(sIn, sOut);
+			remove(sIn.c_str());
 		}
 	}
 
@@ -708,6 +717,98 @@ namespace Utilities {
 				throw runtime_error("ID not found! Maybe you got the wrong database or contentfile?");
 			}
 			return res;
+		}
+		catch (...) {
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+		}
+	}
+
+	///////////////////////////////////////////////////////
+	// Check if duplicate entries exist in the content file. 
+	// WARNING: This will read the entire content file into RAM!
+	inline void checkIfContentFileIsCorrupted(const string& sContentFile, const string& sFixedContentFileOut) {
+		try {
+			auto func = [](const string& sTempLineSpecIDs, const string& sCurrLineSpecIDs, const string& sTempLineAccNrs, const string& sCurrLineAccNrs) {
+				unordered_set<string> sSpecIDs, sAccNrs;
+				// concatenate non-redundant species IDs
+				const auto& newSpecIDs = Utilities::split(sTempLineSpecIDs, ';'); // tempLineContent[2]
+				const auto& currentSpecIDs = Utilities::split(sCurrLineSpecIDs, ';'); // get<1>(entry->second)
+				sSpecIDs.insert(newSpecIDs.cbegin(), newSpecIDs.cend());
+				sSpecIDs.insert(currentSpecIDs.cbegin(), currentSpecIDs.cend());
+				string sNewSpecIDs = "";
+				for (const auto& elem : sSpecIDs) {
+					sNewSpecIDs += elem + ";";
+				}
+				sNewSpecIDs.pop_back();
+
+				// concatenate non-redundant accession numbers
+				const auto& newAccNrs = Utilities::split(sTempLineAccNrs, ';'); // tempLineContent[3]
+				const auto& currentAccNrs = Utilities::split(sCurrLineAccNrs, ';'); // get<2>(entry->second)
+				sAccNrs.insert(newAccNrs.cbegin(), newAccNrs.cend());
+				sAccNrs.insert(currentAccNrs.cbegin(), currentAccNrs.cend());
+				string sNewAccNrs = "";
+				for (const auto& elem : sAccNrs) {
+					sNewAccNrs += elem + ";";
+				}
+				sNewAccNrs.pop_back();
+
+				return make_pair(sNewSpecIDs, sNewAccNrs);
+			};
+
+			ifstream fContent;
+			bool bTaxIdsAsStrings = false;
+			//fContent.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
+			fContent.open(sContentFile);
+			if (!fContent) {
+				throw runtime_error("Content file couldn't be read!");
+			}
+			string sTempLine = "";
+			unordered_map<string, tuple<string, string, string, string>> mOrganisms;
+			uint64_t iLargestLineIndex = 1;
+			while (getline(fContent, sTempLine)) {
+				if (sTempLine != "") {
+					const auto& tempLineContent = Utilities::split(sTempLine, '\t');
+					if (tempLineContent.size() >= 5 && !bTaxIdsAsStrings) {
+						bTaxIdsAsStrings = true;
+					}
+
+					bool bDummy = false;
+					// check for dummys to get the current counter
+					if (tempLineContent[0].find("EWAN") != string::npos) {
+						bDummy = true;
+					}
+					auto entry = mOrganisms.find(tempLineContent[1]);
+					if (entry != mOrganisms.end()) {
+						if (!bDummy) {
+							// content file is corrupted
+							cout << "OUT: Content file is corrupted, duplicate entries" << tempLineContent[0] << " and " << get<0>(entry->second) << " were found. Merging them now..." << endl;
+
+							const auto& res = func(tempLineContent[2], get<1>(entry->second), tempLineContent[3], get<2>(entry->second));
+
+							entry->second = make_tuple(get<0>(entry->second), res.first, res.second, tempLineContent[4]);
+						}
+					}
+					else {
+						if (bTaxIdsAsStrings) {
+							const auto& currLineIdx = std::stoull(tempLineContent[4]);
+							iLargestLineIndex = (iLargestLineIndex < currLineIdx) ? currLineIdx : iLargestLineIndex;
+							mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], tempLineContent[4]); // [taxID] -> (Name, species ID, Acc Nrs., lineIdx) 
+						}
+						else {
+							mOrganisms[tempLineContent[1]] = make_tuple(tempLineContent[0], tempLineContent[2], tempLineContent[3], ""); // [taxID] -> (Name, species ID, Acc Nrs.) 
+						}
+					}
+				}
+			}
+
+			// write content file
+			ofstream fContentOS(sFixedContentFileOut);
+			if (!fContentOS) {
+				throw runtime_error("Content file couldn't be opened for writing!");
+			}
+			for (const auto& entry : mOrganisms) {
+				fContentOS << get<0>(entry.second) << "\t" << entry.first << "\t" << get<1>(entry.second) << "\t" << get<2>(entry.second) << ((bTaxIdsAsStrings) ? ("\t" + get<3>(entry.second)) : "") << endl;
+			}
 		}
 		catch (...) {
 			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
