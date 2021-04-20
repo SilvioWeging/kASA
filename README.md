@@ -52,9 +52,10 @@ You can use the system specific pre-compiled binaries in the `/bin` folder but I
 Note, that kASA is a console application so if you want to use these binaries, you must either use a terminal (Linux, macOS, Linux Subsystem for Windows) or PowerShell (Windows). A GUI may be implemented, depending on the amount of requests in the [poll](https://github.com/SilvioWeging/kASA/issues/1). If you're using the PowerShell, don't forget to add ".exe" at the end of each call to kASA: `.\<path to kASA>\kASA.exe`.
 
 If you have to compile the code, you'll need the following:
-	* On Linux: cmake version 2.8 (I use version 3.10.2), gcc & g++ version (at least) 5.5, 6.5, 7.5, or 8.4 
-	* On macOS: cmake as above, LLVM/Clang 9.0 or Apple Clang 9.0 (usually part of Xcode)
-	* On Windows: Visual Studio 2019 (I use version 16.8.6 with Visual C++ 2019)
+
+  * On Linux: cmake version >= 2.8 (I use version 3.10.2), gcc & g++ version (at least) 5.5, 6.5, 7.5, or 8.4 
+  * On macOS: cmake as above, LLVM/Clang 9.0 or Apple Clang 9.0 (usually part of Xcode)
+  * On Windows: Visual Studio 2019 (I use version 16.8.6 with Visual C++ 2019)
 
 kASA depends on the [STXXL](https://stxxl.org/) and [Gzstream](https://www.cs.unc.edu/Research/compgeom/gzstream/) but contains all necessary files so you don't need to download those.
 
@@ -81,7 +82,9 @@ Type `../configure` and after that `make`.
 Now for kASA itself, please type the following commands:
 
 * `cd <installPath>/build` (or create/rename the folder)
-* `cmake -DCMAKE_BUILD_TYPE=Release ..` or `cmake -DCMAKE_BUILD_TYPE=Release -D CMAKE_C_COMPILER=gcc-8 -D CMAKE_CXX_COMPILER=g++-8 ..` should multiple gcc/g++ versions be installed on your system (where the version at the end may be 5, 6, 7, or 8)
+* `cmake -DCMAKE_BUILD_TYPE=Release ..` or 
+  * You may need to specify the compiler in your path: `cmake -DCMAKE_BUILD_TYPE=Release -D CMAKE_C_COMPILER=gcc -D CMAKE_CXX_COMPILER=g++ ..` 
+  * Should multiple gcc/g++ versions be installed on your system (where the version at the end may be 5, 6, 7, or 8):  `cmake -DCMAKE_BUILD_TYPE=Release -D CMAKE_C_COMPILER=gcc-8 -D CMAKE_CXX_COMPILER=g++-8 ..` 
 * `make`
 
 ### macOS
