@@ -53,6 +53,15 @@ namespace kASA {
 		const static int8_t _sAminoAcids_cs[], _sAminoAcids_un[];
 		const int8_t _aRevComp[6] = { 'T','G','A','C','X','Z' };
 
+		const bool _bVerbose = false;
+		bool _bSixFrames = false;
+		bool _bProtein = false;
+
+		enum InputMode {
+			DNA,
+			Protein
+		};
+
 		// Functions
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +101,32 @@ namespace kASA {
 			return iOut;
 		}
 
-	public:
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// detect which alphabet and set variable accordingly
+		inline void detectAlphabet(const string& s) {
+			regex self_regex_dna("^[ACGTURYKMSWBDHVN-]+$",  std::regex_constants::icase);
+			if (std::regex_search(s, self_regex_dna)) {
+				if (_bVerbose) {
+					cout << "OUT: DNA sequences detected." << endl;
+				}
+				_bProtein = false;
+			}
+			else {
+				regex self_regex_p("^[ABCDEFGHIJKLMNOPQRSTUVWXYZ*-]+$", std::regex_constants::icase);
+				if (!std::regex_search(s, self_regex_p)) {
+					cerr << "ERROR: The sequence is neither recognized as protein nor DNA. It will be treated as protein sequence but it may fail... Sequence was: " << s << endl;
+				}
+				else {
+					if (_bVerbose) {
+						cout << "OUT: Protein sequences detected." << endl;
+					}
+				}
+
+				_bProtein = true;
+				_bSixFrames = false;
+			}
+		}
+
 		static inline void setAAToAATable(const string& file) {
 			string sDummy = "";
 			ifstream mappings(file); // C:/Users/Silvio/Desktop/out.csv
@@ -165,8 +199,6 @@ namespace kASA {
 
 
 	public:
-		const bool _bVerbose;
-		const bool _bSixFrames;
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Standard Constructor
@@ -351,91 +383,128 @@ namespace kASA {
 		// Counts the number of kMers for each taxon (frequency). 
 		// Usually this is counted while creating the index. If for some reason the frequency file got lost, it can be recreated with this.
 		template<class vecType>
-		inline void GetFrequencyK(const string& contentFile, const string& sLibFile, const string& sOutFile) {
-			// test if files exists
-			if (!ifstream(contentFile) || !ifstream(sLibFile)) {
-				throw runtime_error("OUT: One of the files does not exist");
-			}
-
-			ifstream fContent(contentFile);
-			uint32_t iIdxCounter = 1;
-			unordered_map<uint32_t, uint32_t> mContent; mContent[0] = 0;
-			unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
-			while (fContent.good()) {
-				string dummy = "";
-				getline(fContent, dummy);
-				if (dummy != "") {
-					const auto& line = Utilities::split(dummy, '\t');
-					mContent[stoul(line[1])] = iIdxCounter;
-					mIdxToName[iIdxCounter] = line[0];
-					++iIdxCounter;
+		inline void GetFrequencyK(const string& contentFile, const string& sLibFile, const int64_t& iMemoryAvail, const unordered_map<uint32_t, uint32_t>& mGivenContentMap = unordered_map<uint32_t, uint32_t>()) {
+			try {
+				// test if files exists
+				if (!ifstream(contentFile) || !ifstream(sLibFile)) {
+					throw runtime_error("OUT: One of the files does not exist");
 				}
-			}
 
+				int64_t iMemoryUsage = 0;
+				const int32_t& iMaxNumK = _iHighestK - _iLowestK + 1;
 
-			ifstream fInfo(sLibFile + "_info.txt");
-			uint64_t iSizeOfVec = 0;
-			fInfo >> iSizeOfVec;
-			stxxlFile libfile(sLibFile, stxxl::file::RDONLY);
-			unique_ptr<unique_ptr<const vecType>[]> libvec(new unique_ptr<const vecType>[_iNumOfThreads]);
-			for (int32_t i = 0; i < _iNumOfThreads; ++i) {
-				libvec[i].reset(new const vecType(&libfile, iSizeOfVec));
-			}
-			const int32_t& iMaxNumK = _iHighestK - _iLowestK + 1;
-			unique_ptr<uint64_t[]> aFrequencyArray(new uint64_t[_iNumOfThreads * iIdxCounter * iMaxNumK]);
-			for (uint64_t j = 0; j < _iNumOfThreads * iIdxCounter * iMaxNumK; ++j) {
-				aFrequencyArray[j] = 0;
-			}
+				ifstream fContent(contentFile);
+				uint32_t iIdxCounter = 1;
+				const unordered_map<uint32_t, uint32_t>* mContentThatWillBeUsed = nullptr;
+				unordered_map<uint32_t, uint32_t> mContent; mContent[0] = 0;
+				if (mGivenContentMap.empty()) {
+					while (fContent.good()) {
+						string dummy = "";
+						getline(fContent, dummy);
+						if (dummy != "") {
+							const auto& line = Utilities::split(dummy, '\t');
+							mContent[stoul(line[1])] = iIdxCounter;
+							++iIdxCounter;
+						}
+					}
+					mContentThatWillBeUsed = &mContent;
+				}
+				else {
+					iIdxCounter = static_cast<uint32_t>(mGivenContentMap.size());
+					mContentThatWillBeUsed = &mGivenContentMap;
+				}
+				fContent.close();
+				fContent.clear();
 
-			// count up
-			vector<thread> workerThreads;
-			uint64_t iPartialSize = iSizeOfVec / _iNumOfThreads;
-			uint64_t iPartialRemainder = iSizeOfVec % _iNumOfThreads;
-			auto func = [&](const int32_t iThreadID) {
-				for (uint64_t i = iThreadID * iPartialSize; i < (iThreadID + 1) * iPartialSize + (((iThreadID + 1) * iPartialSize + iPartialRemainder == iSizeOfVec) ? iPartialRemainder : 0); ++i) {
-					const auto& entry = (libvec[iThreadID])->at(i);
-					const auto& idx = (iThreadID * iIdxCounter + Utilities::checkIfInMap(mContent, entry.second)->second) * uint64_t(iMaxNumK);
-					for (int32_t k = 0; k < iMaxNumK; ++k) {
-						const int32_t& shift = 5 * k;
-						if (((entry.first >> shift) & 31) != 30) {
-							++(aFrequencyArray[idx + k]);
+				iMemoryUsage += Utilities::calculateSizeInByteOfUnorderedMap(*mContentThatWillBeUsed);
+
+				// Determine how many threads can be created
+				int32_t iLocalNumOfThreads = 0;
+				while (iMemoryUsage < iMemoryAvail && iLocalNumOfThreads < _iNumOfThreads) {
+					iMemoryUsage += iIdxCounter * iMaxNumK * sizeof(uint64_t);
+					iMemoryUsage += vecType::block_size * vecType::page_size * 4;
+					iLocalNumOfThreads++;
+				}
+				if (iLocalNumOfThreads == 1 && iMemoryUsage > iMemoryAvail) {
+					cerr << "OUT: WARNING! Due to the large content file, creating the frequency file will consume more memory than given. kASA may crash or slow down..." << endl;
+				}
+				
+
+				ifstream fInfo(sLibFile + "_info.txt");
+				uint64_t iSizeOfVec = 0;
+				fInfo >> iSizeOfVec;
+				stxxlFile libfile(sLibFile, stxxl::file::RDONLY);
+				unique_ptr<unique_ptr<const vecType>[]> libvec(new unique_ptr<const vecType>[iLocalNumOfThreads]);
+				for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
+					libvec[i].reset(new const vecType(&libfile, iSizeOfVec));
+				}
+				
+				unique_ptr<uint64_t[]> aFrequencyArray(new uint64_t[size_t(iLocalNumOfThreads) * iIdxCounter * iMaxNumK]);
+				memset(aFrequencyArray.get(), 0, size_t(iLocalNumOfThreads) * iIdxCounter * iMaxNumK * sizeof(uint64_t));
+
+				// count up
+				vector<thread> workerThreads;
+				uint64_t iPartialSize = iSizeOfVec / iLocalNumOfThreads;
+				uint64_t iPartialRemainder = iSizeOfVec % iLocalNumOfThreads;
+				auto func = [&](const int32_t iThreadID) {
+					for (uint64_t i = iThreadID * iPartialSize; i < (iThreadID + 1) * iPartialSize + (((iThreadID + 1) * iPartialSize + iPartialRemainder == iSizeOfVec) ? iPartialRemainder : 0); ++i) {
+						const auto& entry = (libvec[iThreadID])->at(i);
+						const auto& idx = (iThreadID * iIdxCounter + Utilities::checkIfInMap(*mContentThatWillBeUsed, entry.second)->second) * uint64_t(iMaxNumK);
+						for (int32_t k = 0; k < iMaxNumK; ++k) {
+							const int32_t& shift = 5 * k;
+							if (((entry.first >> shift) & 31) != 30) {
+								++(aFrequencyArray[idx + k]);
+							}
+						}
+					}
+				};
+
+				for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
+					workerThreads.push_back(thread(func, iThreadID));
+				}
+				for (int32_t iThreadID = 0; iThreadID < iLocalNumOfThreads; ++iThreadID) {
+					if (workerThreads[iThreadID].joinable()) {
+						workerThreads[iThreadID].join();
+					}
+				}
+
+				// Gather everything
+				for (int32_t i = 1; i < iLocalNumOfThreads; ++i) {
+					for (uint32_t j = 0; j < iIdxCounter; ++j) {
+						for (int32_t k = 0; k < iMaxNumK; ++k) {
+							aFrequencyArray[j * iMaxNumK + k] += aFrequencyArray[(i * iIdxCounter + j) * iMaxNumK + k];
 						}
 					}
 				}
-			};
 
-			for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-				workerThreads.push_back(thread(func, iThreadID));
-			}
-			for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
-				if (workerThreads[iThreadID].joinable()) {
-					workerThreads[iThreadID].join();
+				// Write to file
+				fContent.open(contentFile);
+				ofstream outFile(sLibFile + "_f.txt");
+				if (!outFile) {
+					throw runtime_error("Frequency file couldn't be opened for writing!");
 				}
-			}
-
-			// Gather everything
-			for (int32_t i = 1; i < _iNumOfThreads; ++i) {
-				for (uint32_t j = 0; j < iIdxCounter; ++j) {
-					for (int32_t k = 0; k < iMaxNumK; ++k) {
-						aFrequencyArray[j*iMaxNumK + k] += aFrequencyArray[(i*iIdxCounter + j)*iMaxNumK + k];
-					}
-				}
-			}
-
-			// Write to file
-			ofstream outFile(sOutFile);
-			if (!outFile) {
-				throw runtime_error("Frequency file couldn't be opened for writing!");
-			}
-			for (uint32_t j = 0; j < iIdxCounter; ++j) {
-				outFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-				outFile << aFrequencyArray[j*iMaxNumK];
-				for (int32_t k = 1; k < iMaxNumK; ++k) {
-					outFile << "\t" << aFrequencyArray[j*iMaxNumK + k];
+				// First line
+				outFile << "non_unique";
+				for (int32_t k = 0; k < iMaxNumK; ++k) {
+					outFile << "\t" << aFrequencyArray[k];
 				}
 				outFile << endl;
-			}
 
+				// rest
+				string sDummy = "";
+				for (uint32_t j = 1; j < iIdxCounter && getline(fContent, sDummy); ++j) {
+					const auto& line = Utilities::split(sDummy, '\t');
+					outFile << line[0] << "\t";
+					outFile << aFrequencyArray[j * iMaxNumK];
+					for (int32_t k = 1; k < iMaxNumK; ++k) {
+						outFile << "\t" << aFrequencyArray[j * iMaxNumK + k];
+					}
+					outFile << endl;
+				}
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////

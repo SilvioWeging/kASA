@@ -11,7 +11,7 @@
 
 #define kASA_VERSION_MAJOR 1
 #define kASA_VERSION_MINOR 4
-#define kASA_VERSION_PATCH 1
+#define kASA_VERSION_PATCH 2
 
 #include <iostream>
 #include <cstdint>
@@ -37,6 +37,7 @@
 #include <thread>
 #include <mutex>
 #include <queue>
+#include <regex>
 
 #include "utils/packedPairs.hpp"
 

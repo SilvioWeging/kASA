@@ -236,7 +236,7 @@ class WorkerQueueWithIDs {
 	condition_variable cv_worker;
 	condition_variable cv_master;
 	mutex taskMutex, idsMutex;
-	bool stop = false, bStarted = false;
+	bool stop = false;
 
 public:
 	/////////////////////////////////////////////////////////
@@ -264,25 +264,30 @@ public:
 
 	////////////////////////////////////////////////////////
 	inline void pushTask(const function<void(const int32_t&)>& task) {
-		tasks.push([task](const int32_t& id) { task(id); });
+		{
+			std::unique_lock<std::mutex> lock(this->taskMutex);
+			tasks.push([task](const int32_t& id) { task(id); });
+		}
+		cv_worker.notify_all();
 	}
 
 	////////////////////////////////////////////////////////
 	inline void start() {
-		if (!tasks.empty()) {
+		/*if (!tasks.empty()) {
 			bStarted = true;
 			cv_worker.notify_all();
-		}
+		}*/
+		//bStarted = true;
 	}
 
 	////////////////////////////////////////////////////////
 	inline void waitUntilFinished() {
-		if (bStarted) {
+		if (!this->tasks.empty()) {
 			unique_lock<std::mutex> lock(this->taskMutex);
 			this->cv_master.wait(lock,
 				[this] { return this->tasks.empty(); });
 		}
-		bStarted = false;
+		//bStarted = false;
 	}
 
 private:
@@ -320,14 +325,16 @@ private:
 						}
 					}
 
-					if (bQueueisEmpty) {
-						std::unique_lock<std::mutex> lock(this->taskMutex);
-						cv_master.notify_one();
+					task(id);
+					{
+						std::unique_lock<std::mutex> lock2(this->idsMutex);
+						this->IDs.push_back(id);
 					}
 
-					task(id);
-					std::unique_lock<std::mutex> lock2(this->idsMutex);
-					this->IDs.push_back(id);
+					if (bQueueisEmpty) {
+						//std::unique_lock<std::mutex> lock(this->taskMutex);
+						cv_master.notify_one();
+					}
 				}
 			}
 		)

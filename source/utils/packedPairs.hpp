@@ -45,6 +45,10 @@ struct packedBigPair {
 	bool operator<(const packedBigPair& b) const {
 		return (this->first < b.first || (!(b.first < this->first) && this->second < b.second));
 	}
+
+	bool operator>(const packedBigPair& b) const {
+		return (this->first > b.first || (!(b.first > this->first) && this->second > b.second));
+	}
 };
 #pragma pack(pop)
 
@@ -67,6 +71,10 @@ struct packedLargePair {
 
 	bool operator<(const packedLargePair& b) const {
 		return (this->first < b.first || (!(b.first < this->first) && this->second < b.second));
+	}
+
+	bool operator>(const packedLargePair& b) const {
+		return (this->first > b.first || (!(b.first > this->first) && this->second > b.second));
 	}
 
 };
@@ -115,6 +123,10 @@ struct __attribute__((packed)) packedBigPair {
 	bool operator<(const packedBigPair & b) const {
 		return (this->first < b.first || (!(b.first < this->first) && this->second < b.second));
 	}
+
+	bool operator>(const packedBigPair& b) const {
+		return (this->first > b.first || (!(b.first > this->first) && this->second > b.second));
+	}
 };
 
 struct __attribute__((packed)) packedLargePair {
@@ -135,6 +147,10 @@ struct __attribute__((packed)) packedLargePair {
 
 	bool operator<(const packedLargePair& b) const {
 		return (this->first < b.first || (!(b.first < this->first) && this->second < b.second));
+	}
+
+	bool operator>(const packedLargePair& b) const {
+		return (this->first > b.first || (!(b.first > this->first) && this->second > b.second));
 	}
 };
 

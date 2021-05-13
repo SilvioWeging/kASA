@@ -121,13 +121,12 @@ rule update:
 	threads: config["threads"]
 	shell:
 		"""
-		{config[kASAExec]}kASA update -c {input.content} -d {input.idx} -i {input.db} -o {output.index} -f {input.att} -y {input.tax} -u {params.lvl} -n {threads} -m {params.ram} -v -x {params.callIdx}
+		{config[kASAExec]}kASA update -d {input.idx} -i {input.db} -o {output.index} -f {input.att} -y {input.tax} -u {params.lvl} -n {threads} -m {params.ram} -v -x {params.callIdx}
 		cp work/index/exampleIndex_u_f.txt work/index/exampleIndex_u_f_duplicate.txt
 		"""
 
 rule identify_u:
 	input:
-		content="work/index/exampleIndex_content.txt",
 		idx=rules.update.output.index,
 		fq="work/input/exampleInput.fasta"
 	output:
@@ -138,15 +137,14 @@ rule identify_u:
 		callIdx="7"
 	threads: config["threads"]
 	shell:
-		"{config[kASAExec]}kASA identify -c {input.content} -d {input.idx} -i {input.fq} -p {output.prof} -q {output.json3} -n {threads} -m {params.ram} -v -x {params.callIdx}"
+		"{config[kASAExec]}kASA identify -d {input.idx} -i {input.fq} -p {output.prof} -q {output.json3} -n {threads} -m {params.ram} -v -x {params.callIdx}"
 
 
 
 rule reconstructFrequency:
 	input:
 		dummyLink=rules.identify_u.output.json3,
-		index="work/index/exampleIndex_u",
-		content="work/index/exampleIndex_content.txt"
+		index="work/index/exampleIndex_u"
 	output:
 		freqRec="work/index/exampleIndex_u_f.txt"
 	params:
@@ -155,7 +153,7 @@ rule reconstructFrequency:
 	threads: config["threads"]
 	shell:
 		"""
-		{config[kASAExec]}kASA getFrequency -c {input.content} -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx}
+		{config[kASAExec]}kASA getFrequency -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx}
 		cmp -s work/index/exampleIndex_u_f_duplicate.txt work/index/exampleIndex_u_f.txt
 		"""
 
@@ -181,7 +179,6 @@ rule checkRedundancy:
 	input:
 		dummyLink=rules.identify_u.output.json3,
 		index=rules.update.output.index,
-		content=rules.generateCF.output.content
 	output:
 		red="work/results/redundancy.txt"
 	params:
@@ -189,7 +186,7 @@ rule checkRedundancy:
 		callIdx="10"
 	threads: config["threads"]
 	shell:
-		"{config[kASAExec]}kASA redundancy -c {input.content} -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx} > {output.red}"
+		"{config[kASAExec]}kASA redundancy -d {input.index} -n {threads} -m {params.ram} -v -x {params.callIdx} > {output.red}"
 
 rule mergeIndices:
 	input:
@@ -217,7 +214,6 @@ rule pairedEnd:
 	input:
 		dummyLink=rules.identify_u.output.json3,
 		index=rules.update.output.index,
-		content=rules.generateCF.output.content,
 		freq=rules.reconstructFrequency.output.freqRec
 	output:
 		pE="work/results/pairedEnd.json"
@@ -226,7 +222,7 @@ rule pairedEnd:
 		callIdx="12"
 	threads: config["threads"]
 	shell:
-		"{config[kASAExec]}kASA identify -c {input.content} -d {input.index} -n {threads} -m {params.ram} -x {params.callIdx} -1 work/input/example.fastq.gz -2 work/input/example2.fastq.gz -q work/results/pairedEnd.json"
+		"{config[kASAExec]}kASA identify -d {input.index} -n {threads} -m {params.ram} -x {params.callIdx} -1 work/input/example.fastq.gz -2 work/input/example2.fastq.gz -q work/results/pairedEnd.json"
 
 rule LargeK:
 	input:
@@ -275,7 +271,6 @@ rule ProteinWithAlphabet:
 rule IdentifyMultiple:
 	input:
 		dummyLink=rules.identify_u.output.json3,
-		content=rules.generateCF.output.content,
 		idx=rules.update.output.index,
 		derp=rules.reconstructFrequency.output.freqRec
 	output:
@@ -286,6 +281,6 @@ rule IdentifyMultiple:
 	threads: config["threads"]
 	shell:
 		"""
-		{config[kASAExec]}kASA identify_multiple -c {input.content} -d {input.idx} -i work/input/ -q work/results/mult_ -n {threads} -m {params.ram} -x {params.callIdx}
-		{config[kASAExec]}kASA identify_multiple -c {input.content} -d {input.idx} -i work/input/ -q work/results/mult_r_ -n {threads} -m {params.ram} -x {params.callIdx} -r
+		{config[kASAExec]}kASA identify_multiple -d {input.idx} -i work/input/ -q work/results/mult_ -n {threads} -m {params.ram} -x {params.callIdx}
+		{config[kASAExec]}kASA identify_multiple -d {input.idx} -i work/input/ -q work/results/mult_r_ -n {threads} -m {params.ram} -x {params.callIdx} -r
 		"""

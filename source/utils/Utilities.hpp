@@ -128,6 +128,16 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	template<typename FileType>
+	inline string getFirstSequenceOfFile(FileType& sequenceFile) {
+		string sLine = "";
+		getline(sequenceFile, sLine); // In fasta as well as in fastq, the first line is uninteresting
+		getline(sequenceFile, sLine); // This should now contain enough information to figure it out
+		sequenceFile.seekg(0);
+		return sLine;
+	}
+
+	///////////////////////////////////////////////////////
 	inline pair<vector<pair<string,int8_t>>, size_t> gatherFilesFromPath(const string& sPath) {
 		try {
 			vector<pair<string, int8_t>> files; // 0: not zipped; 1: gzipped; 2: bzip2'ed
@@ -234,6 +244,26 @@ namespace Utilities {
 			}
 
 			return make_pair(files,overallFileSize);
+		}
+		catch (...) {
+			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+		}
+	}
+
+	///////////////////////////////////////////////////////
+	inline size_t getSizeOfFile(const string& file) {
+		try {
+#if (_WIN32 || _WIN64) && !__APPLE__ 
+
+			return filesystem::file_size(file);
+#else
+#if (__GNUC__ || defined(__llvm__)) && !_MSC_VER
+
+			struct stat stat_buf;
+			stat(file.c_str(), &stat_buf);
+			return stat_buf.st_size;
+#endif
+#endif
 		}
 		catch (...) {
 			cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

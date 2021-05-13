@@ -329,32 +329,16 @@ public:
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Save to file
 	template<typename T>
-	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath, unique_ptr<uint64_t[]>* arrOfFreqs = nullptr, const int32_t& _iHighestK = 12, const unordered_map<uint32_t, uint32_t>& mContent = unordered_map<uint32_t, uint32_t>()) { //passing a non-const reference with default value is a hassle
+	inline void SaveToStxxlVec(const T* vKMerVec, const string& savePath) { //passing a non-const reference with default value is a hassle
 		try {
 			Utilities::checkIfFileCanBeCreated(savePath + "_trie");
 			stxxlFile trieFile(savePath+"_trie", stxxl::file::RDWR);
 			trieVector trieVec(&trieFile, 0);
 			uint64_t iCount = 1;
 			auto iKnownShortMer = vKMerVec->at(0).first & _Bitmask;
-			if (!mContent.empty()) {
-				const auto& idx = Utilities::checkIfInMap(mContent, vKMerVec->cbegin()->second)->second * _iHighestK;
-				for (uint8_t k = 0; k < _iHighestK; ++k) {
-					if (((vKMerVec->cbegin()->first >> 5 * k) & 31) != 30) {
-						(*arrOfFreqs)[idx + k]++;
-					}
-				}
-			}
 			stxxl::vector_bufreader<typename T::const_iterator> bufferedReader(vKMerVec->cbegin() + 1, vKMerVec->cend(), 0);
 			for (; !bufferedReader.empty(); ++bufferedReader) {
 				const auto& entry = *bufferedReader;
-				if (!mContent.empty()) {
-					const auto& idx = Utilities::checkIfInMap(mContent, entry.second)->second * _iHighestK;
-					for (uint8_t k = 0; k < _iHighestK; ++k) {
-						if (((entry.first >> 5 * k) & 31) != 30) {
-							(*arrOfFreqs)[idx + k]++;
-						}
-					}
-				}
 				const auto& iTemp = entry.first & _Bitmask;
 				if (iTemp != iKnownShortMer) {
 					trieVec.push_back(packedBigPairTrie(uint32_t(iKnownShortMer >> (_iMaxK - _iMaxLevel) * 5), iCount));

@@ -17,20 +17,35 @@
 namespace kASA {
 	template<class vecType, class elemType, class intType>
 	class Read : public kASA {
-		const bool _bInputAreAAs;
 		const bool _bUnfunny;
+
 	public:
 		bool _bVisualize = false;
 		bool _bOnlyOneFrame = false;
 		vector<string> _translatedFramesForVisualization;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const bool& bTranslated = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bInputAreAAs(bTranslated), _bUnfunny(bUnfunny) {}
-		Read(const kASA& obj, const bool& bTranslated = false, const bool& bUnfunny = false) : kASA(obj), _bInputAreAAs(bTranslated), _bUnfunny(bUnfunny) {}
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bUnfunny(bUnfunny) {}
+		Read(const kASA& obj, const bool& bUnfunny = false) : kASA(obj), _bUnfunny(bUnfunny) {}
 	protected:
 
 		// test for garbage to correctly count matchable k-mers
 		//const uint64_t _tails[12] = { 0x1E, 0x3C0, 0x7800, 0xF0000, 0x1E00000, 0x3C000000, 0x780000000, 0xF00000000, 0x1E000000000, 0x3C0000000000, 0x7800000000000, 0xF000000000000 }; // ^, ^@, ^@@, ...
+
+		/////////////////////////////////
+		inline int32_t calculatekMerCount(const string& str) {
+			if (this->_bProtein) {
+				return static_cast<int32_t>(str.length() - _iHighestK + 1);
+			}
+			else {
+				if (_bOnlyOneFrame) {
+					return static_cast<int32_t>(str.length() / 3 - _iHighestK + 1);
+				}
+				else {
+					return static_cast<int32_t>(str.length() - 3 * _iHighestK + 1);
+				}
+			}
+		}
 
 		/////////////////////////////////
 		inline void convert_alreadyTranslatedTokMers(const string& sProteinSequence, const readIDType& iReadID, const int32_t& iNumberOfkMers, uint64_t& iPositionForOut, vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& resultsVec) {
@@ -197,7 +212,7 @@ namespace kASA {
 			//const uint64_t iStartPositionForOut = iPositionForOut;
 			for (uint64_t i = start; i < end; ++i) {
 				if (get<0>(vLines[i]) != "" || get<0>(vRCLines[i]) != "") {
-					if (_bInputAreAAs) {
+					if (this->_bProtein) {
 						convert_alreadyTranslatedTokMers(get<0>(vLines[i]), get<1>(vLines[i]), get<2>(vLines[i]), iPositionForOut, kMerVecOut);
 					}
 					else {
@@ -303,22 +318,8 @@ namespace kASA {
 				bool bNotFull = true;
 				readIDType iLocalReadID = 0;
 
-				auto calculatekMerCount = [&,this](const string& str) {
-					if (_bInputAreAAs) {
-						return static_cast<int32_t>(str.length() - _iHighestK + 1);
-					}
-					else {
-						if (_bOnlyOneFrame) {
-							return static_cast<int32_t>(str.length() / 3 - _iHighestK + 1);
-						}
-						else {
-							return static_cast<int32_t>(str.length() - 3 * _iHighestK + 1);
-						}
-					}
-				};
-
 				string sFalsekMerMarker = "";
-				if (_bInputAreAAs) {
+				if (this->_bProtein) {
 					for (int32_t i = 0; i < (_iMaxK - _iMinK); ++i) {
 						sFalsekMerMarker += "^";
 					}
@@ -351,7 +352,7 @@ namespace kASA {
 						input2.getChunk(resultChunkPair2, iNumOfChars);
 					}
 
-					if (iExpectedInput == 1 && (resultChunkPair.first.length() < static_cast<size_t>((_bInputAreAAs) ? (_iHighestK + 1) : (3 * _iHighestK + 1))) && resultChunkPair.second == false) {
+					if (iExpectedInput == 1 && (resultChunkPair.first.length() < static_cast<size_t>((this->_bProtein) ? (_iHighestK + 1) : (3 * _iHighestK + 1))) && resultChunkPair.second == false) {
 						// currently read DNA string is too short and there is more DNA to be had, usually happens when the end of the buffer is read but the file still contains DNA
 						// first, count number of characters read in the first try and then append more DNA
 						transfer->iNumOfCharsRead += iNumOfChars;
@@ -405,7 +406,7 @@ namespace kASA {
 						if (bAddTail) {
 							// Pad very small reads
 							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
-								if (_bInputAreAAs) {
+								if (this->_bProtein) {
 									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
 										get<0>(vLines.back()) += '^';
 									}
@@ -507,7 +508,7 @@ namespace kASA {
 									throw runtime_error("Spaces or tabs inside read, please check your input. Error occured in:\n" + sName);
 								}
 								else {
-									if (_bInputAreAAs) {
+									if (this->_bProtein) {
 										if (c == '*') {
 											c = '[';
 										}
@@ -529,7 +530,7 @@ namespace kASA {
 						auto funcReadTooShort = [&](string& sDNA, string& sOverhang, const pair<std::string, bool>& resultChunkPair) {
 							sDNA = sOverhang + resultChunkPair.first;
 							iDNALength += resultChunkPair.first.length();
-							if (_bInputAreAAs) {
+							if (this->_bProtein) {
 								if (sDNA.length() < size_t(_iHighestK)) {
 									sOverhang = sDNA;
 									bReadTooShort = true;
@@ -568,7 +569,7 @@ namespace kASA {
 							if (!bReadTooShort) {
 								if (bNewRead) {
 									bNewRead = false;
-									if (!_bInputAreAAs && _bSixFrames) {
+									if (!this->_bProtein && _bSixFrames) {
 										string tempDNA = reverseComplement(sDNA);
 										while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
 											tempDNA += 'X';
@@ -579,7 +580,7 @@ namespace kASA {
 									}
 								}
 								else {
-									if (!_bInputAreAAs && _bSixFrames) {
+									if (!this->_bProtein && _bSixFrames) {
 										const auto& rc = reverseComplement(sDNA);
 										vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
 										iSoftMaxSize -= rc.length() * sizeof(char) + sizeof(readIDType) + sizeof(int32_t);
@@ -635,7 +636,7 @@ namespace kASA {
 						if (bAddTail) {
 							// Pad very small reads
 							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
-								if (_bInputAreAAs) {
+								if (this->_bProtein) {
 									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
 										get<0>(vLines.back()) += '^';
 									}
@@ -748,7 +749,7 @@ namespace kASA {
 							if (bReadTooShort) {
 								if (bNewRead) {
 									bNewRead = false;
-									if (!_bInputAreAAs && _bSixFrames) {
+									if (!this->_bProtein && _bSixFrames) {
 										string tempDNA = reverseComplement(sDNA);
 										while (tempDNA.length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
 											tempDNA += 'X';
@@ -759,7 +760,7 @@ namespace kASA {
 									}
 								}
 								else {
-									if (!_bInputAreAAs && _bSixFrames) {
+									if (!this->_bProtein && _bSixFrames) {
 										const auto& rc = reverseComplement(sDNA);
 										vRCLines.emplace_back(rc, iLocalReadID, calculatekMerCount(rc));
 										iSumOfkMers += get<2>(vRCLines.back());
@@ -769,7 +770,7 @@ namespace kASA {
 								vLines.emplace_back(sDNA, iLocalReadID, calculatekMerCount(sDNA));
 							}
 
-							if (_bInputAreAAs) {
+							if (this->_bProtein) {
 								while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
 									get<0>(vLines.back()) += '^';
 								}
@@ -966,7 +967,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// convert lines from fasta/fastq to kMers and save them in a (stxxl-)vector
-		inline void dnaTokMers(const string& sDna, const uint32_t& iID, unique_ptr<vecType>& kMerVecOut, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
+		inline void dnaTokMers(const string& sDna, const uint32_t& iID, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
 			vector<tuple<intType, uint32_t>> vResultingkMers;
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
 
@@ -1050,22 +1051,12 @@ namespace kASA {
 				}
 			}
 
-			uint64_t iResultingSize = vResultingkMers.size();
-
 			// Write resulting kMers in stxxl vector but exclude those which are not useful
 			double dStepSize = (fShrinkPercentage > 0.f) ? 100. / fShrinkPercentage : 0.;
 			double dNextThrowOut = dStepSize;
 			uint64_t iCounterOfThrowOut = 1;
 
-			uint32_t iSizeCounterOfVec = 0;
-			uint64_t iStart = 0;
-			if (kMerVecOut) {
-				iStart = kMerVecOut->size();
-			}
 			if (fShrinkPercentage > 0.f) {
-				if (kMerVecOut) {
-					kMerVecOut->resize(iStart + iResultingSize);
-				}
 				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
 						if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
@@ -1079,13 +1070,8 @@ namespace kASA {
 								get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 							}
 
-							if (kMerVecOut) {
-								kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
-							}
-							else {
-								if (!(vBricks.addToInt(element))) {
-									vBricks.IntToExtPart();
-								}
+							if (!(vBricks.addToInt(element))) {
+								vBricks.IntToExtPart();
 							}
 						}
 						else {
@@ -1096,9 +1082,6 @@ namespace kASA {
 				}
 			}
 			else {
-				if (kMerVecOut) {
-					kMerVecOut->resize(iStart + iResultingSize);
-				}
 				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
 						if (_bUnfunny) {
@@ -1111,25 +1094,17 @@ namespace kASA {
 							get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 						}
 
-						if (kMerVecOut) {
-							kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
-						}
-						else {
-							if (!(vBricks.addToInt(element))) {
-								vBricks.IntToExtPart();
-							}
+						if (!(vBricks.addToInt(element))) {
+							vBricks.IntToExtPart();
 						}
 					}
 				}
-			}
-			if (kMerVecOut) {
-				kMerVecOut->resize(iStart + iSizeCounterOfVec);
 			}
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// convert lines from fasta/fastq to kMers and save them in a (stxxl-)vector, use only one frame
-		inline void dnaTokMers_oneFrame(const string& sDna, const uint32_t& iID, unique_ptr<vecType>& kMerVecOut, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
+		inline void dnaTokMers_oneFrame(const string& sDna, const uint32_t& iID, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
 			vector<tuple<intType, uint32_t>> vResultingkMers;
 			const int32_t& iMaxKTimes3 = 3 * _iHighestK;
 
@@ -1189,22 +1164,12 @@ namespace kASA {
 				}
 			}
 
-			uint64_t iResultingSize = vResultingkMers.size();
-
 			// Write resulting kMers in stxxl vector but exclude those which are not useful
 			double dStepSize = (fShrinkPercentage > 0.f) ? 100. / fShrinkPercentage : 0.;
 			double dNextThrowOut = dStepSize;
 			uint64_t iCounterOfThrowOut = 1;
 
-			uint32_t iSizeCounterOfVec = 0;
-			uint64_t iStart = 0;
-			if (kMerVecOut) {
-				iStart = kMerVecOut->size();
-			}
 			if (fShrinkPercentage > 0.f) {
-				if (kMerVecOut) {
-					kMerVecOut->resize(iStart + iResultingSize);
-				}
 				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
 						if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
@@ -1218,13 +1183,8 @@ namespace kASA {
 								get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 							}
 
-							if (kMerVecOut) {
-								kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
-							}
-							else {
-								if (!(vBricks.addToInt(element))) {
-									vBricks.IntToExtPart();
-								}
+							if (!(vBricks.addToInt(element))) {
+								vBricks.IntToExtPart();
 							}
 						}
 						else {
@@ -1235,9 +1195,6 @@ namespace kASA {
 				}
 			}
 			else {
-				if (kMerVecOut) {
-					kMerVecOut->resize(iStart + iResultingSize);
-				}
 				for (auto& element : vResultingkMers) {
 					if (get<0>(element) != 0) {
 						if (_bUnfunny) {
@@ -1250,25 +1207,17 @@ namespace kASA {
 							get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 						}
 
-						if (kMerVecOut) {
-							kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
-						}
-						else {
-							if (!(vBricks.addToInt(element))) {
-								vBricks.IntToExtPart();
-							}
+						if (!(vBricks.addToInt(element))) {
+							vBricks.IntToExtPart();
 						}
 					}
 				}
-			}
-			if (kMerVecOut) {
-				kMerVecOut->resize(iStart + iSizeCounterOfVec);
 			}
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// convert protein sequences to k-mers in the building step
-		inline void proteinTokMers(const string& sAASequence, const uint32_t& iIdx, unique_ptr<vecType>& kMerVecOut, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
+		inline void proteinTokMers(const string& sAASequence, const uint32_t& iIdx, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
 			vector<tuple<intType, uint32_t>> vResultingkMers;
 			const int32_t& iMaxRange = int32_t(sAASequence.length()) - _iHighestK + 1;
 			if (iMaxRange > 0) {
@@ -1284,30 +1233,15 @@ namespace kASA {
 			double dNextThrowOut = dStepSize;
 			uint64_t iCounterOfThrowOut = 1;
 
-			uint64_t iResultingSize = vResultingkMers.size();
-			uint32_t iSizeCounterOfVec = 0;
-			uint64_t iStart = 0;
-			if (kMerVecOut) {
-				iStart = kMerVecOut->size();
-			}
-
 			if (fShrinkPercentage > 0.f) {
-				if (kMerVecOut) {
-					kMerVecOut->resize(iStart + iResultingSize);
-				}
 				for (auto& element : vResultingkMers) {
 					if (iCounterOfThrowOut != static_cast<uint64_t>(dNextThrowOut)) {
 						if (_bUnfunny) {
 							get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 						}
 
-						if (kMerVecOut) {
-							kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
-						}
-						else {
-							if (!(vBricks.addToInt(element))) {
-								vBricks.IntToExtPart();
-							}
+						if (!(vBricks.addToInt(element))) {
+							vBricks.IntToExtPart();
 						}
 					}
 					else {
@@ -1317,21 +1251,13 @@ namespace kASA {
 				}
 			}
 			else {
-				if (kMerVecOut) {
-					kMerVecOut->resize(iStart + iResultingSize);
-				}
 				for (auto& element : vResultingkMers) {
 					if (_bUnfunny) {
 						get<0>(element) = aminoAcidsToAminoAcid(get<0>(element));
 					}
 
-					if (kMerVecOut) {
-						kMerVecOut->at(iStart + iSizeCounterOfVec++) = element;
-					}
-					else {
-						if (!(vBricks.addToInt(element))) {
-							vBricks.IntToExtPart();
-						}
+					if (!(vBricks.addToInt(element))) {
+						vBricks.IntToExtPart();
 					}
 				}
 			}
@@ -1341,18 +1267,25 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Read a fasta and create a kMer-Vec, used in BuildAll(...)
 		template<typename T>
-		inline void readFasta(T& input, const unordered_map<string, uint32_t>& mAccToID, Build<vecType, elemType>& vBricks, unique_ptr<vecType>& vOut, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
+		inline void readFasta(T& input, const unordered_map<string, uint32_t>& mAccToID, Build<vecType, elemType>& vBricks, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage) {
 			try {
 				if (!input.good()) {
 					throw runtime_error("No input found!");
 				}
+
+				Utilities::FileReader<T> inputReader; 
+				inputReader.setFile(&input);
+				pair<std::string, bool> resultChunkPair;
+				uint64_t iNumOfChars = 0;
+
+				uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iCurrentOverallPercentage = 0;
 
 				uint32_t iIdx = 0, nextIdx = 0;
 
 				bool bAccNumberFound = false;
 
 				string sFalsekMerMarker = "";
-				if (_bInputAreAAs) {
+				if (this->_bProtein) {
 					for (int32_t i = 0; i < (_iHighestK - _iLowestK); ++i) {
 						sFalsekMerMarker += "^";
 					}
@@ -1363,15 +1296,18 @@ namespace kASA {
 					}
 				}
 
-				string sInitialString;
-				while (input.good()) {
-					getline(input, sInitialString);
-					if (sInitialString == "") {
+				while (!inputReader.eof()) {
+					resultChunkPair.first = "";
+					resultChunkPair.second = false;
+					inputReader.getChunk(resultChunkPair, iNumOfChars);
+					iNumOfCharsRead += iNumOfChars;
+
+					if (resultChunkPair.first == "") {
 						continue;
 					}
-					if (sInitialString.front() == '>') {
-						sInitialString.erase(sInitialString.begin());
-						const auto& sNumbers = Utilities::split(Utilities::split(sInitialString, ' ').at(0), '|');
+					if (resultChunkPair.first.front() == '>') {
+						resultChunkPair.first.erase(resultChunkPair.first.begin());
+						const auto& sNumbers = Utilities::split(Utilities::split(resultChunkPair.first, ' ').at(0), '|');
 						string acc = "";
 						for (const auto& entry : sNumbers) {
 							if (entry.find('.') != string::npos) {
@@ -1386,7 +1322,7 @@ namespace kASA {
 						}
 						else {
 							// search if acc is a dummy
-							isInMap = mAccToID.find(sInitialString);
+							isInMap = mAccToID.find(resultChunkPair.first);
 							if (isInMap != mAccToID.end()) {
 								iIdx = isInMap->second;
 								bAccNumberFound = true;
@@ -1402,17 +1338,13 @@ namespace kASA {
 					}
 				}
 
-
-
 				bool bAddFalseMarker = false, bNextIdx = false, bAddFalseRCMarker = true;
 
 				const int32_t& iConcurrentLines = 20;
 				string sOverhang = "", sDNA = "";
 
-				uint64_t iNumOfCharsRead = 0, iCurrentPercentage = 0, iCurrentOverallPercentage = 0;
-
 				// Either the file still contains dna or there is an Overhang left from a previous loop
-				while (input.good() || sOverhang != "") {
+				while (!inputReader.eof() || sOverhang != "") {
 
 					if (bNextIdx) {
 						bAddFalseMarker = false;
@@ -1422,10 +1354,10 @@ namespace kASA {
 					bool bCreateOverhang = true;
 
 					for (int32_t i = 0; i < iConcurrentLines; ++i) {
-						char sTempCArr[10000];
-						input.get(sTempCArr, 10000);
+						resultChunkPair.first = "";
+						resultChunkPair.second = false;
+						inputReader.getChunk(resultChunkPair, iNumOfChars);
 
-						auto iNumOfChars = input.gcount();
 						if (_bVerbose && iFileLength != 0) {
 							iNumOfCharsRead += iNumOfChars;
 							overallCharsRead += iNumOfChars;
@@ -1441,16 +1373,10 @@ namespace kASA {
 							}
 						}
 
-						bool bLineNotFinished = true;
-						if (iNumOfChars != 9999 && input) {
-							bLineNotFinished = false;
-							input.get();
-						}
-						string sTempString(sTempCArr);
+						string sTempString(resultChunkPair.first);
 						if (sTempString == "") {
-							if (input.fail() && !input.eof()) {
-								input.clear();
-								getline(input, sTempString);
+							if (!inputReader.eof()) {
+								break;
 							}
 							else {
 								bCreateOverhang = false;
@@ -1460,21 +1386,20 @@ namespace kASA {
 							--i;
 							continue;
 						}
-						if (input) {
+						if (!inputReader.eof()) {
 
 							// new entry in fasta
 							if (sTempString.front() == '>') {
 
 								sTempString.erase(sTempString.begin());
-								while (bLineNotFinished) {
+								while (resultChunkPair.second == false) {
 									// read the whole line
-									input.get(sTempCArr, 10000);
-									iNumOfChars = input.gcount();
-									if (iNumOfChars != 9999 && input) {
-										bLineNotFinished = false;
-										input.get();
-									}
-									sTempString.append(sTempString);
+									resultChunkPair.first = "";
+									resultChunkPair.second = false;
+									inputReader.getChunk(resultChunkPair, iNumOfChars);
+									iNumOfCharsRead += iNumOfChars;
+									overallCharsRead += iNumOfChars;
+									sTempString.append(resultChunkPair.first);
 								}
 								const auto& sNumbers = Utilities::split(Utilities::split(sTempString, ' ').at(0), '|');
 								string acc = "";
@@ -1533,7 +1458,7 @@ namespace kASA {
 
 					sDNA = sOverhang + sDNA;
 
-					if (_bInputAreAAs) {
+					if (this->_bProtein) {
 						if (sDNA.length() < size_t(_iHighestK + 2) && bCreateOverhang) { // e.g. 14 is the last frame for a kMer of Maxlength 12
 							sOverhang = sDNA;
 							sDNA = "";
@@ -1553,7 +1478,7 @@ namespace kASA {
 							throw runtime_error("Spaces or tabs inside reference, please check your input. Error occured in content entry Nr.: " + to_string(iIdx));
 						}
 						else {
-							if (_bInputAreAAs) {
+							if (this->_bProtein) {
 								if (chara == '*') {
 									chara = '[';
 								}
@@ -1576,17 +1501,17 @@ namespace kASA {
 						bAddFalseMarker = false;
 					}
 
-					if (_bInputAreAAs) {
-						proteinTokMers(sDNA, iIdx, vOut, vBricks, fShrinkPercentage);
+					if (this->_bProtein) {
+						proteinTokMers(sDNA, iIdx, vBricks, fShrinkPercentage);
 					}
 					else {
 						if (_bOnlyOneFrame) {
-							dnaTokMers_oneFrame(sDNA, iIdx, vOut, vBricks, fShrinkPercentage);
+							dnaTokMers_oneFrame(sDNA, iIdx, vBricks, fShrinkPercentage);
 						}
 						else {
-							dnaTokMers(sDNA, iIdx, vOut, vBricks, fShrinkPercentage);
+							dnaTokMers(sDNA, iIdx, vBricks, fShrinkPercentage);
 							if (_bSixFrames) {
-								dnaTokMers(sRCDNA, iIdx, vOut, vBricks, fShrinkPercentage);
+								dnaTokMers(sRCDNA, iIdx, vBricks, fShrinkPercentage);
 							}
 						}
 					}
@@ -1597,7 +1522,7 @@ namespace kASA {
 					}
 
 					if (bCreateOverhang) {
-						if (_bInputAreAAs) {
+						if (this->_bProtein) {
 							sOverhang = sDNA.substr(sDNA.length() + 1 - _iHighestK);
 						}
 						else {
@@ -1616,9 +1541,355 @@ namespace kASA {
 			}
 		}
 
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Go through file and map accs to taxids
+		inline void accToTaxST(unordered_map<string, tuple<uint32_t, string>>& mAccTo_ID_DNA_NumOfkMers, const string& content) {
+			debugBarrier
+			ifstream contentFile(content);
+			size_t iNumOfEntries = mAccTo_ID_DNA_NumOfkMers.size(), iCounterOfFoundElements = 0;
+			string item, sDummy;
+			while (getline(contentFile, sDummy) && iCounterOfFoundElements < iNumOfEntries) {
+				stringstream ss(sDummy);
+				getline(ss, item, '\t');
+				getline(ss, item, '\t');
+				const string tID = move(item);
+				getline(ss, item, '\t');
+				while (getline(ss, item, ';')) {
+					auto res = mAccTo_ID_DNA_NumOfkMers.find(item);
+					if (res != mAccTo_ID_DNA_NumOfkMers.end()) {
+						get<0>(res->second) = stoul(tID);
+						iCounterOfFoundElements++;
+					}
+				}
+			}
+			debugBarrier
+		}
+
+		inline void findAccInLine(const string& sLine, unordered_map<string, tuple<uint32_t, string>>& mAccTo_ID_DNA_NumOfkMers) {
+			string item;
+			stringstream ss(sLine);
+			getline(ss, item, '\t');
+			getline(ss, item, '\t');
+			const string tID = move(item);
+			getline(ss, item, '\t');
+			while (getline(ss, item, ';')) {
+				auto res = mAccTo_ID_DNA_NumOfkMers.find(item);
+				if (res != mAccTo_ID_DNA_NumOfkMers.end()) {
+					get<0>(res->second) = stoul(tID);
+				}
+			}
+		}
+
+		inline void accToTaxMT(unordered_map<string, tuple<uint32_t, string>>& mAccTo_ID_DNA_NumOfkMers, const string& content, WorkerQueueWithIDs& Q) {
+			debugBarrier
+			ifstream contentFile(content);
+			Utilities::FileReader<ifstream> fileReader;
+			fileReader.setFile(&contentFile);
+			pair<string, bool> pChunk("",false);
+			uint64_t iDummyNumOfChars = 0;
+			string sLine = "", item;
+			int32_t iCounterOfConcurrentLinesBeingProcessed = 0;
+			while (!fileReader.eof()) {
+				if (iCounterOfConcurrentLinesBeingProcessed == 2*_iNumOfThreads) {
+					Q.waitUntilFinished();
+					iCounterOfConcurrentLinesBeingProcessed = 0;
+				}
+				fileReader.getChunk(pChunk, iDummyNumOfChars);
+				while (!pChunk.second) {
+					sLine += pChunk.first; // maybe this is not a good idea if the line is very large...
+					pChunk.first = "";
+					fileReader.getChunk(pChunk, iDummyNumOfChars);
+				}
+				sLine += pChunk.first;
+				Q.pushTask([&mAccTo_ID_DNA_NumOfkMers, this, sLine](const int32_t&) { findAccInLine(sLine, mAccTo_ID_DNA_NumOfkMers); });
+				sLine = "";
+				pChunk.first = "";
+				iCounterOfConcurrentLinesBeingProcessed++;
+			}
+			Q.waitUntilFinished();
+			debugBarrier
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Translate and convert for readFastaAlternativeMode
+		inline void translateAndConvert(const unordered_map<string, tuple<uint32_t, string>>& mAccTo_ID_DNA_NumOfkMers, const string& sAccThatHasBeenPushedAlready, Build<vecType, elemType>& vBricks, const float& fShrinkPercentage) {
+			debugBarrier
+			string sFalsekMerMarker = "";
+			if (this->_bProtein) {
+				for (int32_t i = 0; i < (_iHighestK - _iLowestK); ++i) {
+					sFalsekMerMarker += "^";
+				}
+			}
+			else {
+				for (int32_t i = 0; i < (_iHighestK - _iLowestK) * 3; ++i) {
+					sFalsekMerMarker += "X";
+				}
+			}
+			
+			for (auto mapIt = mAccTo_ID_DNA_NumOfkMers.cbegin(); mapIt != mAccTo_ID_DNA_NumOfkMers.cend(); mapIt++) {
+				if (get<0>(mapIt->second)) { // only translate entries with valid taxids (0 is a signal for non-valid) 
+					if (this->_bProtein) {
+						proteinTokMers(get<1>(mapIt->second), get<0>(mapIt->second), vBricks, fShrinkPercentage);
+					}
+					else {
+						if (_bOnlyOneFrame) {
+							dnaTokMers_oneFrame(get<1>(mapIt->second), get<0>(mapIt->second), vBricks, fShrinkPercentage);
+						}
+						else {
+							dnaTokMers(get<1>(mapIt->second), get<0>(mapIt->second), vBricks, fShrinkPercentage);
+							if (_bSixFrames) {
+								string sRCDNA = (_bSixFrames) ? reverseComplement(get<1>(mapIt->second)) : "";
+								if (mapIt->first != sAccThatHasBeenPushedAlready) {
+									sRCDNA += sFalsekMerMarker;
+								}
+								dnaTokMers(sRCDNA, get<0>(mapIt->second), vBricks, fShrinkPercentage);
+							}
+						}
+					}
+				}
+			}
+			debugBarrier
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Read a fasta and create a kMer-Vec, used in BuildAll(...)
+		template<typename T>
+		inline void readFastaAlternativeMode(Utilities::FileReader<T>& input, const string& contentFile, Build<vecType, elemType>& vBricks, const uint64_t& iFileLength, size_t& overallCharsRead, const size_t& overallFilesSize, const float& fShrinkPercentage, const int64_t& iMemoryAvail) {
+			try {
+				debugBarrier
+
+				WorkerQueueWithIDs Q(_iNumOfThreads);
+				pair<std::string, bool> resultChunkPair;
+
+				const float fShrinkFactor = 1.0f - fShrinkPercentage / 100.0f;
+
+				unordered_map<string, tuple<uint32_t, string>> mAccTo_ID_DNA_NumOfkMers;
+				unordered_map<string, tuple<uint32_t, string>>::iterator currElement;
+				string sAccThatHasBeenPushedAlready = "";
+				int64_t iMemoryUsed = sizeof(unordered_map<string, tuple<uint32_t, string>>);
+
+				bool bNewAcc = true;
+
+				string sOverhang = "", sDNA = "", currAcc = "", newAcc = "";
+
+				uint64_t iNumOfCharsRead = 0, iNumOfChars = 0, iCurrentPercentage = 0, iCurrentOverallPercentage = 0, iRequiredSizeOfInternal = 0;
+
+				// add those to correctly parse smaller k-mers from larger ones
+				string sFalsekMerMarker = "";
+				if (this->_bProtein) {
+					for (int32_t i = 0; i < (_iHighestK - _iLowestK); ++i) {
+						sFalsekMerMarker += "^";
+					}
+				}
+				else {
+					for (int32_t i = 0; i < (_iHighestK - _iLowestK) * 3; ++i) {
+						sFalsekMerMarker += "X";
+					}
+				}
+				debugBarrier
+				// Read data from file, skip irrelevant lines
+				while (!input.eof()) {
+
+					for (int32_t i = 0; i < 1; ++i) {
+						resultChunkPair.first = "";
+						resultChunkPair.second = false;
+						input.getChunk(resultChunkPair, iNumOfChars);
+						debugBarrier
+						if (_bVerbose && iFileLength != 0) {
+							iNumOfCharsRead += iNumOfChars;
+							overallCharsRead += iNumOfChars;
+							double dPercentageOfInputRead = iNumOfCharsRead / double(iFileLength) * 100.;
+							if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentPercentage) {
+								iCurrentPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+								cout << "OUT: Progress of current file " << iCurrentPercentage << " %" << endl;
+							}
+							dPercentageOfInputRead = overallCharsRead / double(overallFilesSize) * 100.;
+							if (static_cast<uint64_t>(dPercentageOfInputRead) != iCurrentOverallPercentage) {
+								iCurrentOverallPercentage = static_cast<uint64_t>(dPercentageOfInputRead);
+								cout << "OUT: Progress of all files " << iCurrentOverallPercentage << " %" << endl;
+							}
+						}
+
+						string sTempString(resultChunkPair.first);
+						if (sTempString == "") {
+							if (input.eof()) {
+								break;
+							}
+							--i;
+							continue;
+						}
+						if (!input.eof()) {
+							debugBarrier
+							// new entry in fasta
+							if (sTempString.front() == '>') {
+
+								sTempString.erase(sTempString.begin());
+								while (resultChunkPair.second == false) {
+									// read the whole line
+									resultChunkPair.first = "";
+									resultChunkPair.second = false;
+									input.getChunk(resultChunkPair, iNumOfChars);
+									iNumOfCharsRead += iNumOfChars;
+									overallCharsRead += iNumOfChars;
+									sTempString.append(resultChunkPair.first);
+								}
+								const auto& sNumbers = Utilities::split(Utilities::split(sTempString, ' ').at(0), '|');
+								string acc = "";
+								for (const auto& entry : sNumbers) {
+									if (entry.find('.') != string::npos) {
+										acc = entry;
+										break;
+									}
+								}
+								
+								newAcc = acc;
+								bNewAcc = true;
+
+								break;
+							}
+							else {
+								sDNA = sTempString;
+							}
+						}
+						else {
+							// EOF
+							if (currAcc == "") {
+								throw runtime_error("No > found in input.");
+							}
+							debugBarrier
+							sDNA = sTempString;
+							break;
+						}
+					}
+					debugBarrier
+					// check for irregular letters
+					for (auto& chara : sDNA) {
+						if (chara == '\t' || chara == ' ') {
+							throw runtime_error("Spaces or tabs inside reference, please check your input. Error occured in content entry: " + currAcc);
+						}
+						else {
+							if (this->_bProtein) {
+								if (chara == '*') {
+									chara = '[';
+								}
+							}
+							else {
+								if (chara != 'A' && chara != 'C' && chara != 'G' && chara != 'T' && chara != 'a' && chara != 'c' && chara != 'g' && chara != 't') {
+									chara = 'Z';
+								}
+							}
+						}
+					}
+					debugBarrier
+
+					// new acc has been found, save the old one
+					if (bNewAcc) {
+						if (currAcc != "") {
+							get<1>(currElement->second) += sFalsekMerMarker;
+							iRequiredSizeOfInternal += _iHighestK - 1;
+
+							iMemoryUsed += sizeof(char) * sFalsekMerMarker.length() + sizeof(elemType) * (_iHighestK - 1);
+						}
+						debugBarrier
+						currAcc = newAcc;
+						currElement = mAccTo_ID_DNA_NumOfkMers.insert(make_pair(newAcc, make_tuple(0, ""))).first;
+						iMemoryUsed += sizeof(char) * newAcc.length() + static_cast<int64_t>(1.5*sizeof(pair< string, tuple<uint32_t, string>>));
+
+						bNewAcc = false;
+					}
+					else {
+						if (input.eof()) {
+							get<1>(currElement->second) += sFalsekMerMarker;
+							iRequiredSizeOfInternal += _iHighestK - 1;
+							debugBarrier
+							// save to external
+							// the entry in sAccThatHasBeenPushedAlready shall receive no false kMers for RC (since it had them already), check if it is still in map
+							accToTaxMT(mAccTo_ID_DNA_NumOfkMers, contentFile, Q);
+							debugBarrier
+							vBricks.setInternalSize(iRequiredSizeOfInternal);
+							debugBarrier
+							translateAndConvert(mAccTo_ID_DNA_NumOfkMers, sAccThatHasBeenPushedAlready, vBricks, fShrinkPercentage);
+							debugBarrier
+							vBricks.IntToExtPart();
+							debugBarrier
+						}
+						else {
+
+							int32_t iNumOfkMers = 0;
+							if (get<1>(currElement->second) == "") {
+								iNumOfkMers = (_bSixFrames) ? 2 * calculatekMerCount(sDNA) : calculatekMerCount(sDNA);
+							}
+							else {
+								iNumOfkMers = (_bSixFrames) ? 2 * (calculatekMerCount(sDNA) + _iHighestK - 1) : (calculatekMerCount(sDNA) + _iHighestK - 1);
+							}
+							debugBarrier
+							int64_t iAdditionalMemoryUsage = sizeof(char) * sDNA.length() + sizeof(elemType) * static_cast<size_t>(fShrinkFactor * iNumOfkMers); // depending on RC or not
+							if (iMemoryUsed + iAdditionalMemoryUsage > iMemoryAvail) {
+								// save to external
+								// the entry in sAccThatHasBeenPushedAlready shall receive no false kMers for RC (since it had them already), check if it is still in map
+								debugBarrier
+								accToTaxMT(mAccTo_ID_DNA_NumOfkMers, contentFile, Q);
+								debugBarrier
+								vBricks.setInternalSize(iRequiredSizeOfInternal);
+								debugBarrier
+								translateAndConvert(mAccTo_ID_DNA_NumOfkMers, sAccThatHasBeenPushedAlready, vBricks, fShrinkPercentage);
+								debugBarrier
+								vBricks.IntToExtPart();
+								debugBarrier
+								// create overhang to new dna from old dna which will now be converted
+								string sTempDNA = get<1>(currElement->second);
+								sOverhang = "";
+								if (sTempDNA.length()) {
+									if (this->_bProtein) {
+										if (sTempDNA.length() + 1 > static_cast<size_t>(_iHighestK)) {
+											sOverhang = sTempDNA.substr(sTempDNA.length() + 1 - _iHighestK);
+										}
+										else {
+											sOverhang = sTempDNA;
+										}
+									}
+									else {
+										if (sTempDNA.length() + 1 > static_cast<size_t>(_iHighestK * 3)) {
+											sOverhang = sTempDNA.substr(sTempDNA.length() + 1 - _iHighestK * 3);
+										}
+										else {
+											sOverhang = sTempDNA;
+										}
+									}
+								}
+
+								sAccThatHasBeenPushedAlready = currElement->first;
+								auto tempElement = *currElement;
+								mAccTo_ID_DNA_NumOfkMers.clear();
+								currElement = mAccTo_ID_DNA_NumOfkMers.insert(tempElement).first;
+								get<1>(currElement->second) = sOverhang;
+								const auto& kmerCount = (_bSixFrames) ? 2 * calculatekMerCount(sOverhang) : calculatekMerCount(sOverhang);
+								iRequiredSizeOfInternal = static_cast<size_t>(fShrinkFactor * kmerCount);
+								debugBarrier
+								iMemoryUsed = sizeof(unordered_map<string, tuple<uint32_t, string>>) + sizeof(char) * sOverhang.length() + sizeof(elemType) * static_cast<size_t>(fShrinkFactor * kmerCount);
+							}
+
+							get<1>(currElement->second) += sDNA;
+							iRequiredSizeOfInternal += static_cast<size_t>(fShrinkFactor * iNumOfkMers);
+
+							iMemoryUsed += iAdditionalMemoryUsage;
+							debugBarrier
+						}
+					}
+					debugBarrier
+					sDNA = "";
+				}
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
+		}
+
+
+
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Build the index from fasta files
-		void BuildAll(const string& fContentFile, const string& sDirectory, const string& fOutFile, int64_t iMem, const float& fShrinkPercentage = 0.f) {
+		tuple< unordered_map<uint32_t, uint32_t>, uint64_t >  BuildAll(const string& fContentFile, const string& sDirectory, const string& fOutFile, int64_t iMem, const float& fShrinkPercentage = 0.f, const bool& bContinue = false, const bool& bUpdate = false) {
 			try {
 				// test if files exists
 				if (!ifstream(fContentFile)) {
@@ -1631,39 +1902,60 @@ namespace kASA {
 					vDivisionArray[i] = (i + 1) * iStep;
 				}*/
 
+				debugBarrier
 				Utilities::checkIfFileCanBeCreated(fOutFile);
 				
 				//stxxlFile* stxxlOutFile = new stxxlFile(fOutFile, stxxl::file::RDWR);
 				//contentVecType_32p* vOutVec = new contentVecType_32p(stxxlOutFile, 0);
 
+				if (_bVerbose) {
+					cout << "OUT: Reading content file... " << endl;
+				}
+
+				int64_t iMemGiven = iMem;
 				uint32_t iIdxCounter = 1;
 				unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
 				//unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
 				unordered_map<string, uint32_t> mAccToID;
 				ifstream content(fContentFile);
 				string sDummy = "";
-				bool bTaxIdsAsStrings = false;
+
+				bool bTaxIdsAsStrings = false, bAlternativeMode = false;
+				
 				while (getline(content, sDummy)) {
+					if (iMem < iMemGiven / 2 && !bAlternativeMode) {
+						cerr << "WARNING: Your content file is quite large and keeping the hash tables generated from it in memory consumes more than half of the memory given. \
+kASA will therefore use an alternative but slower way of generating the index. You can Ctrl+C now if you don't want this and instead reduce the number of entries in the content file or abstract to a higher taxonomic rank and generate it anew. \
+Sorry!" << endl;
+						bAlternativeMode = true;
+					}
+
 					if (sDummy != "") {
 						const auto& line = Utilities::split(sDummy, '\t');
 						if (line.size() >= 5 && !bTaxIdsAsStrings) {
 							bTaxIdsAsStrings = true;
 						}
 						if (line.size() >= 4) {
-							//mIdxToName[iIdxCounter] = line[0];
-							const auto& vAccessionNumbers = Utilities::split(line[3], ';');
 							if (bTaxIdsAsStrings) {
 								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
-								for (const auto& acc : vAccessionNumbers) {
-									mAccToID.insert(make_pair(acc, stoul(line[4])));
-									iMem -= sizeof(char) * acc.length();
+								iMem -= sizeof(pair<uint32_t, uint32_t>);
+								if (!bAlternativeMode && !bContinue) {
+									const auto& vAccessionNumbers = Utilities::split(line[3], ';');
+									for (const auto& acc : vAccessionNumbers) {
+										mAccToID.insert(make_pair(acc, stoul(line[4])));
+										iMem -= static_cast<int64_t>(1.5*sizeof(pair< string, uint32_t>)) + sizeof(char) * acc.length();
+									}
 								}
 							}
 							else {
 								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
-								for (const auto& acc : vAccessionNumbers) {
-									mAccToID.insert(make_pair(acc, stoul(line[1])));
-									iMem -= sizeof(char) * acc.length();
+								iMem -= sizeof(pair<uint32_t, uint32_t>);
+								if (!bAlternativeMode && !bContinue) {
+									const auto& vAccessionNumbers = Utilities::split(line[3], ';');
+									for (const auto& acc : vAccessionNumbers) {
+										mAccToID.insert(make_pair(acc, stoul(line[1])));
+										iMem -= static_cast<int64_t>(1.5*sizeof(pair< string, uint32_t>)) + sizeof(char) * acc.length();
+									}
 								}
 							}
 							++iIdxCounter;
@@ -1673,158 +1965,185 @@ namespace kASA {
 						}
 					}
 				}
-				
-				iMem -= Utilities::calculateSizeInByteOfUnorderedMap(mAccToID);
-				iMem -= Utilities::calculateSizeInByteOfUnorderedMap(mIDsAsIdx);
+				content.close();
+				content.clear();
 
-				if (iMem < 0) {
-					cerr << "WARNING: Your content file is quite large and keeping the hash tables generated from it in memory consumes more memory than given.\
-							 kASA might therefore consume more than anticipated and thus crash. If you can, reduce the number of entries in the content file or abstract to a higher taxonomic rank and generate it anew.\
-							Sorry!" << endl;
-					iMem = 1073741824; // 1024^3
+				if (bAlternativeMode) {
+					iMemGiven -= Utilities::calculateSizeInByteOfUnorderedMap(mIDsAsIdx);
+					mAccToID.clear();
+				}
+				
+				debugBarrier
+
+				if (_bVerbose && !bAlternativeMode) {
+					cout << "OUT: Creating internal k-mer container... " << endl;
 				}
 
-				Build<vecType, elemType> brick(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, static_cast<size_t>(iMem) / (sizeof(elemType)), iIdxCounter);
+				Build<vecType, elemType> brick;
+
+				if (bAlternativeMode || bContinue) {
+					brick.setMemberVariables(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, 0);
+				}
+				else {
+					brick.setMemberVariables(_sTemporaryPath, _iNumOfCall, _iNumOfThreads, static_cast<size_t>(iMem) / sizeof(elemType));
+				}
+
+				debugBarrier
 
 				size_t overallCharsRead = 0;
-				unique_ptr<vecType> dummy;
 
 				auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
-				for (auto& fileName : filesAndSize.first) {
-					if (_bVerbose) {
-						cout << "OUT: Current file: " << fileName.first << endl;
-					}
-
-					// check if gzipped
-					bool isGzipped = fileName.second;
-
-					if (isGzipped) {
+				if (!bContinue) {
+					for (auto& fileName : filesAndSize.first) {
 						if (_bVerbose) {
-							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
+							cout << "OUT: Current file: " << fileName.first << endl;
 						}
-						igzstream fastaFile_gz(fileName.first.c_str());
-						readFasta(fastaFile_gz, mAccToID, brick, dummy, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage);
-					}
-					else {
-						ifstream fastaFile(fileName.first);
-						fastaFile.seekg(0, fastaFile.end);
-						const uint64_t& iFileLength = fastaFile.tellg();
-						fastaFile.seekg(0, fastaFile.beg);
-						readFasta(fastaFile, mAccToID, brick, dummy, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+
+						// check if gzipped
+						bool isGzipped = fileName.second;
+
+						debugBarrier
+
+							if (isGzipped) {
+								if (_bVerbose) {
+									cout << "OUT: File is gzipped, no progress output can be shown." << endl;
+								}
+								igzstream fastaFile_gz(fileName.first.c_str());
+								
+								// Determine if protein or DNA sequence
+								if (!this->_bProtein) {
+									const string& sFirstSequence = Utilities::getFirstSequenceOfFile(fastaFile_gz);
+									this->detectAlphabet(sFirstSequence);
+									fastaFile_gz.close();
+									fastaFile_gz.open(fileName.first.c_str());
+								}
+								
+								if (bAlternativeMode) {
+									Utilities::FileReader<igzstream> fastaFileReader;
+									fastaFileReader.setFile(&fastaFile_gz);
+									readFastaAlternativeMode(fastaFileReader, fContentFile, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage, iMemGiven);
+								}
+								else {
+									readFasta(fastaFile_gz, mAccToID, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+								}
+							}
+							else {
+								ifstream fastaFile(fileName.first);
+
+								// Determine if protein or DNA sequence
+								if (!this->_bProtein) {
+									const string& sFirstSequence = Utilities::getFirstSequenceOfFile(fastaFile);
+									this->detectAlphabet(sFirstSequence);
+								}
+
+								const uint64_t& iFileLength = Utilities::getSizeOfFile(fileName.first);
+
+								if (bAlternativeMode) {
+									Utilities::FileReader<ifstream> fastaFileReader;
+									fastaFileReader.setFile(&fastaFile);
+									readFastaAlternativeMode(fastaFileReader, fContentFile, brick, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage, iMemGiven);
+								}
+								else {
+									readFasta(fastaFile, mAccToID, brick, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+								}
+							}
+						debugBarrier
 					}
 				}
 
+				if (_bVerbose) {
+					cout << "OUT: Merging temporary index files... " << endl;
+				}
 				
+				debugBarrier
 				// Finalize
-				brick.IntToExtPart();
+				if (!bAlternativeMode && !bContinue) {
+					brick.IntToExtPart();
+				}
+
+				if (bContinue) {
+					auto vecOfSizes = brick.getVectorSizesVec();
+					auto filesInTemp = Utilities::gatherFilesAndSizesFromPath(_sTemporaryPath);
+					sort(filesInTemp.begin(), filesInTemp.end(), [](const pair<string, size_t>& a, const pair<string, size_t>& b) { return a.first < b.first; });
+					brick.setNumOfContainers(filesInTemp.size());
+					for (const auto& entry : filesInTemp) {
+						vecOfSizes->push_back(entry.second / sizeof(elemType));
+					}
+				}
 				const uint64_t& iSizeOfFinalIndex = brick.mergeTemporaries(fOutFile);
 
+				debugBarrier
+
 				if (iSizeOfFinalIndex == 0) {
-					throw runtime_error("Index is empty, maybe the input were translated sequences and you forgot -z?");
+					throw runtime_error("Index is empty, are all input files okay?");
 				}
 
-				unique_ptr<uint64_t[]> arrFrequencies;
-				arrFrequencies.reset(new uint64_t[iIdxCounter * _iHighestK]);
-				memset(arrFrequencies.get(), 0, iIdxCounter* _iHighestK * sizeof(uint64_t));
-				/*for (uint64_t i = 0; i < iIdxCounter * _iHighestK; ++i) {
-					arrFrequencies[i] = 0;
-				}*/
+				if (!bUpdate) {
 
-				// Create Trie and frequencies out of final file
-				stxxlFile* libFile = new stxxlFile(fOutFile, stxxlFile::RDONLY);
-				const vecType* libVec = new const vecType(libFile, iSizeOfFinalIndex);
-				Trie<intType> T(static_cast<int8_t>(((_iMaxK > 12) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(_iMinK), 6);
-				T.SaveToStxxlVec(libVec, fOutFile, &arrFrequencies, _iHighestK, mIDsAsIdx);
-
-				// If taxaOnly index is desired, create it here:
-				if (_bUnfunny) {
-					Utilities::checkIfFileCanBeCreated(fOutFile+"_taxOnly");
-					stxxlFile* taxaOnlyFile = new stxxlFile(fOutFile+"_taxOnly", stxxlFile::RDWR);
-					taxaOnly* taxaOnlyFileVec = new taxaOnly(taxaOnlyFile, iSizeOfFinalIndex);
-
-					auto tOIt = taxaOnlyFileVec->begin();
-					for (const auto& elem : *libVec) {
-						*tOIt = static_cast<uint16_t>(mIDsAsIdx.find(elem.second)->second);
-						++tOIt;
+					if (_bVerbose) {
+						cout << "OUT: Creating trie... " << endl;
 					}
 
-					taxaOnlyFileVec->export_files("_");
-					delete taxaOnlyFileVec;
-					delete taxaOnlyFile;
-					delete libVec;
-					libFile->close_remove();
-					delete libFile;
+					debugBarrier
 
-					remove(fOutFile.c_str());
-					Utilities::copyFile(fOutFile + "_taxOnly", fOutFile);
-				}
+					// Create Trie and frequencies out of final file
+					unique_ptr<stxxlFile> libFile(new stxxlFile(fOutFile, stxxlFile::RDONLY));
+					unique_ptr<const vecType> libVec(new const vecType(libFile.get(), iSizeOfFinalIndex));
+					Trie<intType> T(static_cast<int8_t>(((_iMaxK > 12) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(_iMinK), 6);
+					T.SaveToStxxlVec(libVec.get(), fOutFile);
+					debugBarrier
 
-				// write frequency file
-				/// first line
-				ofstream outFile(fOutFile + "_f.txt");
-				outFile << "non_unique";
-				for (int32_t k = 0; k < _iHighestK; ++k) {
-					outFile << "\t" << arrFrequencies[k];
-				}
-				outFile << endl;
-				/// rest
-				content.clear();
-				content.seekg(0);
-				for (uint32_t j = 1; j < iIdxCounter && getline(content, sDummy); ++j) {
-					const auto& line = Utilities::split(sDummy, '\t');
-					outFile << line[0] << "\t";
-					outFile << arrFrequencies[j * _iHighestK];
-					for (int32_t k = 1; k < _iHighestK; ++k) {
-						outFile << "\t" << arrFrequencies[j * _iHighestK + k];
+					// If taxaOnly index is desired, create it here:
+					if (_bUnfunny) {
+						Utilities::checkIfFileCanBeCreated(fOutFile + "_taxOnly");
+						stxxlFile* taxaOnlyFile = new stxxlFile(fOutFile + "_taxOnly", stxxlFile::RDWR);
+						taxaOnly* taxaOnlyFileVec = new taxaOnly(taxaOnlyFile, iSizeOfFinalIndex);
+
+						auto tOIt = taxaOnlyFileVec->begin();
+						for (const auto& elem : *libVec) {
+							*tOIt = static_cast<uint16_t>(mIDsAsIdx.find(elem.second)->second);
+							++tOIt;
+						}
+
+						taxaOnlyFileVec->export_files("_");
+						delete taxaOnlyFileVec;
+						delete taxaOnlyFile;
+
+						remove(fOutFile.c_str());
+						Utilities::copyFile(fOutFile + "_taxOnly", fOutFile);
 					}
-					outFile << endl;
+
+					debugBarrier
+
+					if (_bVerbose) {
+						cout << "OUT: Creating frequency file... " << endl;
+					}
+
+					libVec.reset();
+					libFile.reset();
+					// create frequency file
+					this->GetFrequencyK<vecType>(fContentFile, fOutFile, iMemGiven, mIDsAsIdx);
 				}
+
+				debugBarrier
+				return make_tuple(mIDsAsIdx, iSizeOfFinalIndex);
 			}
 			catch (invalid_argument&) {
 				cerr << "ERROR: content file doesn't have the right format. If you'd like to use non-numeric taxids, please apply the --taxidasstr flag." << endl;
-				return;
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
 			}
+			return make_tuple(unordered_map<uint32_t, uint32_t>(), 0);
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Merge two existing indices into a new one
-		void MergeTwoIndices(const string& index_1, const string& index_2, const string& index_out, const string& contentFile, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
+		void MergeTwoIndices(const string& index_1, const string& index_2, const string& index_out, const string& contentFile, const int64_t& iMemory, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys = make_pair(unordered_map<uint32_t, uint32_t>(), unordered_map<uint32_t, uint32_t>())) {
 			try {
 				// test if files exists
 				if (!ifstream(contentFile)) {
 					throw runtime_error("Content file not found.");
-				}
-
-				// content file
-				uint32_t iIdxCounter = 1;
-				unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
-				unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
-				ifstream content(contentFile);
-				string sDummy = "";
-				bool bTaxIdsAsStrings = false;
-				while (getline(content, sDummy)) {
-					if (sDummy != "") {
-						const auto& line = Utilities::split(sDummy, '\t');
-						if (line.size() >= 5 && !bTaxIdsAsStrings) {
-							bTaxIdsAsStrings = true;
-						}
-						if (line.size() >= 4) {
-							mIdxToName[iIdxCounter] = line[0];
-							if (bTaxIdsAsStrings) {
-								mIDsAsIdx[stoul(line[4])] = iIdxCounter;
-							}
-							else {
-								mIDsAsIdx[stoul(line[1])] = iIdxCounter;
-							}
-							++iIdxCounter;
-						}
-						else {
-							throw runtime_error("Content file contains less than 4 columns, it may be damaged...");
-						}
-					}
 				}
 
 				Build<vecType, elemType> brick;
@@ -1850,37 +2169,34 @@ namespace kASA {
 				unique_ptr<vecType> vecOut(new vecType(stxxlVecOut.get(), iSizeOfFirstLib + iSizeOfSecondLib));
 				typename vecType::bufwriter_type vecOutBuff(*vecOut);
 
-				//merge
-				unique_ptr<uint64_t[]> arrFrequencies;
-				arrFrequencies.reset(new uint64_t[iIdxCounter * _iHighestK]);
-				for (uint64_t i = 0; i < iIdxCounter * _iHighestK; ++i) {
-					arrFrequencies[i] = 0;
+				if (_bVerbose) {
+					cout << "OUT: Merging files... " << endl;
 				}
 
-				const auto& vOutSize = brick.merge(vecOutBuff, vec1Buff, iSizeOfFirstLib, vec2->cbegin(), vec2->cend(), arrFrequencies, mIDsAsIdx, mapsForDummys);
+				//merge
+				const auto& vOutSize = brick.merge(vecOutBuff, vec1Buff, iSizeOfFirstLib, vec2->cbegin(), vec2->cend(), mapsForDummys);
 				vecOut->resize(vOutSize, true);
+				vecOutBuff.finish();
 
 				// save additional stuff
 				vecOut->export_files("_");
-				ofstream fOutInfo(index_out + "_info.txt");
-				fOutInfo << vecOut->size();
-				if (is_same<vecType, contentVecType_128>::value) {
-					fOutInfo << endl << 128;
-				}
-
-				ofstream outFile(index_out + "_f.txt");
-				for (uint32_t j = 0; j < iIdxCounter; ++j) {
-					outFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
-					outFile << arrFrequencies[j * _iHighestK];
-					for (int32_t k = 1; k < _iHighestK; ++k) {
-						outFile << "\t" << arrFrequencies[j * _iHighestK + k];
-					}
-					outFile << endl;
+				
+				if (_bVerbose) {
+					cout << "OUT: Creating trie... " << endl;
 				}
 
 				// trie
 				Trie<intType> T(static_cast<int8_t>(((is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(_iMinK), 6);
 				T.SaveToStxxlVec(vecOut.get(), index_out);
+
+				vecOut.reset();
+				stxxlVecOut.reset();
+
+				if (_bVerbose) {
+					cout << "OUT: Creating frequency file... " << endl;
+				}
+
+				this->GetFrequencyK<vecType>(contentFile, index_out, iMemory);
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

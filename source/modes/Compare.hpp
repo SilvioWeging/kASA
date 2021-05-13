@@ -32,7 +32,6 @@ namespace kASA {
 
 		typedef Read<contentVecType, elemType, intType> Base;
 
-		const bool _bTranslated = false;
 		bool bUnfunny = false;
 		mutex m_exceptionLock;
 		exception_ptr someThingWentWrong;
@@ -40,7 +39,7 @@ namespace kASA {
 		vector<pair<string, uint32_t>> _matchedkMers;
 
 	public:
-		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const bool& bProtein = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read<contentVecType, elemType, intType>(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, bProtein, stxxl_mode, bSixFrames, bUnfunny), _bTranslated(bProtein), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
+		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read<contentVecType, elemType, intType>(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames, bUnfunny), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
 
 		// for output
 		int32_t iNumOfBeasts = 3;
@@ -97,7 +96,7 @@ namespace kASA {
 				this->mIdxToTax.reset(new vector<uint32_t>);
 
 				ifstream fContent(sContentFile);
-				uint32_t iAmountOfSpecies = 1;
+				uint32_t iNumberOfSpecies = 1;
 				string sTempLine = "";
 				bool bTaxIdsAsStrings = false;
 				this->mTaxToIdx->insert(make_pair(0, 0));
@@ -114,11 +113,11 @@ namespace kASA {
 							iAvailableMemory -= this->mOrganisms->back().size() * sizeof(char);
 							if (bTaxIdsAsStrings) {
 								this->mIdxToTax->push_back(stoul(tempLineContent[4]));
-								this->mTaxToIdx->insert(make_pair(stoul(tempLineContent[4]), iAmountOfSpecies++));
+								this->mTaxToIdx->insert(make_pair(stoul(tempLineContent[4]), iNumberOfSpecies++));
 							}
 							else {
 								this->mIdxToTax->push_back(stoul(tempLineContent[1]));
-								this->mTaxToIdx->insert(make_pair(stoul(tempLineContent[1]) , iAmountOfSpecies++));
+								this->mTaxToIdx->insert(make_pair(stoul(tempLineContent[1]) , iNumberOfSpecies++));
 							}
 						}
 						else {
@@ -134,7 +133,7 @@ namespace kASA {
 
 				// get frequencies
 				ifstream fFrequencies(sLibFile + "_f.txt");
-				this->mFrequencies.reset(new uint64_t[iAmountOfSpecies]);
+				this->mFrequencies.reset(new uint64_t[iNumberOfSpecies]);
 				uint32_t iCounterForFreqs = 0;
 				while (getline(fFrequencies, sTempLine)) {
 					if (sTempLine != "") {
@@ -1024,7 +1023,7 @@ namespace kASA {
 							debugBarrier
 							kMerScore = vReadIDtoGenID[readIdx][iSpecIdx];
 							debugBarrier
-							if (_bTranslated) {
+							if (Base::_bProtein) {
 								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK + 1)));
 							}
 							else {
@@ -1369,7 +1368,7 @@ namespace kASA {
 
 				for (auto it = vTempResultVec.begin(); it != vTempResultVec.end();) {
 					double relativeScore = 0.0;
-					if (_bTranslated) {
+					if (Base::_bProtein) {
 						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - Base::_iHighestK + 1)));
 					}
 					else {
@@ -1918,6 +1917,7 @@ namespace kASA {
 				}
 				debugBarrier
 
+
 				/*unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
 				unique_ptr<unique_ptr<const contentVecType>[]> vLib;
 				unique_ptr<unique_ptr<const index_t_p>[]> vLibParted_p;
@@ -2145,6 +2145,18 @@ namespace kASA {
 						fast_q_a_File_gz->rdbuf()->pubsetbuf(&inFilebuffer[0], 2097152);
 						fast_q_a_File_gz->open(inFile.first.c_str());
 						bIsGood = fast_q_a_File_gz->good();
+						
+						// Determine if protein or DNA sequence
+						if (!Base::_bProtein) {
+							const string& sFirstSequence = Utilities::getFirstSequenceOfFile(*fast_q_a_File_gz);
+							Base::detectAlphabet(sFirstSequence);
+							// gzstream does not allow seek, therefore the file must be resetted the hard way
+							fast_q_a_File_gz.reset(new igzstream());
+							fast_q_a_File_gz->rdbuf()->pubsetbuf(&inFilebuffer[0], 2097152);
+							fast_q_a_File_gz->open(inFile.first.c_str());
+						}
+
+						// Determine if fasta or fastq
 						char cLessOrAt = static_cast<char>(fast_q_a_File_gz->peek());
 						if (cLessOrAt == '>') {
 							bIsFasta = true;
@@ -2174,6 +2186,14 @@ namespace kASA {
 						fast_q_a_File->open(inFile.first);
 						bIsGood = fast_q_a_File->good();
 
+						// Determine if protein or DNA sequence
+						// Determine if protein or DNA sequence
+						if (!Base::_bProtein) {
+							const string& sFirstSequence = Utilities::getFirstSequenceOfFile(*fast_q_a_File);
+							Base::detectAlphabet(sFirstSequence);
+						}
+
+						// Determine if fasta or fastq
 						char cLessOrAt = static_cast<char>(fast_q_a_File->peek());
 						if (cLessOrAt == '>') {
 							bIsFasta = true;
@@ -2270,8 +2290,6 @@ namespace kASA {
 						//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
 						iNumOfReads = transferBetweenRuns->iNumOfNewReads;
 
-
-
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
 						cout << "Input_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
@@ -2315,7 +2333,7 @@ namespace kASA {
 
 						
 						auto timeWholePartEnd = std::chrono::high_resolution_clock::now();
-						if (Base::_bVerbose) {
+						if (Base::_bVerbose && !isGzipped) {
 							if (iLastProgress != 0) {
 								cout << "OUT: Estimated remaining time needed for this file: " << static_cast<double>(iFileLength - transferBetweenRuns->iNumOfCharsRead) / (transferBetweenRuns->iNumOfCharsRead - iLastProgress) * static_cast<double>(chrono::duration_cast<std::chrono::seconds>(timeWholePartEnd - timeWholePartStart).count()) << "s" << endl;
 								timeWholePartStart = std::chrono::high_resolution_clock::now();

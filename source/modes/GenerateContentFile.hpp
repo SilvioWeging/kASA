@@ -21,12 +21,21 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Generate temporary content file(s) in case not enough memory is available to hold the unordered_maps
 		inline void generateTemporaryContentFile(const string& sTempCFilePath, const string& sTaxonomyPath, string sTaxonomicLevel, const bool& bTaxIdsAsStrings, const string& sAccToTaxFiles, pair<uint32_t, uint32_t> poolAndNames, unordered_map<string, bool>& vAccessions, unordered_map<string, uint32_t>& vEntriesWithoutAccNr, unordered_map<string, string>& vNamesFromFasta) {
+			if (_bVerbose) {
+				cout << "OUT: Generating temporary content file: " << sTempCFilePath << endl;
+			}
+			
+			debugBarrier
 			ofstream contentFile = Utilities::createFileAndGetIt(sTempCFilePath);
 
 			size_t iIdentifiedCounter = 0;
 			unordered_map<string, unordered_set<string>> taxWithAccNrs;
 			unordered_map<string, string> taxToNames;
 			bool bNotAllFound = true;
+
+			if (_bVerbose) {
+				cout << "OUT: Assigning taxids... " << endl;
+			}
 
 			if (sTaxonomicLevel == "lowest") {
 				for (auto& entry : vAccessions) {
@@ -44,6 +53,7 @@ namespace kASA {
 					}
 				}
 				bNotAllFound = false;
+				debugBarrier
 			}
 			else {
 				auto files = Utilities::gatherFilesFromPath(sAccToTaxFiles).first;
@@ -79,7 +89,7 @@ namespace kASA {
 					}
 
 
-
+					debugBarrier
 
 					while (((isGzipped) ? getline(acc2TaxGZ, sDummy) : getline(acc2Tax, sDummy)) && bNotAllFound) {
 						const auto& columns = Utilities::split(sDummy, '\t');
@@ -105,10 +115,12 @@ namespace kASA {
 							}
 						}
 					}
+					debugBarrier
 				}
 			}
 			vNamesFromFasta.clear();
 
+			debugBarrier
 			////////////////////
 			if (_bVerbose && bNotAllFound) {
 				cout << "OUT: The accession numbers without a taxid will be written to " + _sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_accessionsWithoutTaxid.txt" << endl;
@@ -130,6 +142,7 @@ namespace kASA {
 				}
 			}
 			vAccessions.clear();
+			debugBarrier
 
 			////////////////////
 			if (_bVerbose) {
@@ -145,14 +158,14 @@ namespace kASA {
 				--pool;
 			}
 
+			debugBarrier
 			////////////////////
 			if (_bVerbose) {
 				cout << "OUT: Fetching name(s)..." << endl;
 			}
 
 			//taxToNames
-			if (taxToNames.empty())
-			{
+			if (taxToNames.empty()) {
 				ifstream names(sTaxonomyPath + "names.dmp");
 				string sDummy = "";
 				while (getline(names, sDummy)) {
@@ -163,6 +176,7 @@ namespace kASA {
 				}
 			}
 
+			debugBarrier
 			////////////////////
 			if (_bVerbose) {
 				cout << "OUT: Creating dictionary to map taxid(s) to your specified tax. level..." << endl;
@@ -178,6 +192,7 @@ namespace kASA {
 				}
 			}
 
+			debugBarrier
 			////////////////////
 			if (_bVerbose) {
 				cout << "OUT: Linking to your specified tax. level..." << endl;
@@ -239,10 +254,11 @@ namespace kASA {
 				taxWithAccNrs.clear();
 			}
 
+			debugBarrier
 			////////////////////
 
 			if (_bVerbose) {
-				cout << "OUT: Creating content file..." << endl;
+				cout << "OUT: Writing to temporary content file..." << endl;
 			}
 
 			uint32_t iUnnamedCounter = 0;
@@ -278,6 +294,10 @@ namespace kASA {
 
 			vEntriesWithoutAccNr.clear();
 
+			if (_bVerbose) {
+				cout << "OUT: Finished generating temporary content file, either resuming with gathering accessions or writing to final content file... " << endl;
+			}
+			debugBarrier
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -289,7 +309,7 @@ namespace kASA {
 						throw runtime_error("The taxonomy files couldn't be found");
 					}
 				}
-
+				debugBarrier
 				Utilities::checkIfFileCanBeCreated(sOutput);
 
 				auto files = Utilities::gatherFilesFromPath(sInput).first;
@@ -310,6 +330,7 @@ namespace kASA {
 					+ 2 * sizeof(unordered_map<string, string>)
 					+ sizeof(unordered_map<string, unordered_set<string>>); // all unordered_maps that are memory critical
 
+				debugBarrier
 				for (const auto& file : files) {
 					ifstream fastaFile;
 					igzstream fastaFileGZ;
@@ -321,6 +342,7 @@ namespace kASA {
 						fastaFile.open(file.first);
 					}
 
+					debugBarrier
 					string sDummy = "";
 					while ((file.second) ? getline(fastaFileGZ, sDummy) : getline(fastaFile, sDummy)) {
 						if (sDummy != "") {
@@ -352,13 +374,16 @@ namespace kASA {
 							if (iMemoryAllocated > iMemoryAvailable) {
 								iNumOfLegitAccessions += vAccessions.size();
 								iNumOfDummys += vEntriesWithoutAccNr.size();
+								debugBarrier
 								generateTemporaryContentFile(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCounter) + ".txt", sTaxonomyPath, sTaxonomicLevel, bTaxIdsAsStrings, sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
 								++iTemporaryCounter;
 								iMemoryAllocated = 0;
+								debugBarrier
 							}
 						}
 					}
 				}
+				debugBarrier
 
 				iNumOfLegitAccessions += vAccessions.size();
 				iNumOfDummys += vEntriesWithoutAccNr.size();
@@ -366,13 +391,15 @@ namespace kASA {
 				if (iTemporaryCounter == 0) {
 					if (_bVerbose) {
 						cout << "OUT: " << iNumOfLegitAccessions << " legit accession number(s) found in " << files.size() << " file(s)." << endl
-							<< "OUT: " << iNumOfDummys << " entr(y/ies) got a dummy ID." << endl
+							<< "OUT: " << iNumOfDummys << " entr(y/ies) will get a dummy ID." << endl
 							<< "OUT: Creating content file..." << endl;
 					}
+					debugBarrier
 					generateTemporaryContentFile(sOutput, sTaxonomyPath, sTaxonomicLevel, bTaxIdsAsStrings, sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
 				}
 				else {
 					if (vAccessions.size()) {
+						debugBarrier
 						generateTemporaryContentFile(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCounter) + ".txt", sTaxonomyPath, sTaxonomicLevel, bTaxIdsAsStrings, sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
 						++iTemporaryCounter;
 					}
@@ -383,22 +410,25 @@ namespace kASA {
 							<< "OUT: Merging temporary content files..." << endl;
 					}
 
+					debugBarrier
 					string sTempFinal1 = _sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_final1.txt";
 					string sTempFinal2 = _sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_final2.txt";
 					mergeContentFiles(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_0.txt", _sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_1.txt", false, sTempFinal1);
 					remove((_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_0.txt").c_str());
 					remove((_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_1.txt").c_str());
+					debugBarrier
 					for (uint32_t iTemporaryCFilesIdx = 2; iTemporaryCFilesIdx < iTemporaryCounter; ++iTemporaryCFilesIdx) {
 						string currentFile = _sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCFilesIdx) + ".txt";
 						mergeContentFiles(sTempFinal1, currentFile, false, sTempFinal2);
 						swap(sTempFinal1, sTempFinal2);
 						remove(currentFile.c_str());
 					}
-
+					debugBarrier
 					Utilities::moveFile(sTempFinal1, sOutput);
 					remove(sTempFinal2.c_str());
 
 				}
+				debugBarrier
 
 			}
 			catch (...) {
@@ -436,7 +466,7 @@ namespace kASA {
 
 					return make_pair(sNewSpecIDs, sNewAccNrs);
 				};
-
+				debugBarrier
 				pair<uint32_t, uint32_t> pool(numeric_limits<uint32_t>::max(), 0); // first component counts downwards from the highest possible number to distinguish it from valid taxIDs, the second component gives the entry a name ID
 				vector<string> vListOfDummys;
 				unordered_map<uint32_t, uint32_t> mapOfOldDummyToNewDummy1;
@@ -473,6 +503,8 @@ namespace kASA {
 					bTaxIdsAsStrings = true;
 				}
 				auto compareFunc = [&bTaxIdsAsStrings](const string& a, const string& b) { if (bTaxIdsAsStrings) { return a < b; } else { return stoull(a) < stoull(b); } };
+
+				debugBarrier
 
 				while (fContent && fContent2) {
 					const auto& currLine1Split = Utilities::split(currLine1, '\t');
@@ -520,17 +552,42 @@ namespace kASA {
 					}
 				}
 
+				debugBarrier
 				while (fContent) {
 					const auto& currLine1Split = Utilities::split(currLine1, '\t');
-					fContentOut << currLine1Split[0] << "\t" << currLine1Split[1] << "\t" << currLine1Split[2] << "\t" << currLine1Split[3] << ((bTaxIdsAsStrings) ? ("\t" + Utilities::itostr(iLargestLineIndex++)) : "") << "\n";
+
+					if (currLine1Split[0].find("EWAN") != string::npos) {
+						if (bMergeExistingIndices) {
+							const auto& ewanTaxID = stoul(currLine1Split[1]);
+							mapOfOldDummyToNewDummy1.insert(make_pair(ewanTaxID, pool.first)); // get current dummy taxID and map to new one
+							pool.first--;
+						}
+						vListOfDummys.push_back(currLine1Split[3]);
+					}
+					else {
+						fContentOut << currLine1Split[0] << "\t" << currLine1Split[1] << "\t" << currLine1Split[2] << "\t" << currLine1Split[3] << ((bTaxIdsAsStrings) ? ("\t" + Utilities::itostr(iLargestLineIndex++)) : "") << "\n";
+					}
 					getline(fContent, currLine1);
 				}
+				debugBarrier
 				while (fContent2) {
 					const auto& currLine2Split = Utilities::split(currLine2, '\t');
-					fContentOut << currLine2Split[0] << "\t" << currLine2Split[1] << "\t" << currLine2Split[2] << "\t" << currLine2Split[3] << ((bTaxIdsAsStrings) ? ("\t" + Utilities::itostr(iLargestLineIndex++)) : "") << "\n";
+
+					if (currLine2Split[0].find("EWAN") != string::npos) {
+						if (bMergeExistingIndices) {
+							const auto& ewanTaxID = stoul(currLine2Split[1]);
+							mapOfOldDummyToNewDummy2.insert(make_pair(ewanTaxID, pool.first)); // get current dummy taxID and map to new one
+							pool.first--;
+						}
+						vListOfDummys.push_back(currLine2Split[3]);
+					}
+					else {
+						fContentOut << currLine2Split[0] << "\t" << currLine2Split[1] << "\t" << currLine2Split[2] << "\t" << currLine2Split[3] << ((bTaxIdsAsStrings) ? ("\t" + Utilities::itostr(iLargestLineIndex++)) : "") << "\n";
+					}
 					getline(fContent2, currLine2);
 				}
 
+				debugBarrier
 				uint32_t iDummyID = numeric_limits<uint32_t>::max();
 				for (const auto& entry : vListOfDummys) {
 					const auto& IDStr = to_string(iDummyID--);
@@ -547,15 +604,25 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Add new stuff to an existing content file
-		inline pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> addToContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sTaxonomicLevel, const string& contentFile, const bool& bTaxIdsAsStrings, const uint64_t& iMemoryAvail) {
+		inline pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> addToContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sTaxonomicLevel, const string& sExistingContentFile, const string& sNewContentFile, const bool& bTaxIdsAsStrings, const uint64_t& iMemoryAvail) {
 			// Warning: taxonomic levels must not change in an update
 			const string& temporaryContentFile = _sTemporaryPath + Utilities::itostr(_iNumOfCall) + "_tempContent.txt";
 			const string& temporaryContentOutFile = _sTemporaryPath + Utilities::itostr(_iNumOfCall) + "_tempContentOut.txt";
+
+			if (_bVerbose) {
+				cout << "OUT: Generating temporary content file from new data..." << endl;
+			}
+			debugBarrier
 			generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, temporaryContentFile, sTaxonomicLevel, bTaxIdsAsStrings, iMemoryAvail);
 
-			const auto& result = mergeContentFiles(temporaryContentFile, contentFile, true, temporaryContentOutFile);
-			remove(contentFile.c_str());
-			Utilities::moveFile(temporaryContentOutFile, contentFile);
+			if (_bVerbose) {
+				cout << "OUT: Merging content file from new data with the existing one..." << endl;
+			}
+			debugBarrier
+			const auto& result = mergeContentFiles(sExistingContentFile, temporaryContentFile, true, temporaryContentOutFile);
+			remove(temporaryContentFile.c_str());
+			remove(sNewContentFile.c_str());
+			Utilities::moveFile(temporaryContentOutFile, sNewContentFile);
 
 			return result;
 		}

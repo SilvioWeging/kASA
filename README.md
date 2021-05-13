@@ -2,9 +2,9 @@
 
 ![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/SilvioWeging/kASA) [![GitHub issues](https://img.shields.io/github/issues/SilvioWeging/kASA.svg)](https://github.com/SilvioWeging/kASA/issues) ![GitHub All Releases](https://img.shields.io/github/downloads/SilvioWeging/kASA/total.svg)
 
-This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</u>equences based on <u>A</u>mino acid-like encoding, the preprint can be found [here](https://doi.org/10.1101/713966).
+This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</u>equences based on <u>A</u>mino acid-like encoding, the published paper can be found [here](https://academic.oup.com/nar/advance-article/doi/10.1093/nar/gkab200/6204649).
 
-If this file is too long or cumbersome, please have a look at the wiki :)
+The README file is quite large so it might make sense to have a look at the wiki. I will also give context on code updates there.
 
 ## Table of content
 - [Things to know](#things-to-know-before-you-start)
@@ -212,7 +212,6 @@ The content file from the previous mode is given to kASA via the `-c` parameter 
 ##### Optional paramameters
 * `-c (--content) <file>`: Path and name of the content file either downloaded or created from genomic data.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
-* `-z (--translated)`: Tell kASA, that the input consists of protein sequences.
 * `--three`: Use only three reading frames instead of six. Halves index size but implies the usage of `--six` during identification if the orientation of the reads is unknown. Default: off.
 * `--one`: Use only one reading frame instead of six. Reduces final index size significantly but sacrifices accuracy and robustness. Default: off.
 * `--taxidasstr`: Taxonomic IDs are treated as strings and not integers. A fifth column will be added to the content file indicating the integer associated with this taxid.
@@ -233,7 +232,7 @@ You can input fasta or fastq files (depending on whether the first symbol is a `
 
 kASA supports paired-end files which are synchronous.
 
-To input translated sequences, add the `-z` flag. If you've used a custom alphabet for conversion, just use the same here by copying the `-a <file> <number>` part of your `build` call.
+Protein sequences are detected automatically. If you've used a custom alphabet for conversion, just use the same here by copying the `-a <file> <number>` part of your `build` call.
 
 Since kASA uses k-mers, a `k` can be given to influence accuracy. You can set these bounds by yourself with the `-k` parameter, the default lower bound is 7, the upper 12.
 Smaller `k`'s than 6 only make sense if your data is very noisy or you're working on amino acid level.
@@ -259,8 +258,6 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `-q (--rtt) <file>`: Path and name of the read ID to tax IDs output file. If not given, a profile-only version of kASA will be used which is much faster!
 ##### Optional paramameters
 * `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
-* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
- converted via the same alphabet to amino acids.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-k <upper> <lower>`: Bounds for `k`, all `k`'s in between will be evaluated as well. If your intuition is more like `<lower> <upper>` then that's okay too. Default: 12 7.
 * `--kH <upper>`: Set only the upper bound. If the index has been built with 128 bit size, k can be up to 25.
@@ -345,8 +342,6 @@ The index and trie is loaded once in the beginning and then all threads access t
 * `-q (--rtt) <file>`: Path and prefix of the read ID to tax IDs output files.
 ##### Optional paramameters
 * `-r (--ram)`: Loads the index into primary memory. If you don't provide enough RAM for this, it will fall back to using secondary memory. Default: false.
-* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
- converted via the same alphabet to amino acids.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `-k <upper> <lower>`: Bounds for `k`, all `k`'s in between will be evaluated as well. If your intuition is more like `<lower> <upper>` then that's okay too. Default: 12 7.
 * `--kH <upper>`: Set only the upper bound. If the index has been built with 128 bit size, k can be up to 25.
@@ -384,8 +379,6 @@ If you've created the content file together with the index, this default content
 * `-o (--outgoing) <file>`: Either the existing index or a new file name, depending on whether you want to keep the old file or not. Default: overwrite.
 * `-l (--deleted) <file>`: delete taxa via the NCBI taxonomy file.
 ##### Optional paramameters
-* `-z (--translated)`: Tell kASA, that the input consists of protein sequences. Note, that the index must've been
- converted via the same alphabet to amino acids. Currently in BETA.
 * `-a (--alphabet) <file> <number>`: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id (can be a string). Please use only letters in the range ['A',']'] from the ASCII table for your custom alphabet. Default: Hardcoded translation table.
 * `--three`: Use only three reading frames instead of six. Default: off.
 ##### Example calls
@@ -425,9 +418,10 @@ This mode merges two indices into one.
 Both indices must have been created with the same bit size (64 or 128). The content files are also merged. You cannot overwrite indices this way.
 
 ##### Necessary paramameters
+* `-c (--content) <file>`: Content file that already contains all taxa of both indices (if you have it already, for example). Default: none.
 * `-c1 <file>`: Content file of the first index. Default: <index>_content.txt
 * `-c2 <file>`: Content file of the second index. Default: Same as above.
-* `-c (--content) <file>`: Content file in which the two will be merged. Default: Same as above.
+* `-co <file>`: Content file in which the two will be merged. Default: Same as above.
 * `-d (--database) <file>`: First index.
 * `-i (--input) <file>`: Second index.
 * `-o (--outgoing) <file>`: Resulting merged index. Default: None.
@@ -435,7 +429,9 @@ Both indices must have been created with the same bit size (64 or 128). The cont
 ##### Example call
 ``` 
 <path to kASA>/kASA merge -c <content file> -d <path and name of the first index file> -i <path and name of the second index> -o <path and name of the new index>
-e.g.: [weging@example:/kASA$] build/kASA merge -c example/work/content_merged.txt -c1 example/work/index/index_1_content.txt -d example/work/index/index_1 -i example/work/index/index_2 -o example/work/index/index_merged
+or
+<path to kASA>/kASA merge -co <resulting content file> -c1 <content file of first index> -c2 <content file of second index> -d <path and name of the first index file> -i <path and name of the second index> -o <path and name of the new index>
+e.g.: [weging@example:/kASA$] build/kASA merge -co example/work/content_merged.txt -c1 example/work/index/index_1_content.txt -c2 example/work/index/index_2_content.txt -d example/work/index/index_1 -i example/work/index/index_2 -o example/work/index/index_merged
 ``` 
 
 ### Miscellaneous

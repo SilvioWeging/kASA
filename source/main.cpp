@@ -55,7 +55,6 @@ If -c is not specified:\n\
 \n\
 Optional parameters:\n\
 -a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
--z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
 -t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
 -n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
 -m (--memory) <number>: Amount of Gigabytes available to kASA.If you don't provide enough, a warning will be written and it attempts to use as little as possible but may crash. If you provide more than your system can handle, it will crash or thrash. If you write \"inf\" instead of a number, kASA assumes that you have no memory limit. Default: 5 GB.\n\
@@ -88,7 +87,6 @@ Optional parameters:\n\
 --kraken: Sets the output format to a kraken like tsv format.\n\
 -e (--unique): Ignores duplicates of k-mers in every read.This helps removing bias from repeats but messes with error scores, so consider it BETA.\n\
 -a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
--z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
 \n\
 -t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
 -n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
@@ -118,7 +116,6 @@ Necessary parameters:\n\
 \n\
 Optional parameters:\n\
 -a (--alphabet) <file> <number>: If you'd like to use a different translation alphabet formated in the NCBI compliant way, provide the file (gc.prt) and the id. Default: Hardcoded translation table.\n\
--z (--translated): Tell kASA, that the input consists of protein sequences. Currently in BETA.\n\
 \n\
 -t (--temp) <path>: Path to temporary directory where files are stored that are either deleted automatically or can savely be deleted after kASA finishes. Defaults depend on your OS.\n\
 -n (--threads) <number>: Number of parallel threads.Recommendation for different settings (due to IO bottleneck): HDD: 1, SSD: 2-4, RAM disk: 2-?. Note, that when compiling with C++17 enabled on Windows, some routines use all available cores provided by the hardware (because of the implementation of parallel STL algorithms). Default: 1.\n\
@@ -198,9 +195,10 @@ Optional parameters:\n\
 		else if (m == "merge") {
 		out = "This mode merged two indices together into one. Both indices must have been created with the same bit size (64 or 128). The content files are also merged. You cannot overwrite indices this way.\n\
 Necessary parameters:\n\
+-c(--content) <file>: Content file that already contains all taxids of both indices (if you already have it, for example). Default: None. \n\
 -c1 <file>: Content file of the first index. Default: <index>_content.txt\n\
--c2 <file>: Content file of the second index.Default: Same as above.\n\
--c(--content) < file > : Content file in which the two will be merged.Default: Same as above.\n\
+-c2 <file>: Content file of the second index. Default: Same as above.\n\
+-co <file> : Content file in which the two will be merged. Default: Same as above.\n\
 -d(--database) < file > : First index.\n\
 -i(--input) < file > : Second index.\n\
 -o(--outgoing) < file > : Resulting merged index.Default: None.\n";
@@ -214,8 +212,8 @@ int main(int argc, char* argv[]) {
 
 		vector<string> vParameters(argv, argv + argc);
 
-		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false;
+		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", contentFileAfterUpdate = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
+		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		kASA::OutputFormat eOutputFormat = kASA::OutputFormat::Json;
 		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
@@ -280,6 +278,9 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "-e" || sParameter == "--unique") {
 				bUnique = true;
+			}
+			else if (sParameter == "--continue") {
+				bContinue = true;
 			}
 			else if (sParameter == "-f" || sParameter == "--acc2tax") {
 				sAccToTaxFiles = Utilities::removeSpaceAndEndline(vParameters[++i]);
@@ -419,6 +420,10 @@ int main(int argc, char* argv[]) {
 					throw runtime_error("Content file 2 not found");
 				}
 			}
+			else if (sParameter == "-co") {
+				contentFileAfterUpdate = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				Utilities::checkIfFileCanBeCreated(contentFileAfterUpdate);
+			}
 			else if (sParameter == "-1") {
 				sPairedEnd1 = Utilities::removeSpaceAndEndline(vParameters[++i]);
 				if (!ifstream(sPairedEnd1)) {
@@ -521,6 +526,11 @@ int main(int argc, char* argv[]) {
 			throw runtime_error("You'll have to decide between using one, three, or six frames. Currently, more than one option was chosen. Please check your parameters!");
 		}
 
+		// Set for build and update
+		if (bTranslated) {
+			bThreeFrames = true;
+		}
+
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		if (cMode == "build") {
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
@@ -546,30 +556,30 @@ int main(int argc, char* argv[]) {
 					genCFObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings, iMemorySizeAvail);
 				}
 			}
-			if (iMemorySizeAvail*0.9 < 1024ull * 1024ull * 1024ull) {
+			if (iMemorySizeAvail * 0.9 < 1024ull * 1024ull * 1024ull) {
 				throw runtime_error("Not enough memory given!");
 			}
 
 
 			if (iHigherK <= 12) {
-				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bTranslated, bUnfunny);
-				
+				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bUnfunny);
+
 				if (bOnlyOneFrame) {
 					readObj._bOnlyOneFrame = true;
 				}
-				
-				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
+
+				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, bContinue);
 			}
 			else {
-				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bTranslated, bUnfunny);
+				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bUnfunny);
 
 				if (bOnlyOneFrame) {
 					readObj._bOnlyOneFrame = true;
 				}
 
-				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway);
+				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, bContinue);
 			}
-			
+
 
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -596,15 +606,35 @@ int main(int argc, char* argv[]) {
 			}
 
 			// Content file was created together with the index
+			string sContentFileOut = "";
+			if (contentFileAfterUpdate != "") {
+				sContentFileOut = contentFileAfterUpdate;
+			}
+			else {
+				if (contentFileIn == "") {
+					sContentFileOut = sDBPathOut + "_content.txt";
+				} // else: create no new content file and instead take the one provided
+			}
+
 			if (contentFileIn == "") {
 				contentFileIn = indexFile + "_content.txt";
 			}
 
 			// get taxIds that are new and map the accession numbers to those
 			pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> mapsForDummys;
-			if (sAccToTaxFiles != "" && sTaxonomyPath != "") {
+			if (sContentFileOut != "") {
+				if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
+					throw runtime_error("No acc2Tax file or taxonomy path given...");
+				}
+
+
+				if (bVerbose) {
+					cout << "OUT: Creating content file: " << sContentFileOut << endl;
+				}
+
 				kASA::ContentFile genCFObj(kASAObj);
-				mapsForDummys = genCFObj.addToContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sTaxLevel, contentFileIn, bTaxIdsAsStrings, iMemorySizeAvail);
+				mapsForDummys = genCFObj.addToContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sTaxLevel, contentFileIn, sContentFileOut, bTaxIdsAsStrings, iMemorySizeAvail);
+				contentFileIn = sContentFileOut; // newly created content file will now be taken for the updated index
 			}
 
 			ifstream fLibInfo(indexFile + "_info.txt");
@@ -620,14 +650,14 @@ int main(int argc, char* argv[]) {
 
 			
 			if (iVecType != 128) {
-				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bTranslated, bUnfunny);
+				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bUnfunny);
 				if (bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
 				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, mapsForDummys);
 			}
 			else {
-				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bTranslated, bUnfunny);
+				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bUnfunny);
 				if (bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
@@ -661,12 +691,12 @@ int main(int argc, char* argv[]) {
 			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
 			auto start = std::chrono::high_resolution_clock::now();
 			if (iVecType != 128) {
-				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bTranslated, bUnfunny);
-				updateObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut));
+				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bUnfunny);
+				updateObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), iMemorySizeAvail);
 			}
 			else {
-				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bTranslated, bUnfunny);
-				updateObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut));
+				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bUnfunny);
+				updateObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), iMemorySizeAvail);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -775,14 +805,17 @@ int main(int argc, char* argv[]) {
 			fLibInfo.close();
 
 			// Content file was created together with the index
-			if (contentFile1 == "") {
-				contentFile1 = indexFile + "_content.txt";
-			}
-			if (contentFile2 == "") {
-				contentFile2 = sInput + "_content.txt";
-			}
+
 			if (contentFileIn == "") {
-				contentFileIn = sDBPathOut + "_content.txt";
+				if (contentFile1 == "") {
+					contentFile1 = indexFile + "_content.txt";
+				}
+				if (contentFile2 == "") {
+					contentFile2 = sInput + "_content.txt";
+				}
+				if (contentFileAfterUpdate == "") {
+					contentFileAfterUpdate = sDBPathOut + "_content.txt";
+				}
 			}
 
 			// call Merge on the content files and indices
@@ -796,11 +829,21 @@ int main(int argc, char* argv[]) {
 					iLowerK = 12;
 				}
 
-				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bTranslated, bUnfunny);
-				kASA::ContentFile genCFObj(kASAObj);
-				auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileIn);
-				readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, res);
 				// call merge
+				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bUnfunny);
+				if (contentFileAfterUpdate != "") {
+					kASA::ContentFile genCFObj(kASAObj);
+					auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileAfterUpdate);
+					readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileAfterUpdate, iMemorySizeAvail, res);
+				}
+				else {
+					if (contentFileIn != "") {
+						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, iMemorySizeAvail);
+					}
+					else {
+						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFile1, iMemorySizeAvail);
+					}
+				}
 			}
 			else {
 				if ((iVecType == 128 && iVecType2 != 128) || (iVecType != 128 && iVecType2 == 128)) {
@@ -810,11 +853,20 @@ int main(int argc, char* argv[]) {
 				}
 				kASAObj._iHighestK = 25;
 				kASAObj._iMaxK = 25;
-				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bTranslated, bUnfunny);
-				kASA::ContentFile genCFObj(kASAObj);
-				auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileIn);
-				readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, res);
-				
+				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bUnfunny);
+				if (contentFileAfterUpdate != "") {
+					kASA::ContentFile genCFObj(kASAObj);
+					auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileAfterUpdate);
+					readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileAfterUpdate, iMemorySizeAvail, res);
+				}
+				else {
+					if (contentFileIn != "") {
+						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, iMemorySizeAvail);
+					}
+					else {
+						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFile1, iMemorySizeAvail);
+					}
+				}
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -863,7 +915,7 @@ int main(int argc, char* argv[]) {
 					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
 					iLowerK = 12;
 				}
-				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny);
+				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
 
 				if (bVisualize) {
 					kASAObj._bVisualize = true;
@@ -891,7 +943,7 @@ int main(int argc, char* argv[]) {
 					iHigherK = HIGHESTPOSSIBLEK;
 				}
 
-				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny);
+				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
 
 				if (bVisualize) {
 					kASAObj._bVisualize = true;
@@ -984,7 +1036,7 @@ int main(int argc, char* argv[]) {
 				}
 
 				debugBarrier
-				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny));
+				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny));
 
 				if (codonTable != "") {
 					kASAObj->setCodonTable(codonTable, sCodonID);
@@ -1026,7 +1078,7 @@ int main(int argc, char* argv[]) {
 					iHigherK = HIGHESTPOSSIBLEK;
 				}
 
-				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, bTranslated, sStxxlMode, bSixFrames, bUnfunny) );
+				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny) );
 
 				if (codonTable != "") {
 					kASAObj128->setCodonTable(codonTable, sCodonID);
@@ -1123,10 +1175,10 @@ int main(int argc, char* argv[]) {
 			fLibInfo.close();
 
 			if (iVecType != 128) {
-				kASAObj.GetFrequencyK<contentVecType_32p>(contentFileIn, indexFile, indexFile + "_f.txt");
+				kASAObj.GetFrequencyK<contentVecType_32p>(contentFileIn, indexFile, iMemorySizeAvail);
 			}
 			else {
-				kASAObj.GetFrequencyK<contentVecType_128>(contentFileIn, indexFile, indexFile + "_f.txt");
+				kASAObj.GetFrequencyK<contentVecType_128>(contentFileIn, indexFile, iMemorySizeAvail);
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

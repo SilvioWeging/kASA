@@ -24,7 +24,8 @@ namespace kASA {
 		//uint64_t _iConstSize = 0;
 		int32_t _iCounterOfContainers = 0;
 
-		size_t _iAmountOfSpace = 1024000, _iSoftSize = 0;
+		//size_t _iAmountOfSpace = 1024000;
+		size_t _iSoftSize = 0;
 
 #if __GNUC__ || defined(__llvm__)
 		int32_t _iNumOfThreads_ = 1;
@@ -35,13 +36,32 @@ namespace kASA {
 
 	public:
 
-		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t&) : _iSoftSize(iSoftLimit) {
-			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
+		Build(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit, const uint64_t&) {
 			//ofstream derp;
 			//derp.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
 			//derp.open(_sTempPath + to_string(_iFlagOfContainerIdx));
 			//derp.close();
 			//derp.open(_sTempPath + to_string(!_iFlagOfContainerIdx));
+
+			//_iAmountOfSpace = iSoftLimit;
+
+			/*arrFrequencies.reset(new uint64_t[iNumOfTaxa* _iHighestK]);
+			for (uint64_t i = 0; i < iNumOfTaxa * _iHighestK; ++i) {
+				arrFrequencies[i] = 0;
+			}*/
+			setMemberVariables(path, iNumOfCall, iNumOfThreads, iSoftLimit);
+		}
+
+		Build() {}
+
+		/////////////////////////////////////////////////////////////////////////////////////////
+	public:
+
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// a posteriori constructor
+		inline void setMemberVariables(const string& path, const int32_t& iNumOfCall, const int32_t& iNumOfThreads, const size_t& iSoftLimit) {
+			_sTempPath = path + "_temp_" + to_string(iNumOfCall) + "_";
+
 			try {
 				vInternal.reset(new vector<elemType>());
 				vInternal->reserve(iSoftLimit + 1);
@@ -51,22 +71,48 @@ namespace kASA {
 				throw;
 			}
 
-			_iAmountOfSpace = iSoftLimit;
+			_iSoftSize = iSoftLimit;
 
-			/*arrFrequencies.reset(new uint64_t[iNumOfTaxa* _iHighestK]);
-			for (uint64_t i = 0; i < iNumOfTaxa * _iHighestK; ++i) {
-				arrFrequencies[i] = 0;
-			}*/
 #if __GNUC__ || defined(__llvm__)
 			_iNumOfThreads_ = iNumOfThreads;
 #endif
 		}
 
-		Build() {}
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// For the alternative mode, where the size of the internal vector might change
+		inline void setInternalSize(const size_t& iSoftLimit) {
+			try {
+				vInternal.reset(new vector<elemType>());
+				vInternal->reserve(iSoftLimit + 1);
+			}
+			catch (const bad_alloc&) {
+				cerr << "ERROR: Not enough memory provided. Quitting now..." << endl;
+				throw;
+			}
+
+			_iSoftSize = iSoftLimit;
+		}
 
 		/////////////////////////////////////////////////////////////////////////////////////////
-	public:
+		// If someone wants to use this directly
+		inline vector<elemType>* getInternal() {
+			return &vInternal;
+		}
 
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// If the merging should be continued, the sizes must be recalculated
+		inline vector<uint64_t>* getVectorSizesVec() {
+			return &vVectorSizes;
+		}
+
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// Set num of containers 
+		inline void setNumOfContainers(const size_t& numberOfContainers) {
+			_iCounterOfContainers = static_cast<int32_t>(numberOfContainers);
+		}
+
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// add elements to internal vector until it is full
 		inline bool addToInt(const tuple<uint64_t,uint32_t>& elem) {
 			vInternal->push_back(elemType(get<0>(elem), get<1>(elem)));
 			if (vInternal->size() >= _iSoftSize) {
@@ -104,20 +150,10 @@ namespace kASA {
 		/////////////////////////////////////////////////////////////////////////////////////////
 		// It's like merging two sorted decks of cards into one
 		template<typename W, typename R, typename I>
-		inline uint64_t merge(W& vNCIt, R& it, const uint64_t& vecSize, I&& vIntItC, const I&& vIntEndItC, unique_ptr<uint64_t[]>& freqArray, const unordered_map<uint32_t, uint32_t>& mContent, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
+		inline uint64_t merge(W& vNCIt, R& it, const uint64_t& vecSize, I&& vIntItC, const I&& vIntEndItC, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
 			try {
 				elemType tSeenInt; //eliminate duplicates
 				bool bIndexIntChanged = false;
-				int32_t iLocalHighestK = (is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12;
-
-				auto countFreqs = [&mContent,&freqArray,&iLocalHighestK](const elemType& pair) {
-					const auto& idx = Utilities::checkIfInMap(mContent, pair.second)->second * iLocalHighestK;
-					for (uint8_t k = 0; k < iLocalHighestK; ++k) {
-						if (((pair.first >> 5 * k) & 31) != 30) {
-							freqArray[idx + k]++;
-						}
-					}
-				};
 
 				uint64_t ivCSizeCounter = 0, iElemCounter = 0;
 
@@ -136,12 +172,13 @@ namespace kASA {
 
 					if (it->first < vIntItC->first) {
 						elemType pair = *it;
-						auto res = mapsForDummys.first.find(pair.second);
-						if (res != mapsForDummys.first.end()) {
-							pair.second = res->second;
+						if (mapsForDummys.first.size()) {
+							auto res = mapsForDummys.first.find(pair.second);
+							if (res != mapsForDummys.first.end()) {
+								pair.second = res->second;
+							}
 						}
 						vNCIt << pair;
-						countFreqs(pair);
 						++it;
 						++ivCSizeCounter;
 						++iElemCounter;
@@ -151,12 +188,13 @@ namespace kASA {
 						if (it->first == vIntItC->first) {
 							if (it->second < vIntItC->second) {
 								elemType pair = *it;
-								auto res = mapsForDummys.first.find(pair.second);
-								if (res != mapsForDummys.first.end()) {
-									pair.second = res->second;
+								if (mapsForDummys.first.size()) {
+									auto res = mapsForDummys.first.find(pair.second);
+									if (res != mapsForDummys.first.end()) {
+										pair.second = res->second;
+									}
 								}
 								vNCIt << pair;
-								countFreqs(pair);
 								++it;
 								++ivCSizeCounter;
 								++iElemCounter;
@@ -165,24 +203,26 @@ namespace kASA {
 							else {
 								if (it->second > vIntItC->second) {
 									elemType pair = *vIntItC;
-									auto res = mapsForDummys.second.find(pair.second);
-									if (res != mapsForDummys.second.end()) {
-										pair.second = res->second;
+									if (mapsForDummys.second.size()) {
+										auto res = mapsForDummys.second.find(pair.second);
+										if (res != mapsForDummys.second.end()) {
+											pair.second = res->second;
+										}
 									}
 									vNCIt << pair;
-									countFreqs(pair);
 									++vIntItC;
 									++iElemCounter;
 									bIndexIntChanged = true;
 								}
 								else {
 									elemType pair = *vIntItC;
-									auto res = mapsForDummys.second.find(pair.second);
-									if (res != mapsForDummys.second.end()) {
-										pair.second = res->second;
+									if (mapsForDummys.second.size()) {
+										auto res = mapsForDummys.second.find(pair.second);
+										if (res != mapsForDummys.second.end()) {
+											pair.second = res->second;
+										}
 									}
 									vNCIt << pair;
-									countFreqs(pair);
 									++it;
 									++ivCSizeCounter;
 									++vIntItC;
@@ -193,12 +233,13 @@ namespace kASA {
 						}
 						else {
 							elemType pair = *vIntItC;
-							auto res = mapsForDummys.second.find(pair.second);
-							if (res != mapsForDummys.second.end()) {
-								pair.second = res->second;
+							if (mapsForDummys.second.size()) {
+								auto res = mapsForDummys.second.find(pair.second);
+								if (res != mapsForDummys.second.end()) {
+									pair.second = res->second;
+								}
 							}
 							vNCIt << pair;
-							countFreqs(pair);
 							++vIntItC;
 							++iElemCounter;
 							bIndexIntChanged = true;
@@ -210,12 +251,13 @@ namespace kASA {
 				//while (it != vC->cend()) {
 				while (ivCSizeCounter < vecSize) {
 					elemType pair = *it;
-					auto res = mapsForDummys.first.find(pair.second);
-					if (res != mapsForDummys.first.end()) {
-						pair.second = res->second;
+					if (mapsForDummys.first.size()) {
+						auto res = mapsForDummys.first.find(pair.second);
+						if (res != mapsForDummys.first.end()) {
+							pair.second = res->second;
+						}
 					}
 					vNCIt << pair;
-					countFreqs(pair);
 					++it;
 					++iElemCounter;
 					++ivCSizeCounter;
@@ -232,12 +274,13 @@ namespace kASA {
 					}
 
 					elemType pair = *vIntItC;
-					auto res = mapsForDummys.second.find(pair.second);
-					if (res != mapsForDummys.second.end()) {
-						pair.second = res->second;
+					if (mapsForDummys.second.size()) {
+						auto res = mapsForDummys.second.find(pair.second);
+						if (res != mapsForDummys.second.end()) {
+							pair.second = res->second;
+						}
 					}
 					vNCIt << pair;
-					countFreqs(pair);
 					++vIntItC;
 					++iElemCounter;
 				}
@@ -316,6 +359,18 @@ namespace kASA {
 				auto comparisonFunction = [](const pair<typename vecType::const_iterator, uint32_t>& it1, const pair<typename vecType::const_iterator, uint32_t>& it2) { return *(it1.first) < *(it2.first); };
 				priority_queue<pair<typename vecType::const_iterator,uint32_t>, vector<pair<typename vecType::const_iterator, uint32_t>>, decltype(comparisonFunction)> vCurrentIterators(comparisonFunction);
 
+				/*auto print_queue = [](priority_queue<pair<typename vecType::const_iterator, uint32_t>, vector<pair<typename vecType::const_iterator, uint32_t>>, decltype(comparisonFunction)> Q) {
+					while (!Q.empty()) {
+						cout << kASA::kMerToAminoacid(Q.top().first->first, 12) << endl;
+						Q.pop();
+					}
+					cout << endl;
+				};*/
+
+				size_t iNumOfVecsThatCanBeOpened = _iSoftSize * sizeof(elemType) / (vecType::block_size * vecType::page_size * 4); // It could be, that the memory needed to open the files is larger than the memory provided
+				//cout << "iNumOfVecsThatCanBeOpened: " << iNumOfVecsThatCanBeOpened << endl;
+				iNumOfVecsThatCanBeOpened = (iNumOfVecsThatCanBeOpened > FOPEN_MAX - 1) ? FOPEN_MAX - 1 : iNumOfVecsThatCanBeOpened;
+
 				auto maxNrOfFiles = remainingFiles;
 				while (remainingFiles != 1) {
 					// first gather as many files as permitted
@@ -323,20 +378,34 @@ namespace kASA {
 					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
 
 					uint64_t iSumSize = 0;
-					for (int32_t i = 0; i < (FOPEN_MAX - 1) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
-						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDONLY));
+					for (int32_t i = 0; i < static_cast<int32_t>(iNumOfVecsThatCanBeOpened) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
+						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDWR));
 						currentVecs[i].reset(new vecType(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
-						vCurrentIterators.push(make_pair(currentVecs[i]->cbegin(), i));
+						vCurrentIterators.push(make_pair(currentVecs[i]->cend() - 1, i));
 						iSumSize += vVectorSizes[iCurrentIdx];
 						remainingFiles--;
 					}
+
+					//print_queue(vCurrentIterators);
 
 					// create merge-file
 					Utilities::checkIfFileCanBeCreated(_sTempPath + to_string(_iCounterOfContainers));
 
 					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
-					unique_ptr<vecType> vNC(new vecType(fNCFile.get(), iSumSize));
-					typename vecType::bufwriter_type vNCIt(*vNC);
+					//unique_ptr<vecType> vNC(new vecType(fNCFile.get(), iSumSize));
+					size_t sizeOfAGigabyte = 1024 * 1024 * 1024 / sizeof(elemType);
+					unique_ptr<vecType> vNC(new vecType(fNCFile.get(), 0));
+					vNC->reserve(sizeOfAGigabyte);
+					auto addElement = [&](const uint64_t& iCurrentSize, const elemType& elem) {
+						if (iCurrentSize < vNC->size()) {
+							vNC->push_back(elem);
+						}
+						else {
+							vNC->reserve(vNC->size() + sizeOfAGigabyte);
+							vNC->push_back(elem);
+						}
+					};
+					//typename vecType::bufwriter_type vNCIt(*vNC);
 
 					elemType pSeen;
 					uint64_t iSizeOfNewVec = 0;
@@ -347,35 +416,34 @@ namespace kASA {
 						if (!(*(it.first) == pSeen)) {
 							// if not: write it to the output
 							pSeen = *(it.first);
-							vNCIt << pSeen;
+							//vNCIt << pSeen;
+							addElement(iSizeOfNewVec, pSeen);
 							++iSizeOfNewVec;
 						}
-						it.first++;
-
+						
 						// The end of that vector has been reached: take this iterator (and temporary vector) out of consideration
-						if (it.first == currentVecs[it.second]->cend()) {
-							const auto& whichOne = it.second;
-							currentVecs[whichOne].reset();
-							//currentVecs.erase(currentVecs.begin() + whichOne);
-							currentFiles[whichOne]->close_remove();
-							currentFiles[whichOne].reset();
-							//currentFiles.erase(currentFiles.begin() + whichOne);
+						if (it.first == currentVecs[it.second]->cbegin()) {
+							currentVecs[it.second].reset();
+
+							currentFiles[it.second]->close_remove();
+							currentFiles[it.second].reset();
+
 							vCurrentIterators.pop();
-							//cout << whichOne;
-							//for (size_t i = 0; i < vCurrentIterators.size(); ++i) {
-							//	cout << " " << currentVecs[i]->size() << endl;
-							//}
 						}
 						else {
+							it.first--;
+							currentVecs[it.second]->resize(currentVecs[it.second]->size() - 1, true);
+							
 							vCurrentIterators.pop();
 							vCurrentIterators.push(it);
 						}
 
-
+						//print_queue(vCurrentIterators);
 					}
-					vNCIt.finish();
+					//vNCIt.finish();
 					vVectorSizes.push_back(iSizeOfNewVec);
 					vNC->resize(iSizeOfNewVec, true);
+					std::reverse(vNC->begin(), vNC->end());
 
 					vNC->export_files("_");
 					++_iCounterOfContainers;
