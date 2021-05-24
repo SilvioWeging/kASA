@@ -2008,23 +2008,22 @@ Sorry!" << endl;
 								if (_bVerbose) {
 									cout << "OUT: File is gzipped, no progress output can be shown." << endl;
 								}
-								igzstream fastaFile_gz(fileName.first.c_str());
-								
+								unique_ptr<igzstream> fastaFile_gz(new igzstream(fileName.first.c_str()));
+
 								// Determine if protein or DNA sequence
 								if (!this->_bProtein) {
-									const string& sFirstSequence = Utilities::getFirstSequenceOfFile(fastaFile_gz);
+									const string& sFirstSequence = Utilities::getFirstSequenceOfFile(*fastaFile_gz);
 									this->detectAlphabet(sFirstSequence);
-									fastaFile_gz.close();
-									fastaFile_gz.open(fileName.first.c_str());
+									fastaFile_gz.reset(new igzstream(fileName.first.c_str()));
 								}
-								
+
 								if (bAlternativeMode) {
 									Utilities::FileReader<igzstream> fastaFileReader;
-									fastaFileReader.setFile(&fastaFile_gz);
+									fastaFileReader.setFile(fastaFile_gz.get());
 									readFastaAlternativeMode(fastaFileReader, fContentFile, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage, iMemGiven);
 								}
 								else {
-									readFasta(fastaFile_gz, mAccToID, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+									readFasta(*fastaFile_gz, mAccToID, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage);
 								}
 							}
 							else {
