@@ -131,8 +131,7 @@ typedef stxxl::syscall_file stxxlFile;
 #endif
 
 static bool _bShowLineDebugMode = false;
-#define debugBarrier \
-  if (_bShowLineDebugMode ) { cerr << "File: " << __FILE__ << " Line: " << __LINE__ << endl; }
+#define debugBarrier if (_bShowLineDebugMode ) { cerr << "File: " << __FILE__ << " Line: " << __LINE__ << endl; }
 
 
 typedef	stxxl::VECTOR_GENERATOR<packedBigPair, 4U, 4U, 2101248, stxxl::RC>::result contentVecType_32p; //2101248 is dividable by 4096(blocksize from stxxl) and 12( sizeof(packedBigPair) )
@@ -150,3 +149,4 @@ typedef stxxl::VECTOR_GENERATOR<packedBigPairTrie, 4U, 4U, 2097156, stxxl::RC>::
 typedef uint32_t readIDType;
 
 constexpr auto HIGHESTPOSSIBLEK = 25;
+constexpr uint64_t GIGABYTEASBYTES = 1024ull * 1024ull * 1024ull;

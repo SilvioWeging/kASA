@@ -132,6 +132,7 @@ private:
 
 class WorkerQueue {
 	vector<unique_ptr<thread> > pool; // this holds the threads
+	priority_queue<int32_t, vector<int32_t>> availableCores;
 	queue< pair<function<void(const int32_t&)>,int32_t> > tasks; // this holds the tasks
 	condition_variable cv_worker;
 	condition_variable cv_master;
@@ -162,8 +163,8 @@ public:
 	}
 
 	////////////////////////////////////////////////////////
-	inline void pushTask(const function<void(const int32_t&)>& task, const int32_t& iID) {
-		tasks.push(make_pair([task](const int32_t& id) { task(id); }, iID));
+	inline void pushTask(const function<void(const int32_t&)>& task, const int32_t& iNumOfThreads) {
+		tasks.push(make_pair([task](const int32_t& ithreads) { task(ithreads); }, iNumOfThreads));
 	}
 	
 	////////////////////////////////////////////////////////
@@ -192,6 +193,7 @@ private:
 				while (true) {
 
 					pair<function<void(const int32_t&)>,int32_t> task;
+					int32_t iNumOfAvailThreads = 0;
 					bool bQueueisEmpty = false;
 					{
 						std::unique_lock<std::mutex> lock(this->taskMutex);
@@ -208,6 +210,10 @@ private:
 							task = std::move(this->tasks.front());
 							this->tasks.pop();
 							bQueueisEmpty = this->tasks.empty();
+							if (!availableCores.empty()) {
+								iNumOfAvailThreads = this->availableCores.top();
+								this->availableCores.pop();
+							}
 						}
 						else {
 							continue;
@@ -219,7 +225,20 @@ private:
 						cv_master.notify_one();
 					}
 
-					task.first(task.second);
+					if (iNumOfAvailThreads) {
+						task.first(iNumOfAvailThreads);
+						{
+							std::unique_lock<std::mutex> lock(this->taskMutex);
+							this->availableCores.push(iNumOfAvailThreads);
+						}
+					}
+					else {
+						task.first(task.second);
+						{
+							std::unique_lock<std::mutex> lock(this->taskMutex);
+							this->availableCores.push(task.second);
+						}
+					}
 				}
 			}
 		)
@@ -236,7 +255,7 @@ class WorkerQueueWithIDs {
 	condition_variable cv_worker;
 	condition_variable cv_master;
 	mutex taskMutex, idsMutex;
-	bool stop = false;
+	bool stop = false;//, bStarted = false;
 
 public:
 	/////////////////////////////////////////////////////////

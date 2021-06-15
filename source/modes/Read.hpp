@@ -85,7 +85,12 @@ namespace kASA {
 
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
-					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
+					if (_bSpaced) {
+						dnaToAminoacidSpaced(sDna, iMaxKTimes3, j, &sTempFrame);
+					}
+					else {
+						dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
+					}
 					if (_bVisualize) {
 						_translatedFramesForVisualization[j] += sTempFrame;
 					}
@@ -117,7 +122,12 @@ namespace kASA {
 					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; j++) {
 						for (int32_t k = 0; k < 3; ++k) {
 							int8_t sTempAA = ' ';
-							dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							if (_bSpaced) {
+								dnaToAminoacidSpaced(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							}
+							else {
+								dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							}
 							if (_bVisualize) {
 								_translatedFramesForVisualization[k] += sTempAA;
 							}
@@ -147,7 +157,12 @@ namespace kASA {
 					// compute frames of said tail
 					for (int32_t j = 0; j < iMaxRangeMod3; ++j) {
 						int8_t sTempAA = ' ';
-						dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						if (_bSpaced) {
+							dnaToAminoacidSpaced(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						}
+						else {
+							dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						}
 						if (_bVisualize) {
 							_translatedFramesForVisualization[j] += sTempAA;
 						}
@@ -406,33 +421,35 @@ namespace kASA {
 						if (bAddTail) {
 							// Pad very small reads
 							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
-								if (this->_bProtein) {
-									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-										get<0>(vLines.back()) += '^';
-									}
-								}
-								else {
-									if (_bOnlyOneFrame) {
-										while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length())/3 < size_t(_iHighestK)) {
-											get<0>(vLines.back()) += 'X';
+								if (vLines.size()) {
+									if (this->_bProtein) {
+										while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+											get<0>(vLines.back()) += '^';
 										}
 									}
 									else {
-										while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-											get<0>(vLines.back()) += 'X';
+										if (_bOnlyOneFrame) {
+											while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length()) / 3 < size_t(_iHighestK)) {
+												get<0>(vLines.back()) += 'X';
+											}
+										}
+										else {
+											while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+												get<0>(vLines.back()) += 'X';
+											}
 										}
 									}
+
+									get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+
+									iSumOfkMers -= get<2>(vLines.back());
+									iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+
+									get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
+
+									iSumOfkMers += get<2>(vLines.back());
+									iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 								}
-
-								get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
-
-								iSumOfkMers -= get<2>(vLines.back());
-								iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
-
-								get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
-								
-								iSumOfkMers += get<2>(vLines.back());
-								iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 							};
 							padding(vLines);
 							if (input2.notNull()) {
@@ -636,33 +653,35 @@ namespace kASA {
 						if (bAddTail) {
 							// Pad very small reads
 							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
-								if (this->_bProtein) {
-									while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
-										get<0>(vLines.back()) += '^';
-									}
-								}
-								else {
-									if (_bOnlyOneFrame) {
-										while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length()) / 3 < size_t(_iHighestK)) {
-											get<0>(vLines.back()) += 'X';
+								if (vLines.size()) {
+									if (this->_bProtein) {
+										while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK)) {
+											get<0>(vLines.back()) += '^';
 										}
 									}
 									else {
-										while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
-											get<0>(vLines.back()) += 'X';
+										if (_bOnlyOneFrame) {
+											while ((get<0>(vLines.back()).length() + sFalsekMerMarker.length()) / 3 < size_t(_iHighestK)) {
+												get<0>(vLines.back()) += 'X';
+											}
+										}
+										else {
+											while (get<0>(vLines.back()).length() + sFalsekMerMarker.length() < size_t(_iHighestK) * 3) {
+												get<0>(vLines.back()) += 'X';
+											}
 										}
 									}
+
+									get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
+
+									iSumOfkMers -= get<2>(vLines.back());
+									iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+
+									get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
+
+									iSumOfkMers += get<2>(vLines.back());
+									iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 								}
-
-								get<0>(vLines.back()) += sFalsekMerMarker; // add false marker
-
-								iSumOfkMers -= get<2>(vLines.back());
-								iSoftMaxSize += get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
-
-								get<2>(vLines.back()) = calculatekMerCount(get<0>(vLines.back()));
-
-								iSumOfkMers += get<2>(vLines.back());
-								iSoftMaxSize -= get<2>(vLines.back()) * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
 							};
 							padding(vLines);
 							if (input2.notNull()) {
@@ -858,11 +877,7 @@ namespace kASA {
 				}
 				catch (const bad_alloc&) {
 					int64_t triedToAllocate = iSumOfkMers * sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>) / (1024 * 1024);
-					if (iAvailMemory < triedToAllocate) {
-						cerr << "ERROR: Your system does not have enough contiguous memory available (which happens if the system is powered on over a long period of time). You might try to restart or use a lower number after -m. FYI: You tried to use " + to_string(triedToAllocate) + " MB." << endl;	
-					} else {
-						cerr << "ERROR: Not enough memory available. You tried to use " + to_string(triedToAllocate) + " MB. Please try again with a lower number after -m." << endl;
-					}
+					cerr << "ERROR: Your system does not have enough contiguous memory available (which happens if the system is powered on over a long period of time). You might try to restart or use a lower number after -m. FYI: You tried to use " + to_string(triedToAllocate) + " MB but had only " << to_string(iAvailMemory/(1024ull*1024ull)) << " MB available." << endl;	
 					throw;
 				}
 				const auto& chunkSize = iSumOfkMers / _iNumOfThreads;
@@ -985,7 +1000,12 @@ namespace kASA {
 				uint32_t aDeletekMerCounter[3] = { 0, 0, 0 };
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
-					dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
+					if (_bSpaced) {
+						dnaToAminoacidSpaced(sDna, iMaxKTimes3, j, &sTempFrame);
+					}
+					else {
+						dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
+					}
 					sAAFrames[j] = aminoacidTokMer<intType>(sTempFrame);
 					// if a character is 'illegal' then don't save the kMer containing it
 					const auto& iPosOfU = sTempFrame.find_last_of('_');
@@ -1011,7 +1031,12 @@ namespace kASA {
 					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; ++j) {
 						for (int32_t k = 0; k < 3; ++k) {
 							int8_t sTempAA = ' ';
-							dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							if (_bSpaced) {
+								dnaToAminoacidSpaced(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							}
+							else {
+								dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							}
 							sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
 							//string sDEBUG = kMerToAminoacid(sAAFrames[k], 12);
 							if (sTempAA != '_' && aDeletekMerCounter[k] == 0) {
@@ -1033,7 +1058,12 @@ namespace kASA {
 					// compute frames of said tail
 					for (int32_t j = 0; j < iMaxRangeMod3; ++j) {
 						int8_t sTempAA = ' ';
-						dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						if (_bSpaced) {
+							dnaToAminoacidSpaced(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						}
+						else {
+							dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						}
 						sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
 						if (sTempAA != '_' && aDeletekMerCounter[j] == 0) {
 							vResultingkMers[ikMerCounter + j] = make_tuple(sAAFrames[j], iID);
@@ -2009,14 +2039,14 @@ Sorry!" << endl;
 									cout << "OUT: File is gzipped, no progress output can be shown." << endl;
 								}
 								unique_ptr<igzstream> fastaFile_gz(new igzstream(fileName.first.c_str()));
-
+								
 								// Determine if protein or DNA sequence
 								if (!this->_bProtein) {
 									const string& sFirstSequence = Utilities::getFirstSequenceOfFile(*fastaFile_gz);
 									this->detectAlphabet(sFirstSequence);
 									fastaFile_gz.reset(new igzstream(fileName.first.c_str()));
 								}
-
+								
 								if (bAlternativeMode) {
 									Utilities::FileReader<igzstream> fastaFileReader;
 									fastaFileReader.setFile(fastaFile_gz.get());

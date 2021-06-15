@@ -52,16 +52,14 @@ namespace kASA {
 		static int8_t _sAminoAcids_bs[], _sAminoAcids_aas[];
 		const static int8_t _sAminoAcids_cs[], _sAminoAcids_un[];
 		const int8_t _aRevComp[6] = { 'T','G','A','C','X','Z' };
+		const string _spacedMasks[21] = { "1111111111111*111111111111111111111*11111111111111111111111111111111111111111", "1111111111111*11111111111*111111111*1111111111111111111*111111111111111111111", "1111111111111*1111111*111*11111*111*1111111111111111111*111111111111111111111", "1111111111111*1111111*111*11111*111*11111*111111*111111*111111111111111111111", "1111111*11111*1111111*111*11111*111*11111*111111*111111*11111*111111111111111", "1111111*11111*1111111*111*11*11*111*11*11*111111*111111*11111*111111111111111", "1111111*111*1*1111111*111*11*11*111*11*11*11*111*111111*11111*111111111111111", "1111111*111*1*1111*11*111*11*11*111*11*11*11*111*111*11*11111*111111111111111", "1111*11*111*1*1111*11*111*11*11*111*11*11*11*111*111*11*1*111*111111111111111", "1111*111*111**1*111**1*11*111111111*111*111**1*111**1*11*111111111*111*111*11", "1111*11*111*1*1111*11*111*11*11*111*11*11*11*111*111*11*1*11**111111*11111111", "1111*11*111*1*111**11*111*11*1**111*11*11*11*111*111*11*1*11**111111*11111111", "1111*11*111*1**11**11*111*11*1**111*11*11*11*111*111*11*1*11**1111*1*11111111", "1111*11*111*1**11**11*111*11*1**11**11*11*11*111*111*11*1*11**11*1*1*11111111", "1111*11**11*1**11**11*111*11*1**11**11*11*11*11**111*11*1*11**11*1*1*11111111", "1111*11**11*1**11**11*111*11*1**11**11*11*11*11**11**11*1*11**11*1*1*1111*111", "1111*11***1*1**11**11*111*11*1**11**11*11*11*11**11**11*1*11**11*1*1**111*111", "1111*11***1*1**11**11**11*11*1**11**11*11*11*11**11**11***11**11*1*1**111*111", "1111*11***1*1**11***1**11*11*1**11**11*11*11*11**11**1****11**11*1*1**111*111" };
+		int16_t _iWhichMask = 0;
 
 		const bool _bVerbose = false;
 		bool _bSixFrames = false;
 		bool _bProtein = false;
-
-		enum InputMode {
-			DNA,
-			Protein
-		};
-
+		bool _bSpaced = false;
+		
 		// Functions
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +83,62 @@ namespace kASA {
 
 			const int32_t& iIndex = ((sDna[iPointerPosition] & 14) << 5) | ((sDna[iPointerPosition + 1] & 14) << 2) | ((sDna[iPointerPosition + 2] & 14) >> 1);
 			outString = _sAminoAcids_bs[iIndex];
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		inline char getLetterOfMask(const string& sDNA, const uint32_t& iIdx) {
+			const uint32_t& spacedMaskIdx = iIdx % (3* HIGHESTPOSSIBLEK);
+			if (_spacedMasks[_iWhichMask][spacedMaskIdx] == '1') {
+				if (_spacedMasks[_iWhichMask][spacedMaskIdx +1] == '1') {
+					if (_spacedMasks[_iWhichMask][spacedMaskIdx +2] == '1') {
+						const int32_t& iIndex = ((sDNA[iIdx] & 14) << 5) | ((sDNA[iIdx + 1] & 14) << 2) | ((sDNA[iIdx + 2] & 14) >> 1);
+						return _sAminoAcids_bs[iIndex]; /// 111
+					}
+					else {
+						return 'Z'; // 11*
+					}
+				}
+				else {
+					if (_spacedMasks[_iWhichMask][spacedMaskIdx + 2] == '1') {
+						return '\\'; // 1*1
+					}
+					else {
+						return 'X'; // 1**
+					}
+				}
+			}
+			else {
+				if (_spacedMasks[_iWhichMask][spacedMaskIdx + 1] == '1') {
+					if (_spacedMasks[_iWhichMask][spacedMaskIdx + 2] == '1') {
+						return 'O'; //*11
+					}
+					else {
+						return 'U'; // *1*
+					}
+				}
+				else {
+					if (_spacedMasks[_iWhichMask][spacedMaskIdx + 2] == '1') {
+						return 'J'; // **1
+					}
+					else {
+						return 'B'; // ***
+					}
+				}
+			}
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Converts a string of dna to a string of aminoacids by triplets with a spaced mask
+		inline void dnaToAminoacidSpaced(const string& sDna, const int32_t& iLength, const int32_t& iPointerPosition, string* outString) {
+			const uint32_t& iDnaSize = iLength / 3;
+
+			for (uint32_t i = 0, j = 0; i < iDnaSize; ++i, j += 3) {
+				(*outString)[i] = getLetterOfMask(sDna, iPointerPosition + j);
+			}
+		}
+
+		inline void dnaToAminoacidSpaced(const string& sDna, const int32_t& iPointerPosition, int8_t& outString) {
+			outString = getLetterOfMask(sDna, iPointerPosition);
 		}
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,7 +299,7 @@ namespace kASA {
 			createConfig("stxxl_temp_", iNumOfCall, stxxl_mode);
 		}
 		
-		kASA(const kASA& obj) : _bVerbose(obj._bVerbose), _bSixFrames(obj._bSixFrames) {
+		kASA(const kASA& obj) : _bVerbose(obj._bVerbose) {
 			_iMaxMemUsePerThread = obj._iMaxMemUsePerThread;
 			_iHighestK = obj._iHighestK;
 			_iMaxK = obj._iMaxK;
@@ -261,6 +315,10 @@ namespace kASA {
 			_sTemporaryPath = obj._sTemporaryPath;
 			_iNumOfThreads = obj._iNumOfThreads;
 			_sMaxKBlank = obj._sMaxKBlank;
+			_iWhichMask = obj._iWhichMask;
+			_bSixFrames = obj._bSixFrames;
+			_bProtein = obj._bProtein;
+			_bSpaced = obj._bSpaced;
 		}
 
 

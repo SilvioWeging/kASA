@@ -216,10 +216,10 @@ int main(int argc, char* argv[]) {
 		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		kASA::OutputFormat eOutputFormat = kASA::OutputFormat::Json;
-		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3;
+		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3, iNumOfMask = 0;
 		int64_t iMemorySizeAvail = 0;
 		float fPercentageOfThrowAway = 0.f, threshold = 0.f;
-		uint8_t iTrieDepth = 6, iPrefixCheckMode = 0;
+		uint8_t iTrieDepth = 6;//, iPrefixCheckMode = 0;
 
 		auto timeRightNow = chrono::system_clock::to_time_t(chrono::system_clock::now());
 		cout << "OUT: " << "kASA version " << kASA_VERSION_MAJOR << "." << kASA_VERSION_MINOR << "." << kASA_VERSION_PATCH << " ran on " <<
@@ -350,6 +350,7 @@ int main(int argc, char* argv[]) {
 				if (iLowerK > iHigherK) {
 					swap(iLowerK, iHigherK);
 				}
+				bHighKSetByUser = true;
 			}
 			else if (sParameter == "--kH") {
 				iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
@@ -457,7 +458,7 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "--stxxl") {
 				sStxxlMode = Utilities::removeSpaceAndEndline(vParameters[++i]);
 			}
-			else if (sParameter == "--array") {
+			/*else if (sParameter == "--array") {
 				iPrefixCheckMode = 2;
 			}
 			else if (sParameter == "--trie") {
@@ -465,7 +466,7 @@ int main(int argc, char* argv[]) {
 			}
 			else if (sParameter == "--table") {
 				iPrefixCheckMode = 3;
-			}
+			}*/
 			else if (sParameter == "--six") {
 				bSixFrames = true;
 			}
@@ -487,6 +488,12 @@ int main(int argc, char* argv[]) {
 			else if (sParameter == "--one") {
 				bOnlyOneFrame = true;
 			}
+			else if (sParameter == "--spaced") {
+				bSpaced = true;
+			}
+			else if (sParameter == "--mask") {
+				iNumOfMask = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+			}
 			else {
 				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 			}
@@ -505,7 +512,7 @@ int main(int argc, char* argv[]) {
 		statex.dwLength = sizeof(statex);
 		GlobalMemoryStatusEx(&statex);
 		if (statex.ullTotalPhys < static_cast<uint64_t>(iMemorySizeAvail)) {
-			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail/(1024ull*1024ull*1024ull) << "GB RAM is too much for your system (" << statex.ullTotalPhys / (1024ull * 1024ull * 1024ull) <<"GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
+			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail/GIGABYTEASBYTES << "GB RAM is too much for your system (" << statex.ullTotalPhys / (GIGABYTEASBYTES) <<"GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
 		}
 
 #elif (__GNUC__ || __clang__) && !_MSC_VER
@@ -514,7 +521,7 @@ int main(int argc, char* argv[]) {
 		unsigned long long iMaxPhysMemory = pages * page_size;
 
 		if (iMaxPhysMemory < static_cast<uint64_t>(iMemorySizeAvail)) {
-			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail / (1024ull * 1024ull * 1024ull) << "GB RAM is too much for your system (" << iMaxPhysMemory / (1024ull * 1024ull * 1024ull) << "GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
+			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail / (GIGABYTEASBYTES) << "GB RAM is too much for your system (" << iMaxPhysMemory / (GIGABYTEASBYTES) << "GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
 		}
 #endif
 
@@ -537,6 +544,12 @@ int main(int argc, char* argv[]) {
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
+
+			if (bSpaced) {
+				kASAObj._bSpaced = true;
+				kASAObj._iWhichMask = iNumOfMask;
+			}
+
 			auto start = std::chrono::high_resolution_clock::now();
 
 			// No content file yet created
@@ -556,7 +569,7 @@ int main(int argc, char* argv[]) {
 					genCFObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings, iMemorySizeAvail);
 				}
 			}
-			if (iMemorySizeAvail * 0.9 < 1024ull * 1024ull * 1024ull) {
+			if (iMemorySizeAvail * 0.9 < GIGABYTEASBYTES) {
 				throw runtime_error("Not enough memory given!");
 			}
 
@@ -568,7 +581,7 @@ int main(int argc, char* argv[]) {
 					readObj._bOnlyOneFrame = true;
 				}
 
-				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, bContinue);
+				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, bContinue);
 			}
 			else {
 				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bUnfunny);
@@ -577,7 +590,7 @@ int main(int argc, char* argv[]) {
 					readObj._bOnlyOneFrame = true;
 				}
 
-				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, bContinue);
+				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, bContinue);
 			}
 
 
@@ -654,14 +667,14 @@ int main(int argc, char* argv[]) {
 				if (bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
-				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, mapsForDummys);
+				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, mapsForDummys);
 			}
 			else {
 				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bUnfunny);
 				if (bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
-				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - 1024ull * 1024ull * 1024ull), fPercentageOfThrowAway, mapsForDummys);
+				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, mapsForDummys);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -917,6 +930,11 @@ int main(int argc, char* argv[]) {
 				}
 				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
 
+				if (bSpaced) {
+					kASAObj._bSpaced = true;
+					kASAObj._iWhichMask = iNumOfMask;
+				}
+
 				if (bVisualize) {
 					kASAObj._bVisualize = true;
 				}
@@ -936,7 +954,20 @@ int main(int argc, char* argv[]) {
 
 
 				kASAObj.format = eOutputFormat;
-				kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode, threshold);
+
+				kASAObj.index.set(bRAM, false, iNumOfThreads);
+				kASAObj.index.setFile(indexFile);
+				kASAObj.index.loadTrie(indexFile, iHigherK, iLowerK);
+
+				iMemorySizeAvail -= kASAObj.index.trieForVector->GetSize();
+
+				kASAObj.index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
+
+				debugBarrier
+
+				kASAObj.index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
+
+				kASAObj.CompareWithLib_partialSort(sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bRAM, bUnique, threshold);
 			}
 			else {
 				if (!bHighKSetByUser) {
@@ -945,6 +976,11 @@ int main(int argc, char* argv[]) {
 
 				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
 
+				if (bSpaced) {
+					kASAObj._bSpaced = true;
+					kASAObj._iWhichMask = iNumOfMask;
+				}
+
 				if (bVisualize) {
 					kASAObj._bVisualize = true;
 				}
@@ -963,7 +999,20 @@ int main(int argc, char* argv[]) {
 				}
 
 				kASAObj.format = eOutputFormat;
-				kASAObj.CompareWithLib_partialSort(contentFileIn, indexFile, sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode, threshold);
+
+				kASAObj.index.set(bRAM, false, iNumOfThreads);
+				kASAObj.index.setFile(indexFile);
+				kASAObj.index.loadTrie(indexFile, iHigherK, iLowerK);
+
+				iMemorySizeAvail -= kASAObj.index.trieForVector->GetSize();
+
+				kASAObj.index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
+
+				debugBarrier
+
+				kASAObj.index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
+
+				kASAObj.CompareWithLib_partialSort(sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bRAM, bUnique, threshold);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -1012,7 +1061,7 @@ int main(int argc, char* argv[]) {
 			sort(files.begin(), files.end(), [](const pair<string, size_t>& a, const pair<string, size_t>& b) { return a.second > b.second; });
 			vector<int32_t> vThreadsPerFile(files.size(), 1);
 			const int32_t& iDiff = (static_cast<int32_t>(files.size()) >= iNumOfThreads) ? 0 : iNumOfThreads - static_cast<int32_t>(files.size());
-			const int32_t& iUsedThreads = (static_cast<int32_t>(files.size()) >= iNumOfThreads) ? iNumOfThreads : static_cast<int32_t>(files.size());
+			int32_t iUsedThreads = (static_cast<int32_t>(files.size()) >= iNumOfThreads) ? iNumOfThreads : static_cast<int32_t>(files.size());
 			for (int32_t i = 0; i < iDiff;) {
 				for (size_t j = 0; j < files.size() && i < iDiff; ++j) {
 					vThreadsPerFile[j]++;
@@ -1022,7 +1071,6 @@ int main(int argc, char* argv[]) {
 
 			unique_ptr< kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> > kASAObj;
 			unique_ptr< kASA::Compare<contentVecType_128, packedLargePair, uint128_t> > kASAObj128;
-			unique_ptr<WorkerQueue> Q(new WorkerQueue(iUsedThreads));
 			uint64_t iLocalMemoryAvail = 0;
 
 			if (iVecType != 128) {
@@ -1037,6 +1085,11 @@ int main(int argc, char* argv[]) {
 
 				debugBarrier
 				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny));
+
+				if (bSpaced) {
+					kASAObj->_bSpaced = true;
+					kASAObj->_iWhichMask = iNumOfMask;
+				}
 
 				if (codonTable != "") {
 					kASAObj->setCodonTable(codonTable, sCodonID);
@@ -1053,20 +1106,24 @@ int main(int argc, char* argv[]) {
 
 				debugBarrier
 				kASAObj->index.set(bRAM, false, iNumOfThreads);
+				kASAObj->index.setFile(indexFile);
+				kASAObj->index.bIdentifyMultiple = true;
 				kASAObj->index.loadTrie(indexFile, iHigherK, iLowerK);
-				kASAObj->index.setHasBeenLoadedFromOutside();
 
-				iMemorySizeAvail -= kASAObj->index.getTrie()->GetSize();
+				iMemorySizeAvail -= kASAObj->index.trieForVector->GetSize();
+
+				kASAObj->index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
 
 				debugBarrier
-				kASAObj->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn);
 
-				if (iMemorySizeAvail < 0) {
-					cerr << "WARNING: Not enough memory given, try to download more RAM. Adding 1GB. May lead to bad_alloc errors..." << endl;
-					iMemorySizeAvail = static_cast<int64_t>(1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
+				if (bRAM) {
+					kASAObj->index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
 				}
 
-				iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
+				if (iMemorySizeAvail < 0) {
+					cerr << "WARNING: Not enough memory given. Adding 1GB. May lead to bad_alloc errors..." << endl;
+					iMemorySizeAvail = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
+				}
 
 				kASAObj->format = eOutputFormat;
 				debugBarrier
@@ -1079,6 +1136,11 @@ int main(int argc, char* argv[]) {
 				}
 
 				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny) );
+
+				if (bSpaced) {
+					kASAObj128->_bSpaced = true;
+					kASAObj128->_iWhichMask = iNumOfMask;
+				}
 
 				if (codonTable != "") {
 					kASAObj128->setCodonTable(codonTable, sCodonID);
@@ -1094,26 +1156,44 @@ int main(int argc, char* argv[]) {
 				}
 
 				debugBarrier
-				kASAObj128->index.set(true, false, iNumOfThreads);
-				
+				kASAObj128->index.set(bRAM, false, iNumOfThreads);
+				kASAObj128->index.setFile(indexFile);
+				kASAObj128->index.bIdentifyMultiple = true;
 				kASAObj128->index.loadTrie(indexFile, iHigherK, iLowerK);
-				kASAObj128->index.setHasBeenLoadedFromOutside();
-				iMemorySizeAvail -= kASAObj128->index.getTrie()->GetSize();
+				iMemorySizeAvail -= kASAObj128->index.trieForVector->GetSize();
+				kASAObj128->index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
 				debugBarrier
-				kASAObj128->index.loadIndex(indexFile, iHigherK, iLowerK, iMemorySizeAvail, contentFileIn);
 
-				if (iMemorySizeAvail < 0) {
-					cerr << "WARNING: Not enough memory given, try to download more RAM. Adding 1GB. May lead to bad_alloc errors..." << endl;
-					iMemorySizeAvail = static_cast<int64_t>(1024ull * 1024ull * 1024ull); // 1024ull * 1024ull * 1024ull
+				if (bRAM) {
+					kASAObj128->index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
 				}
 
-				iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
+				if (iMemorySizeAvail < 0) {
+					cerr << "WARNING: Not enough memory given. Adding 1GB. May lead to bad_alloc errors..." << endl;
+					iMemorySizeAvail = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
+				}
 
 				kASAObj128->format = eOutputFormat;
 				debugBarrier
 			}
-				
 
+			// How much memory for each call? Is it less than 2GB? If so, reduce number of concurrent calls. Everything below 2GB is usually too slow.
+			int32_t iUsedThreadsBefore = iUsedThreads;
+			iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
+			while (iLocalMemoryAvail < 2 * GIGABYTEASBYTES && iUsedThreads > 1) {
+				iUsedThreads--;
+				iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
+			}
+			// Add now available threads to the largest files
+			iUsedThreadsBefore -= iUsedThreads;
+			for (int32_t i = 0; i < iUsedThreadsBefore;) {
+				for (size_t j = 0; j < files.size() && i < iUsedThreadsBefore; ++j) {
+					vThreadsPerFile[j]++;
+					++i;
+				}
+			}
+				
+			unique_ptr<WorkerQueue> Q(new WorkerQueue(iUsedThreads));
 			int32_t iLocalThreadIdxStart = 0;
 			for (size_t iFileIdx = 0; iFileIdx < files.size(); ++iFileIdx) {
 				string fileName = "", rttFile = "", csvFile = "";
@@ -1137,10 +1217,10 @@ int main(int argc, char* argv[]) {
 				}
 				
 				if (kASAObj != nullptr) {
-					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile, iLocalThreadIdxStart](const int32_t&) {	kASAObj->CompareWithLib_partialSort(contentFileIn, indexFile, files[iFileIdx].first, rttFile, csvFile, iTrieDepth, iLocalMemoryAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode, threshold, vThreadsPerFile[iFileIdx], iLocalThreadIdxStart); }, static_cast<int32_t>(iFileIdx));
+					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iTrieDepth, iLocalMemoryAvail, bRAM, bUnique, threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
 				}
 				else {
-					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile, iLocalThreadIdxStart](const int32_t&) {	kASAObj128->CompareWithLib_partialSort(contentFileIn, indexFile, files[iFileIdx].first, rttFile, csvFile, iTrieDepth, iLocalMemoryAvail, bSpaced, bRAM, bUnique, iPrefixCheckMode, threshold, vThreadsPerFile[iFileIdx], iLocalThreadIdxStart); }, static_cast<int32_t>(iFileIdx));
+					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj128->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iTrieDepth, iLocalMemoryAvail, bRAM, bUnique, threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
 				}
 				iLocalThreadIdxStart += vThreadsPerFile[iFileIdx];
 			}

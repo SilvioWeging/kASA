@@ -571,6 +571,108 @@ namespace Utilities {
 
 	};
 
+#include <deque>
+	class SparseMatrix {
+	private:
+		uint64_t _iNumOfRows;
+
+		deque<float> _valArr;
+		deque<uint64_t> _colsArr;
+		vector<uint64_t> _rowsArr;
+
+		void insert(uint64_t index, uint64_t row, uint64_t col, float val) {
+			if (_valArr.empty()) {
+				_valArr.push_back(val);
+				_colsArr.push_back(col);
+			}
+			else {
+				_valArr.insert(_valArr.begin() + index, val);
+				_colsArr.insert(_colsArr.begin() + index, col);
+			}
+
+			for_each(_rowsArr.begin() + row + 1, _rowsArr.end(), [](uint64_t& n) { ++n; });
+		}
+
+	public:
+		inline void generate(const uint64_t& rows) {
+			if (_iNumOfRows != 0) {
+				_valArr.clear();
+				_colsArr.clear();
+				_rowsArr.clear();
+			}
+			_iNumOfRows = rows;
+			_rowsArr.resize(rows + 1);
+			
+		}
+
+		inline size_t size() {
+			return _rowsArr.size() - 1;
+		}
+
+		inline size_t size() const {
+			return _rowsArr.size() - 1;
+		}
+
+		inline void set(const uint64_t& row, const uint64_t& col, const float& val) {
+
+			uint64_t pos = _rowsArr.at(row);
+			uint64_t currCol = numeric_limits<uint64_t>::max();
+
+			for (; pos < _rowsArr.at(row + 1); pos++) {
+				currCol = _colsArr.at(pos);
+
+				if (currCol >= col) {
+					break;
+				}
+			}
+
+			if (currCol != col) {
+				insert(pos, row, col, val);
+			}
+			else {
+				_valArr.at(pos) += val;
+			}
+		}
+
+		inline float get(const uint64_t& row, const uint64_t& col) {
+			uint64_t currCol = 0;
+
+			for (uint64_t pos = _rowsArr.at(row); pos < _rowsArr.at(row + 1); pos++) {
+				currCol = _colsArr.at(pos);
+
+				if (currCol == col) {
+					return _valArr.at(pos);
+				}
+				else {
+					if (currCol > col) {
+						break;
+					}
+				}
+			}
+
+			return 0;
+		}
+
+		inline float get(const uint64_t& row, const uint64_t& col) const {
+			uint64_t currCol = 0;
+
+			for (uint64_t pos = _rowsArr.at(row); pos < _rowsArr.at(row + 1); pos++) {
+				currCol = _colsArr.at(pos);
+
+				if (currCol == col) {
+					return _valArr.at(pos);
+				}
+				else {
+					if (currCol > col) {
+						break;
+					}
+				}
+			}
+
+			return 0;
+		}
+	};
+
 	///////////////////////////////////////////////////////
 	// Write strings to file, which are large enough
 	class BufferedWriter {
