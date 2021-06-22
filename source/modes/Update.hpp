@@ -19,7 +19,7 @@ namespace kASA {
 		typedef Read<vecType, elemType, intType> Base;
 
 	public:
-		Update(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : Read<vecType, elemType, intType>(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), Build<vecType, elemType>() {}
+		Update(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : Read<vecType, elemType, intType>(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), Build<vecType, elemType>() {}
 		Update(const kASA& obj, const bool& bUnfunny = false) : Read<vecType, elemType, intType>(obj, bUnfunny), Build<vecType, elemType>() {}
 
 	public:

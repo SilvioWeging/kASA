@@ -39,7 +39,7 @@ namespace kASA {
 		vector<pair<string, uint32_t>> _matchedkMers;
 
 	public:
-		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read<contentVecType, elemType, intType>(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames, bUnfunny), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
+		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read<contentVecType, elemType, intType>(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames, bUnfunny), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
 
 		// for output
 		int32_t iNumOfBeasts = 3;
@@ -459,6 +459,31 @@ namespace kASA {
 			return vec;
 		}
 
+		const vector<string> vMasks{ "1111111011111111111111111", "1111111011011111111111111", "1111111011010111111111111", "1111111011010101111111111", "1111111011010100111111111", "1111111011010100101111111", "1111111011010100101011111", "1111111011010100101011011", "1111111011010100101011001"  }; // 13, 14, 15, 16, 17, 19, 21, 24, 25
+
+		inline uint8_t compareTwoKmers(const uint64_t& inKmer, const uint64_t& idxKmer, const int32_t&) {
+			if (inKmer < idxKmer) {
+				return 0;
+			}
+			else {
+				if (!(idxKmer < inKmer)) {
+					return 1;
+				}
+				else {
+					return 2;
+				}
+			}
+
+			return 3;
+		}
+
+		inline uint8_t compareTwoKmersSpaced(const uint64_t& inKmer, const uint64_t& idxKmer, const int32_t& k) {
+			if (vMasks[Base::_iWhichMask][k] == '0') {
+				return 1;
+			}
+			return compareTwoKmers(inKmer, idxKmer, 0);
+		}
+
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
@@ -477,6 +502,16 @@ namespace kASA {
 				};
 
 				function<void(const uint64_t&, const float&, const uint64_t&, const std::vector<uint64_t>&)> linkReadIDToTaxID = [](const uint64_t&, const float&, const uint64_t&, const vector<uint64_t>&) {};
+
+				/////////////////////////////////////// Spaced try
+				function<uint8_t(const uint64_t&, const uint64_t&, const int32_t&)> compare;
+				if (Base::_bSpaced) {
+					compare = bind(&Compare::compareTwoKmersSpaced, this, placeholders::_1, placeholders::_2, placeholders::_3);
+				}
+				else {
+					compare = bind(&Compare::compareTwoKmers, this, placeholders::_1, placeholders::_2, 0);
+				}
+				///////////////////////////////////////
 
 				// In case read IDs are relevant
 				if (vReadIDtoGenID.size()) {
@@ -627,15 +662,21 @@ namespace kASA {
 
 							const tuple<intType, uint32_t>& iCurrentLib = make_tuple(seenResultIt->first, seenResultIt->second);
 
+							bool bInnerBreakOut = false;
 							ikLengthCounter = static_cast<int16_t>(Base::_iNumOfK - 1);
-							for (; ikLengthCounter >= 0; --ikLengthCounter) {
+							for (; ikLengthCounter >= 0 && !bInnerBreakOut; --ikLengthCounter) {
 
 								shift = 5 * (Base::_iHighestK - Base::_aOfK[ikLengthCounter]);
 								iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
 
 								const auto& iCurrentLibkMerShifted = get<0>(iCurrentLib) >> shift;
 
-								if (iCurrentkMerShifted < iCurrentLibkMerShifted) {
+								//cout << Base::kMerToAminoacid(iCurrentkMerShifted, 25) << " " << Base::kMerToAminoacid(iCurrentLibkMerShifted, 25) << endl;
+
+								const uint8_t iResultFromComparison = compare(iCurrentkMerShifted, iCurrentLibkMerShifted, Base::_aOfK[ikLengthCounter]);
+								switch (iResultFromComparison) {
+
+								case 0:
 									if (bInputIterated) {
 										for (int32_t ik = ikLengthCounter; ik > -1; --ik) {
 											const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
@@ -649,103 +690,100 @@ namespace kASA {
 										}
 									}
 									bBreakOut = true;
+									bInnerBreakOut = true;
 									break;
-								}
-								else {
-									if (!(iCurrentLibkMerShifted < iCurrentkMerShifted)) {
+								case 1:
+									// If the ending is ^, it's not a valid match, might as well stop here
+									if ((iCurrentkMerShifted & 31) == 30) {
+										bBreakOut = true;
+										bInnerBreakOut = true;
+										break;
+									}
 
-										// If the ending is ^, it's not a valid match, might as well stop here
-										if ((iCurrentkMerShifted & 31) == 30) {
-											bBreakOut = true;
-											break;
-										}
+									if (this->_bVisualize) {
+										_matchedkMers.push_back(make_pair(Base::kMerToAminoacid(iCurrentLibkMerShifted, Base::_iMaxK), get<1>(iCurrentLib)));
+									}
 
-										if (this->_bVisualize) {
-											_matchedkMers.push_back(make_pair(Base::kMerToAminoacid(iCurrentLibkMerShifted, Base::_iMaxK),get<1>(iCurrentLib)));
-										}
-
-										// Delayed scoring: First gather everything and then score it instead of scoring everytime you encounter a new read or tax id.
-										if (iCurrentkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
-											// We've seen that already, just add it. 
-											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
-											if (bInputIterated) {
-												addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], get<1>(iCurrentkMer));
-											}
-										}
-										else {
-											debugBarrier
-											// For this k, the kmer is different. Save the gathered information.
-											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
-											const uint64_t& iPartialTempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID) + iSpecIDRange * uint64_t(ikLengthCounter);
-											const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
-											const auto& score = weight * (1.f / numOfEntries);
-
-											const auto& numOfHits = vPositions[ikLengthCounter];
-
-											//dAverageLoopCount += numOfEntries * numOfHits;
-											//iNumOfLoops++;
-											
-											for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) {
-												const auto& tempIndex = iPartialTempIndex + (*it);
-
-												vCount[tempIndex] += double(numOfHits) / numOfEntries;
-
-												if (numOfEntries == 1) {
-													vCountUnique[tempIndex] += numOfHits;
-												}
-
-												linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLengthCounter]);
-											}
-
-											vPositions[ikLengthCounter] = 0;
+									// Delayed scoring: First gather everything and then score it instead of scoring everytime you encounter a new read or tax id.
+									if (iCurrentkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
+										// We've seen that already, just add it. 
+										markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
+										if (bInputIterated) {
 											addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], get<1>(iCurrentkMer));
-
-											vMemoryOfTaxIDs[ikLengthCounter].clear();
-											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
-
-											vMemoryOfSeenkMers[ikLengthCounter] = iCurrentkMerShifted;
-											debugBarrier
 										}
-
 									}
 									else {
+										debugBarrier
+											// For this k, the kmer is different. Save the gathered information.
+											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+										const uint64_t& iPartialTempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID)+iSpecIDRange * uint64_t(ikLengthCounter);
+										const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
+										const auto& score = weight * (1.f / numOfEntries);
 
-										// index kmer is smaller than input kmer. Iterate linearly and score everything that also matched before (albeit with a smaller k)
-										uint64_t iTempCounter = 1;
-										while (seenResultIt + iTempCounter != rangeEndIt + 1) {
-											const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
-											//cout << kASA::kMerToAminoacid(iCurrentkMerShifted, 12) << " " << kASA::kMerToAminoacid(iNextLibSuffix, 12) << endl;
-											if (iCurrentkMerShifted > (iNextLibSuffix >> shift)) {
-												int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
-												for (; iUntilK > -1; --iUntilK) {
-													if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))) {
-														if (this->_bVisualize) {
-															_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
-														}
-														markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
+										const auto& numOfHits = vPositions[ikLengthCounter];
+
+										//dAverageLoopCount += numOfEntries * numOfHits;
+										//iNumOfLoops++;
+
+										for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) {
+											const auto& tempIndex = iPartialTempIndex + (*it);
+
+											vCount[tempIndex] += double(numOfHits) / numOfEntries;
+
+											if (numOfEntries == 1) {
+												vCountUnique[tempIndex] += numOfHits;
+											}
+
+											linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLengthCounter]);
+										}
+
+										vPositions[ikLengthCounter] = 0;
+										addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], get<1>(iCurrentkMer));
+
+										vMemoryOfTaxIDs[ikLengthCounter].clear();
+										markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
+
+										vMemoryOfSeenkMers[ikLengthCounter] = iCurrentkMerShifted;
+										debugBarrier
+									}
+									break;
+								case 2:
+									// index kmer is smaller than input kmer. Iterate linearly and score everything that also matched before (albeit with a smaller k)
+									uint64_t iTempCounter = 1;
+									while (seenResultIt + iTempCounter != rangeEndIt + 1) {
+										const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
+										//cout << kASA::kMerToAminoacid(iCurrentkMerShifted, 12) << " " << kASA::kMerToAminoacid(iNextLibSuffix, 12) << endl;
+										if (iCurrentkMerShifted > (iNextLibSuffix >> shift)) {
+											int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
+											for (; iUntilK > -1; --iUntilK) {
+												if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))) {
+													if (this->_bVisualize) {
+														_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
 													}
-													else {
-														break;
-													}
-												}
-												if (iUntilK < static_cast<int16_t>(Base::_iNumOfK - 1)) {
-													++iTempCounter;
+													markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
 												}
 												else {
-													auto nextValuablekMer = lower_bound(seenResultIt + iTempCounter, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const decltype(iCurrentkMerShifted)& val) { return (a.first >> shift) < val; });
-													//cout << kASA::kMerToAminoacid((nextValuablekMer - 1)->first, 12) << " " << kASA::kMerToAminoacid(nextValuablekMer->first, 12) << " " << nextValuablekMer - seenResultIt << endl;
-													iTempCounter = nextValuablekMer - seenResultIt;
 													break;
 												}
 											}
+											if (iUntilK < static_cast<int16_t>(Base::_iNumOfK - 1)) {
+												++iTempCounter;
+											}
 											else {
+												auto nextValuablekMer = lower_bound(seenResultIt + iTempCounter, rangeEndIt + 1, iCurrentkMerShifted, [&shift](const decltype(*libBeginIt)& a, const decltype(iCurrentkMerShifted)& val) { return (a.first >> shift) < val; });
+												//cout << kASA::kMerToAminoacid((nextValuablekMer - 1)->first, 12) << " " << kASA::kMerToAminoacid(nextValuablekMer->first, 12) << " " << nextValuablekMer - seenResultIt << endl;
+												iTempCounter = nextValuablekMer - seenResultIt;
 												break;
 											}
 										}
-										seenResultIt += iTempCounter;
-										debugBarrier
-										break;
+										else {
+											break;
+										}
 									}
+									seenResultIt += iTempCounter;
+									bInnerBreakOut = true;
+									debugBarrier
+									break;
 								}
 							}
 							// loop through to find other hits in the library (index is redundant so equal kmers with different tax ids are possible)
@@ -2158,6 +2196,7 @@ namespace kASA {
 						debugBarrier
 						//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
 						iNumOfReads = transferBetweenRuns->iNumOfNewReads;
+
 
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();

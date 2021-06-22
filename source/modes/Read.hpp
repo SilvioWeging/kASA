@@ -25,7 +25,7 @@ namespace kASA {
 		vector<string> _translatedFramesForVisualization;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bUnfunny(bUnfunny) {}
+		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bUnfunny(bUnfunny) {}
 		Read(const kASA& obj, const bool& bUnfunny = false) : kASA(obj), _bUnfunny(bUnfunny) {}
 	protected:
 
@@ -85,12 +85,12 @@ namespace kASA {
 
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
-					if (_bSpaced) {
-						dnaToAminoacidSpaced(sDna, iMaxKTimes3, j, &sTempFrame);
-					}
-					else {
+					//if (_bSpaced) {
+						//dnaToAminoacidSpaced(sDna, iMaxKTimes3, j, &sTempFrame);
+					//}
+					//else {
 						dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
-					}
+					//}
 					if (_bVisualize) {
 						_translatedFramesForVisualization[j] += sTempFrame;
 					}
@@ -122,21 +122,17 @@ namespace kASA {
 					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; j++) {
 						for (int32_t k = 0; k < 3; ++k) {
 							int8_t sTempAA = ' ';
-							if (_bSpaced) {
-								dnaToAminoacidSpaced(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
-							}
-							else {
+							//if (_bSpaced) {
+							//	dnaToAminoacidSpaced(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							//}
+							//else {
 								dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
-							}
+							//}
 							if (_bVisualize) {
 								_translatedFramesForVisualization[k] += sTempAA;
 							}
-							if (_iMaxK <= 12) {
-								sAAFrames[k] = aminoacidTokMer(static_cast<uint64_t>(sAAFrames[k]), sTempAA);
-							}
-							else {
-								sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
-							}
+
+							sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
 
 							auto kmerForSearchInTrie = sAAFrames[k];
 							if (_bUnfunny) {
@@ -157,21 +153,18 @@ namespace kASA {
 					// compute frames of said tail
 					for (int32_t j = 0; j < iMaxRangeMod3; ++j) {
 						int8_t sTempAA = ' ';
-						if (_bSpaced) {
-							dnaToAminoacidSpaced(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
-						}
-						else {
+						//if (_bSpaced) {
+						//	dnaToAminoacidSpaced(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						//}
+						//else {
 							dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
-						}
+						//}
 						if (_bVisualize) {
 							_translatedFramesForVisualization[j] += sTempAA;
 						}
-						if (_iMaxK <= 12) {
-							sAAFrames[j] = aminoacidTokMer(static_cast<uint64_t>(sAAFrames[j]), sTempAA);
-						}
-						else {
-							sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
-						}
+
+						sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
+
 
 						auto kmerForSearchInTrie = sAAFrames[j];
 						if (_bUnfunny) {
@@ -1000,12 +993,12 @@ namespace kASA {
 				uint32_t aDeletekMerCounter[3] = { 0, 0, 0 };
 				for (int32_t j = 0; j < iNumFrames; ++j) {
 					string sTempFrame = _sMaxKBlank;
-					if (_bSpaced) {
-						dnaToAminoacidSpaced(sDna, iMaxKTimes3, j, &sTempFrame);
-					}
-					else {
+					//if (_bSpaced) {
+					//	dnaToAminoacidSpaced(sDna, iMaxKTimes3, j, &sTempFrame);
+					//}
+					//else {
 						dnaToAminoacid(sDna, iMaxKTimes3, j, &sTempFrame);
-					}
+					//}
 					sAAFrames[j] = aminoacidTokMer<intType>(sTempFrame);
 					// if a character is 'illegal' then don't save the kMer containing it
 					const auto& iPosOfU = sTempFrame.find_last_of('_');
@@ -1031,12 +1024,12 @@ namespace kASA {
 					for (int32_t j = 1; 3 * (j + iMaxRangeMod3Neg) < iMaxRange; ++j) {
 						for (int32_t k = 0; k < 3; ++k) {
 							int8_t sTempAA = ' ';
-							if (_bSpaced) {
-								dnaToAminoacidSpaced(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
-							}
-							else {
+							//if (_bSpaced) {
+							//	dnaToAminoacidSpaced(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
+							//}
+							//else {
 								dnaToAminoacid(sDna, k + iMaxKTimes3 + 3 * (j - 1), sTempAA);
-							}
+							//}
 							sAAFrames[k] = aminoacidTokMer(sAAFrames[k], sTempAA);
 							//string sDEBUG = kMerToAminoacid(sAAFrames[k], 12);
 							if (sTempAA != '_' && aDeletekMerCounter[k] == 0) {
@@ -1058,12 +1051,12 @@ namespace kASA {
 					// compute frames of said tail
 					for (int32_t j = 0; j < iMaxRangeMod3; ++j) {
 						int8_t sTempAA = ' ';
-						if (_bSpaced) {
-							dnaToAminoacidSpaced(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
-						}
-						else {
+						//if (_bSpaced) {
+						//	dnaToAminoacidSpaced(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
+						//}
+						//else {
 							dnaToAminoacid(sDna, j + iMaxKTimes3 + 3 * (iMaxRange / 3 - 1), sTempAA);
-						}
+						//}
 						sAAFrames[j] = aminoacidTokMer(sAAFrames[j], sTempAA);
 						if (sTempAA != '_' && aDeletekMerCounter[j] == 0) {
 							vResultingkMers[ikMerCounter + j] = make_tuple(sAAFrames[j], iID);

@@ -540,7 +540,8 @@ int main(int argc, char* argv[]) {
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		if (cMode == "build") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
+			const int32_t& iHighestK = ((iHigherK > 12) ? 25 : 12);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
 			if (codonTable != "") {
 				kASAObj.setCodonTable(codonTable, sCodonID);
 			}
@@ -610,7 +611,19 @@ int main(int argc, char* argv[]) {
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "update") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
+			ifstream fLibInfo(indexFile + "_info.txt");
+			uint64_t iSizeOfLib = 0, iVecType = 0;
+			if (fLibInfo) {
+				fLibInfo >> iSizeOfLib;
+				fLibInfo >> iVecType;
+			}
+			else {
+				throw runtime_error("Info file for this index can not be found!");
+			}
+			fLibInfo.close();
+
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
 			
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -649,18 +662,6 @@ int main(int argc, char* argv[]) {
 				mapsForDummys = genCFObj.addToContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sTaxLevel, contentFileIn, sContentFileOut, bTaxIdsAsStrings, iMemorySizeAvail);
 				contentFileIn = sContentFileOut; // newly created content file will now be taken for the updated index
 			}
-
-			ifstream fLibInfo(indexFile + "_info.txt");
-			uint64_t iSizeOfLib = 0, iVecType = 0;
-			if (fLibInfo) {
-				fLibInfo >> iSizeOfLib;
-				fLibInfo >> iVecType;
-			}
-			else {
-				throw runtime_error("Info file for this index can not be found!");
-			}
-			fLibInfo.close();
-
 			
 			if (iVecType != 128) {
 				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bUnfunny);
@@ -701,7 +702,8 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("Halved indices cannot be modified in this way. Sorry...");
 			}
 
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
 			auto start = std::chrono::high_resolution_clock::now();
 			if (iVecType != 128) {
 				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bUnfunny);
@@ -743,8 +745,8 @@ int main(int argc, char* argv[]) {
 				bCopyContentFile = true;
 			}
 
-
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			if (iVecType == 0) {
 				if (bCustomMemorySet && fPercentageOfThrowAway == 0.f && eShrinkingStrategy == kASA::Shrink::ShrinkingStrategy::EveryNth) {
 					// index shall be of a maximum size
@@ -794,8 +796,6 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("You can't overwrite indices (yet)!");
 			}
 
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
-
 			ifstream fLibInfo(indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
@@ -816,6 +816,9 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("Info file for the second index can not be found!");
 			}
 			fLibInfo.close();
+
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
 
 			// Content file was created together with the index
 
@@ -899,6 +902,8 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+
 			if (bVisualize) {
 				iNumOfThreads = 1;
 			}
@@ -928,7 +933,7 @@ int main(int argc, char* argv[]) {
 					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
 					iLowerK = 12;
 				}
-				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
+				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
 
 				if (bSpaced) {
 					kASAObj._bSpaced = true;
@@ -974,7 +979,7 @@ int main(int argc, char* argv[]) {
 					iHigherK = HIGHESTPOSSIBLEK;
 				}
 
-				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
+				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
 
 				if (bSpaced) {
 					kASAObj._bSpaced = true;
@@ -1047,6 +1052,8 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+
 			if (sInput.back() != '/' && sInput.back() != '\\') {
 				throw runtime_error("Input must be a folder with multiple files in it!");
 			}
@@ -1084,7 +1091,7 @@ int main(int argc, char* argv[]) {
 				}
 
 				debugBarrier
-				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny));
+				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(sTempPath, 1, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny));
 
 				if (bSpaced) {
 					kASAObj->_bSpaced = true;
@@ -1135,7 +1142,7 @@ int main(int argc, char* argv[]) {
 					iHigherK = HIGHESTPOSSIBLEK;
 				}
 
-				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny) );
+				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny) );
 
 				if (bSpaced) {
 					kASAObj128->_bSpaced = true;
@@ -1238,7 +1245,7 @@ int main(int argc, char* argv[]) {
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "getFrequency") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			
 			if (contentFileIn == "") {
 				contentFileIn = indexFile + "_content.txt";
 			}
@@ -1254,6 +1261,9 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+
 			if (iVecType != 128) {
 				kASAObj.GetFrequencyK<contentVecType_32p>(contentFileIn, indexFile, iMemorySizeAvail);
 			}
@@ -1268,7 +1278,7 @@ int main(int argc, char* argv[]) {
 				contentFileIn = indexFile + "_content.txt";
 			}
 
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			
 			uint32_t iIdxCounter = 1;
 			ifstream content(contentFileIn);
 			string sDummy = "";
@@ -1292,6 +1302,9 @@ int main(int argc, char* argv[]) {
 			if (iVecType == 3) {
 				throw runtime_error("redundancy cannot be called on shrunken indices!");
 			}
+
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 
 			stxxlFile libFile(indexFile, stxxlFile::RDONLY);
 			uint32_t iCutoffNumber = 0;
@@ -1318,8 +1331,7 @@ int main(int argc, char* argv[]) {
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "trie") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
-
+			
 			ifstream fLibInfo(indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
@@ -1330,6 +1342,9 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("Info file for this index can not be found!");
 			}
 			fLibInfo.close();
+
+			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 
 			auto start = std::chrono::high_resolution_clock::now();
 
@@ -1354,7 +1369,7 @@ int main(int argc, char* argv[]) {
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		else if (cMode == "checkContentFile") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			kASA::kASA kASAObj(sTempPath, iNumOfThreads, 12, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			Utilities::checkIfContentFileIsCorrupted(contentFile1, contentFile2);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1362,7 +1377,7 @@ int main(int argc, char* argv[]) {
 			if (indexFile == sDBPathOut) {
 				throw runtime_error("Paths and names of input and output are the same!");
 			}
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, 12, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
 			//kASAObj.GetFrequencyK(contentFileIn, databaseFile, sDBPathOut + "_f.txt");
 			kASAObj.ShrinkLib<contentVecType_32p, packedBigPair, uint64_t>(indexFile, sDBPathOut, kASA::Shrink::ShrinkingStrategy::TrieHalf, contentFileIn);
 		}
@@ -1380,7 +1395,7 @@ int main(int argc, char* argv[]) {
 			//UnitTests.testC2V_9();
 		}
 		else if (cMode == "translate") {
-			kASA::Read<contentVecType_32p, packedBigPair, uint64_t> derpObj(sTempPath,1,12,7,0);
+			kASA::Read<contentVecType_32p, packedBigPair, uint64_t> derpObj(sTempPath,1,12,12,7,0);
 			derpObj.translateFileInOneFrame(sInput, sDBPathOut);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

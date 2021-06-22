@@ -15,7 +15,7 @@ namespace kASA {
 
 	class ContentFile : public kASA {
 	public:
-		ContentFile(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : kASA(tmpPath, iNumOfProcs, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames) {}
+		ContentFile(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : kASA(tmpPath, iNumOfProcs, 12, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames) {}
 		ContentFile(const kASA& obj) : kASA(obj) {}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -27,9 +27,7 @@ namespace Utilities {
 		sBitArray(const uint64_t& iSize) {
 			_iNumOfBlocks = (iSize + 63) >> 6; // idx / 64
 			_arr.reset(new uint64_t[_iNumOfBlocks]);
-			for (uint64_t i = 0; i < _iNumOfBlocks; ++i) {
-				_arr[i] = 0ULL;
-			}
+			memset(_arr.get(), 0, _iNumOfBlocks * sizeof(uint64_t));
 			_vElementsArray.resize(iSize);
 		}
 
@@ -104,9 +102,8 @@ namespace Utilities {
 			// if there already is a 1, the counter should not increase
 			if (!((_arr[blockID] >> fieldID) & 1)) {
 				_vElementsArray[_currentPositionInArray++] = idx;
+				_arr[blockID] |= (1ULL << fieldID);
 			}
-
-			_arr[blockID] |= (1ULL << fieldID);
 		}
 
 		////////////////////////////////
