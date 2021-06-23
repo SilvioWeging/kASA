@@ -496,16 +496,19 @@ namespace kASA {
 				for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 					libvec[i].reset(new const vecType(&libfile, iSizeOfVec));
 				}
+
 				
-				unique_ptr<uint64_t[]> aFrequencyArray(new uint64_t[size_t(iLocalNumOfThreads) * iIdxCounter * iMaxNumK]);
-				memset(aFrequencyArray.get(), 0, size_t(iLocalNumOfThreads) * iIdxCounter * iMaxNumK * sizeof(uint64_t));
+				vector<uint64_t> aFrequencyArray(size_t(iLocalNumOfThreads) * iIdxCounter * iMaxNumK, 0);
+				//memset(aFrequencyArray.get(), 0, size_t(iLocalNumOfThreads) * iIdxCounter * iMaxNumK * sizeof(uint64_t));
 
 				// count up
 				vector<thread> workerThreads;
 				uint64_t iPartialSize = iSizeOfVec / iLocalNumOfThreads;
 				uint64_t iPartialRemainder = iSizeOfVec % iLocalNumOfThreads;
 				auto func = [&](const int32_t iThreadID) {
-					for (uint64_t i = iThreadID * iPartialSize; i < (iThreadID + 1) * iPartialSize + (((iThreadID + 1) * iPartialSize + iPartialRemainder == iSizeOfVec) ? iPartialRemainder : 0); ++i) {
+					uint64_t endOfLoop = (iThreadID + 1) * iPartialSize;
+					endOfLoop += (((iThreadID + 1) * iPartialSize + iPartialRemainder == iSizeOfVec) ? iPartialRemainder : 0);
+					for (uint64_t i = iThreadID * iPartialSize; i < endOfLoop; ++i) {
 						const auto& entry = (libvec[iThreadID])->at(i);
 						const auto& idx = (iThreadID * iIdxCounter + Utilities::checkIfInMap(*mContentThatWillBeUsed, entry.second)->second) * uint64_t(iMaxNumK);
 						for (int32_t k = 0; k < iMaxNumK; ++k) {

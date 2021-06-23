@@ -328,12 +328,12 @@ namespace kASA {
 
 				string sFalsekMerMarker = "";
 				if (this->_bProtein) {
-					for (int32_t i = 0; i < (_iMaxK - _iMinK); ++i) {
+					for (int32_t i = 0; i < (_iHighestK - _iMinK); ++i) { // (_iHighestK - _iMaxK) + (_iMaxK - _iMinK)
 						sFalsekMerMarker += "^";
 					}
 				}
 				else {
-					for (int32_t i = 0; i < (_iMaxK - _iMinK) * 3; ++i) {
+					for (int32_t i = 0; i < (_iHighestK - _iMinK) * 3; ++i) {
 						sFalsekMerMarker += "X";
 					}
 				}
@@ -874,6 +874,7 @@ namespace kASA {
 					throw;
 				}
 				const auto& chunkSize = iSumOfkMers / _iNumOfThreads;
+				auto chunkSizeOverhead = iSumOfkMers % _iNumOfThreads;
 				size_t start = 0;
 				uint64_t iCurrentkMerCount = 0, iTotalkMerCount = 0;
 				int32_t iProcID = 0;
@@ -887,7 +888,7 @@ namespace kASA {
 				//vector<uint64_t> vRangesOfOutVec(_iNumOfThreads + 1);
 				//cout << "Memory left: " << iSoftMaxSize << endl;
 				for (size_t iLineIdx = 0; iLineIdx < vLines.size(); ++iLineIdx) {
-					if (iCurrentkMerCount >= chunkSize) {
+					if (iCurrentkMerCount >= chunkSize + chunkSizeOverhead) {
 						//call function with start, iLineIdx, iTotalkMerCount
 						auto task = [&, start, iLineIdx, iTotalkMerCount, this](const int32_t&) { convertLinesTokMers_new(vLines, vRCLines, start, iLineIdx, iTotalkMerCount, ref(vOut)); };
 						threadPool[iProcID].pushTask(task);
@@ -896,6 +897,7 @@ namespace kASA {
 						start = iLineIdx;
 						iTotalkMerCount += iCurrentkMerCount;
 						iCurrentkMerCount = 0;
+						chunkSizeOverhead = 0;
 						++iProcID;
 					}
 					if (!_bSixFrames) {

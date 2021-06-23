@@ -38,6 +38,7 @@ namespace kASA {
 			}
 
 			if (sTaxonomicLevel == "lowest") {
+				iIdentifiedCounter = 1;
 				for (auto& entry : vAccessions) {
 					auto elem = taxWithAccNrs.insert(make_pair(to_string(iIdentifiedCounter), unordered_set<string>()));
 					if (elem.second) {
