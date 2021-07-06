@@ -95,6 +95,7 @@ namespace kASA {
 						_translatedFramesForVisualization[j] += sTempFrame;
 					}
 					sAAFrames[j] = aminoacidTokMer<intType>(sTempFrame);
+					//cout << kMerToAminoacid(sAAFrames[j], 25) << " " << sTempFrame << " " << sDna << endl;
 
 					auto kmerForSearchInTrie = sAAFrames[j];
 					if (_bUnfunny) {

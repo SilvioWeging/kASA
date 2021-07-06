@@ -151,7 +151,7 @@ namespace kASA {
 
 				auto outIt = vOut->begin();
 
-				unique_ptr<float[]> summands(new float[_iHighestK]);
+				vector<float> summands(_iHighestK, 1);
 				uint8_t arrayIdx = 0;
 
 				uint64_t iCurrentPercentage = 0;
@@ -265,10 +265,9 @@ namespace kASA {
 		template<class vecType, class elemType>
 		inline void deleteEveryNth(const unique_ptr<const vecType>& vLib, unique_ptr<vecType>& vOut, const float& fN, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
 			try {
-				vector<uint64_t> vSteps(mContent.size(), 1);
 				const double& dStepSize = 100. / fN;
+				vector<uint64_t> vSteps(mContent.size(), 1);
 				vector<double> vNextThrowOutIdx(mContent.size(), dStepSize);
-
 
 				auto itOut = vOut->begin();
 				uint64_t iCounter = 0, iCurrentPercentage = 0;

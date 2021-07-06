@@ -461,7 +461,7 @@ namespace kASA {
 
 		const vector<string> vMasks{ "1111111011111111111111111", "1111111011011111111111111", "1111111011010111111111111", "1111111011010101111111111", "1111111011010100111111111", "1111111011010100101111111", "1111111011010100101011111", "1111111011010100101011011", "1111111011010100101011001"  }; // 13, 14, 15, 16, 17, 19, 21, 24, 25
 
-		inline uint8_t compareTwoKmers(const uint64_t& inKmer, const uint64_t& idxKmer, const int32_t&) {
+		inline uint8_t compareTwoKmers(const intType& inKmer, const intType& idxKmer, const int32_t&) {
 			if (inKmer < idxKmer) {
 				return 0;
 			}
@@ -477,8 +477,13 @@ namespace kASA {
 			return 3;
 		}
 
-		inline uint8_t compareTwoKmersSpaced(const uint64_t& inKmer, const uint64_t& idxKmer, const int32_t& k) {
+		inline uint8_t compareTwoKmersSpaced(const intType& inKmer, const intType& idxKmer, const int32_t& k) {
+			
 			if (vMasks[Base::_iWhichMask][k] == '0') {
+				//if (inKmer != idxKmer) {
+					//cout << k << " " << Base::kMerToAminoacid(inKmer, 25) << " " << Base::kMerToAminoacid(idxKmer, 25) << endl;
+				//}
+
 				return 1;
 			}
 			return compareTwoKmers(inKmer, idxKmer, 0);
@@ -600,7 +605,7 @@ namespace kASA {
 						auto iCurrentkMerShifted = get<0>(iCurrentkMer) >> shift;
 						bInputIterated = true;
 
-						//cout << kASA::kMerToAminoacid(iCurrentkMer.first, 25) << " " << kASA::kMerToAminoacid(shiftVal(iCurrentkMer.first), 25) << " " << kASA::kMerToAminoacid(iCurrentkMerShifted, 25) << " " << kASA::kMerToAminoacid(shiftVal(rangeBeginIt->first), 25) << " " << kASA::kMerToAminoacid(shiftVal(rangeEndIt->first), 25) << endl;
+						//cout << kASA::kMerToAminoacid(iCurrentkMer.first, 25) << " " << kASA::kMerToAminoacid(shiftVal(iCurrentkMer.first), 25) << " " << kASA::kMerToAminoacid(iCurrentkMerShifted, 25) << " " << kASA::kMerToAminoacid(shiftVal(rangeBeginIt->first), 25) << " " << kASA::kMerToAminoacid(iCurrentkMer.first, 25) << endl;
 						debugBarrier
 						// determine first occurence inside index to save matching time
 						if ((get<0>(iSeenInput) != get<0>(iCurrentkMer)) && (shiftVal(seenResultIt->first) != iCurrentkMerShifted) && bDetermineBeginForMatching) {
@@ -645,7 +650,7 @@ namespace kASA {
 							for (int32_t ik = Base::_iNumOfK - 1; ik > -1; --ik) {
 								const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 								const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
-								if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
+								if (compare(iCurrentkMerShifted_ & 31, vMemoryOfSeenkMers[ik] & 31, Base::_aOfK[ik]) == 1) { //  iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]
 									addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
 								}
 							}
@@ -671,13 +676,13 @@ namespace kASA {
 
 								//cout << Base::kMerToAminoacid(iCurrentkMerShifted, 25) << " " << Base::kMerToAminoacid(iCurrentLibkMerShifted, 25) << endl;
 
-								const uint8_t iResultFromComparison = compare(iCurrentkMerShifted, iCurrentLibkMerShifted, Base::_aOfK[ikLengthCounter]);
+								const uint8_t iResultFromComparison = compare(iCurrentkMerShifted & 31, iCurrentLibkMerShifted & 31, Base::_aOfK[ikLengthCounter]);
 								if (iResultFromComparison == 0) {
 									if (bInputIterated) {
 										for (int32_t ik = ikLengthCounter; ik > -1; --ik) {
 											const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 											const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
-											if (iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]) {
+											if (compare(iCurrentkMerShifted_ & 31, vMemoryOfSeenkMers[ik] & 31, Base::_aOfK[ik]) == 1) { //  iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]
 												addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
 											}
 											else {
@@ -752,7 +757,7 @@ namespace kASA {
 											if (iCurrentkMerShifted > (iNextLibSuffix >> shift)) {
 												int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 												for (; iUntilK > -1; --iUntilK) {
-													if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))) {
+													if (compare(vMemoryOfSeenkMers[iUntilK] & 31, (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])) & 31, Base::_aOfK[iUntilK]) == 1) { //  vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))
 														if (this->_bVisualize) {
 															_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
 														}
@@ -798,7 +803,7 @@ namespace kASA {
 						const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
 						int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 						for (; iUntilK > -1; --iUntilK) {
-							if (vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))) {
+							if (compare(vMemoryOfSeenkMers[iUntilK] & 31, (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])) & 31, Base::_aOfK[iUntilK]) == 1) { //   vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))
 								if (this->_bVisualize) {
 									_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
 								}
@@ -2193,6 +2198,10 @@ namespace kASA {
 						//iNumOfReads = (transferBetweenRuns->iNumOfNewReads > 0) ? transferBetweenRuns->iNumOfNewReads : 1; // vReadIDs.size();
 						iNumOfReads = transferBetweenRuns->iNumOfNewReads;
 
+						/*for (int i = 0; i < 5; i++) {
+							cout << Base::kMerToAminoacid(get<1>(vInputVec[i]), 25) << endl;
+						}*/
+
 
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
@@ -2202,6 +2211,10 @@ namespace kASA {
 
 						// sort prefixes for each range in parallel
 						sortInputAndCheckInvalidkMers(vInputVec, index.bPartitioned, *(index.trieForVector), iLocalNumOfThreads);
+
+						/*for (int i = 0; i < 5; i++) {
+							cout << Base::kMerToAminoacid(get<1>(vInputVec[i]), 25) << endl;
+						}*/
 						debugBarrier
 
 #ifdef TIME
@@ -2500,8 +2513,9 @@ namespace kASA {
 					// Because of the padding at the end to get useful k-mers between max_k and min_k (see sFalsekMerMarker), overall relative frequency is distorted
 					// therefore we need to calculate how many there were to get the number right, how many could have possibly matched
 					vector<uint64_t> vNumberOfGarbagekMersPerK(Base::_iNumOfK, 0);
+					const uint64_t iFrameMultiplier = (this->_bOnlyOneFrame) ? 1 : ((Base::_bSixFrames) ? 6 : 3);
 					for (int32_t i = Base::_iMaxK - Base::_iMinK, j = 0; i > 0; --i, ++j) {
-						vNumberOfGarbagekMersPerK[j] = iNumOfReadsSum * ((Base::_bSixFrames) ? 6 : 3) * i; //Number of reads * 2(forward,reverse complement) * 3(frames) * dist(max_k,min_k)
+						vNumberOfGarbagekMersPerK[j] = iNumOfReadsSum * iFrameMultiplier * i; //Number of reads * 2(forward,reverse complement) * 3(frames) * dist(max_k,min_k)
 					}
 
 					// save to file(s)
