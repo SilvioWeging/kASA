@@ -255,7 +255,7 @@ class WorkerQueueWithIDs {
 	condition_variable cv_worker;
 	condition_variable cv_master;
 	mutex taskMutex, idsMutex;
-	bool stop = false;//, bStarted = false;
+	bool stop = false, bStarted = false;
 
 public:
 	/////////////////////////////////////////////////////////
@@ -283,20 +283,15 @@ public:
 
 	////////////////////////////////////////////////////////
 	inline void pushTask(const function<void(const int32_t&)>& task) {
-		{
-			std::unique_lock<std::mutex> lock(this->taskMutex);
-			tasks.push([task](const int32_t& id) { task(id); });
-		}
-		cv_worker.notify_all();
+		tasks.push([task](const int32_t& id) { task(id); });
 	}
 
 	////////////////////////////////////////////////////////
 	inline void start() {
-		/*if (!tasks.empty()) {
+		if (!tasks.empty()) {
 			bStarted = true;
 			cv_worker.notify_all();
-		}*/
-		//bStarted = true;
+		}
 	}
 
 	////////////////////////////////////////////////////////
@@ -304,9 +299,9 @@ public:
 		if (!this->tasks.empty()) {
 			unique_lock<std::mutex> lock(this->taskMutex);
 			this->cv_master.wait(lock,
-				[this] { return this->tasks.empty(); });
+				[this] { return this->tasks.empty() && (this->IDs.size() == pool.size()); });
 		}
-		//bStarted = false;
+		bStarted = false;
 	}
 
 private:
@@ -318,10 +313,11 @@ private:
 
 					function<void(const int32_t&)> task;
 					int32_t id = 0;
-					bool bQueueisEmpty = false;
 					{
 						std::unique_lock<std::mutex> lock(this->taskMutex);
-						this->cv_worker.wait(lock, [this]() {return !(this->tasks.empty()) || this->stop; });
+						
+						this->cv_worker.wait(lock, [this]() {return (!(this->tasks.empty()) && bStarted) || this->stop; });
+
 
 						if (this->stop) {
 							this->pool[index]->detach();
@@ -331,12 +327,12 @@ private:
 						}
 
 						if (!this->tasks.empty()) {
-							task = std::move(this->tasks.front());
+							task = this->tasks.front();
 							this->tasks.pop();
-							bQueueisEmpty = this->tasks.empty();
 
 							std::unique_lock<std::mutex> lock2(this->idsMutex);
-							id = std::move(this->IDs.front());
+
+							id = this->IDs.front();
 							this->IDs.pop_front();
 						}
 						else {
@@ -350,7 +346,7 @@ private:
 						this->IDs.push_back(id);
 					}
 
-					if (bQueueisEmpty) {
+					if (this->tasks.empty() && (this->IDs.size() == pool.size())) {
 						//std::unique_lock<std::mutex> lock(this->taskMutex);
 						cv_master.notify_one();
 					}

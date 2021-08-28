@@ -345,6 +345,14 @@ namespace kASA {
 				size_t iDNALength = transfer->lengthOfDNA, iQualityLength = 0;
 				bool bNewRead = transfer->bNewRead, bAddTail = transfer->addTail;
 
+				if (sOverhang == "" && sName != "") {
+					if (bReadIDsAreInteresting) {
+						++iLocalReadID;
+						vReadNameAndLength.push_back(make_pair(sName, uint32_t(iDNALength)));
+						iSoftMaxSize -= sizeof(pair<string, uint32_t>) + sName.size() * sizeof(char) + sizeof(uint32_t);
+					}
+				}
+
 				transfer->iNumOfNewReads = 0 + (transfer->addTail);
 				transfer->finished = false;
 				pair<std::string, bool> resultChunkPair, resultChunkPair2;
@@ -557,7 +565,7 @@ namespace kASA {
 									bReadTooShort = true;
 								}
 								else {
-									if (sDNA.length() < size_t(_iHighestK) * 3 && resultChunkPair.second) {
+									if (sDNA.length() < size_t(_iHighestK) * 3 && resultChunkPair.second) { // sequence was fully read
 										sOverhang = "";
 										bReadTooShort = false;
 										while (sDNA.length() < size_t(_iHighestK) * 3) {
@@ -638,13 +646,14 @@ namespace kASA {
 									bNotFull = false;
 								}
 							}
-							else {
-								throw runtime_error("No overhang line was found, something went wrong while parsing the input!");
-							}
+							//else {
+
+								//throw runtime_error("No overhang line was found, something went wrong while parsing the input!");
+							//}
 						}
 
 
-						if (bAddTail) {
+						if (bAddTail ) { //&& transfer->lastLine != ""
 							// Pad very small reads
 							auto padding = [&](vector<tuple<string, readIDType, int32_t>>& vLines) {
 								if (vLines.size()) {
@@ -833,6 +842,14 @@ namespace kASA {
 					transfer->name = sName;
 					transfer->overhang = sOverhang;
 					transfer->overhang2 = sOverhang2;
+
+					if (sOverhang.length() == 0 && !input.eof()) {
+						cerr << "Info: Overhanging line is empty!" << endl;
+						if (bReadIDsAreInteresting) {
+							iLocalReadID--;
+							vReadNameAndLength.pop_back();
+						}
+					}
 				}
 
 #ifdef TIME
@@ -856,8 +873,10 @@ namespace kASA {
 				if (input2.notNull()) {
 					vLines.insert(vLines.end(), vLines2.begin(), vLines2.end());
 					vLines2.clear();
+					vLines2.shrink_to_fit();
 					vRCLines.insert(vRCLines.end(), vRCLines2.begin(), vRCLines2.end());
 					vRCLines2.clear();
+					vRCLines2.shrink_to_fit();
 				}
 
 

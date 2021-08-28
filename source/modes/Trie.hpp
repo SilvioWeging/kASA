@@ -108,6 +108,33 @@ public:
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	inline void InOrderTraversal(const int8_t& iCurrentK, const int8_t& iMaxLevel, const vector<uint64_t>& vIn, vector<uint64_t>& vOut, uint64_t& currIdx) {
+		if (_iLevelDiff - 2 > 0) {
+			for (uint32_t iLetterIdx = 0; iLetterIdx < 32; ++iLetterIdx) {
+				Node* edge = static_cast<Node*>(_Edges[iLetterIdx]);
+				if (edge != nullptr) {
+					edge->InOrderTraversal(iCurrentK, iMaxLevel, vIn, vOut, currIdx);
+				}
+			}
+		}
+		else {
+			for (uint32_t iLetterIdx = 0; iLetterIdx < 32; ++iLetterIdx) {
+				Leaf5* edge = static_cast<Leaf5*>(_Edges[iLetterIdx]);
+				if (edge != nullptr) {
+					for (uint32_t iLastIdx = 0; iLastIdx < 32; ++iLastIdx) {
+						if (edge->_vRanges1[iLastIdx] != numeric_limits<uint64_t>::max()) {
+							for (uint32_t iNumOfIdenticals = 0; iNumOfIdenticals < edge->_vRanges2[iLastIdx]; ++iNumOfIdenticals) {
+								vOut[currIdx] = vIn[edge->_vRanges1[iLastIdx]];
+								currIdx++;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	explicit Node(const int8_t& iMaxLevel) : _Edges(), _iLevelDiff(iMaxLevel) {
 		// for root node
 	}
@@ -301,6 +328,13 @@ public:
 		default:
 			break;
 		};
+
+		_root.reset(new Node(_iMaxLevel));
+	}
+
+	inline void addToTrie(const uint32_t& entry, const uint64_t& iIdx, const uint32_t& iValue) {
+		uint64_t iDummy = 0;
+		_root->IncreaseIndex(entry, iIdx, iValue, iDummy);
 	}
 
 	inline void SetForIsInTrie(const uint8_t& val) {
@@ -363,7 +397,6 @@ public:
 	///////////////////////////
 	inline void LoadFromStxxlVec(const string& loadPath) {
 		try {
-			_root.reset(new Node(_iMaxLevel));
 			ios::sync_with_stdio(false);
 			ifstream sizeFile(loadPath + "_trie.txt");
 			uint64_t iSizeOfTrieVec;
@@ -433,7 +466,6 @@ public:
 	template<typename T>
 	inline void Create(const T vKMerVec) { //TODO!!!
 
-		_root.reset(new Node(_iMaxLevel));
 		uint64_t iCount = 0, iStart = 0; //iEnd = 0;
 		uint64_t iKnownShortMer = get<0>(vKMerVec->at(0)) & _Bitmask;
 		uint64_t iTemp = 0;
@@ -490,5 +522,11 @@ public:
 	///////////////////////////
 	inline bool IsInTrie(const uint64_t kMer) const {
 		return _root->isInTrie(static_cast<uint32_t>(kMer >> 30), _ikForIsInTrie, _iMaxLevel);
+	}
+
+	///////////////////////////
+	inline void TraverseTrieInOrder(const vector<uint64_t>& vIn, vector<uint64_t>& vOut) {
+		uint64_t iIdxForOut = 0;
+		_root->InOrderTraversal(7, 6, vIn, vOut, iIdxForOut);
 	}
 };

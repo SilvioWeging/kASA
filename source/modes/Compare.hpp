@@ -386,6 +386,7 @@ namespace kASA {
 		///////////////////////////////////////////////////////
 		//const float arrWeightingFactors[12] = { 1.f , 121.f / 144.f , 100.f / 144.f , 81.f / 144.f , 64.f / 144.f , 49.f / 144.f , 36.f / 144.f , 25.f / 144.f , 16.f / 144.f , 9.f / 144.f , 4.f / 144.f , 1.f / 144.f };
 		const float arrWeightingFactors[HIGHESTPOSSIBLEK] = { 1.f , 576.f / 625.f , 529.f / 625.f , 484.f / 625.f , 441.f / 625.f , 400.f / 625.f , 361.f / 625.f , 324.f / 625.f , 289.f / 625.f , 256.f / 625.f , 225.f / 625.f , 196.f / 625.f , 169.f / 625.f , 144.f / 625.f , 121.f / 625.f , 100.f / 625.f , 81.f / 625.f , 64.f / 625.f , 49.f / 625.f , 36.f / 625.f , 25.f / 625.f , 16.f / 625.f , 9.f / 625.f , 4.f / 625.f , 1.f / 625.f };
+		//const float arrWeightingFactors[HIGHESTPOSSIBLEK] = { 1.f, 0.84934656, 0.71639296, 0.59969536, 0.49787136, 0.4096, 0.33362176, 0.26873856, 0.21381376, 0.16777216, 0.1296, 0.09834496, 0.07311616, 0.05308416, 0.03748096, 0.0256, 0.01679616, 0.01048576, 0.00614656, 0.00331776, 0.0016, 0.00065536, 0.00020736, 4.096E-05, 2.56E-06 };
 		//const float arrWeightingFactors[12] = { 1, 1331.f / 1728.f , 1000.f / 1728.f , 729.f / 1728.f , 512.f / 1728.f , 343.f / 1728.f , 216.f / 1728.f , 125.f / 1728.f , 64.f / 1728.f , 27.f / 1728.f , 8.f / 1728.f , 1.f / 1728.f };
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		inline void markTaxIDs(const uint64_t& codedTaxIDs, Utilities::sBitArray& vMemoryOfTaxIDs_k, const unordered_map<uint32_t, uint32_t>& mTaxToIdx, unique_ptr<const contentVecType>&) {
@@ -494,7 +495,7 @@ namespace kASA {
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
 		// To minimize hard disk access, the order is as follows: Get kMer from RAM Vec -> Search in Prefix-Trie -> Get range of possible hit -> binary search in that range -> note if hit
 		template <typename vecType>
-		inline void compareWithDatabase(const int32_t& iThreadID, const vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
+		inline void compareWithDatabase(const int32_t& iThreadID, const vector<tuple<uint64_t, intType, uint32_t, uint32_t>>& vIn, const uint64_t& vInStart, const uint64_t& vInEnd, const vecType& vLib, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<uint64_t[]>& vCountTotal, Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iSpecIDRange, const unordered_map<uint32_t, uint32_t>& mTaxToIdx) {//, const unordered_map<readIDType, uint64_t>& mReadIDToArrayIdx) {
 
 			try {
 				debugBarrier
@@ -730,6 +731,7 @@ namespace kASA {
 												const auto& tempIndex = iPartialTempIndex + (*it);
 
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
+												vCountTotal[tempIndex] += numOfHits;
 
 												if (numOfEntries == 1) {
 													vCountUnique[tempIndex] += numOfHits;
@@ -835,6 +837,8 @@ namespace kASA {
 							const auto& tempIndex = iPartialTempIndex + (*it);
 							
 							vCount[tempIndex] += double(numOfHits) / numOfEntries;
+
+							vCountTotal[tempIndex] += numOfHits;
 
 							if (numOfEntries == 1) {
 								vCountUnique[tempIndex] += numOfHits;
@@ -1898,7 +1902,7 @@ namespace kASA {
 				// First calculate the average memory usage: 
 				//	Size of trie + size of counts_all/_unique + index size + memory for tax ids + chunksize from input + overhead buffer for various allocations
 				const uint64_t& iMult = uint64_t(iLocalNumOfThreads) * Base::_iNumOfK * uint64_t(index.iNumOfSpecies);
-				int64_t iMemoryUsageOnAverage = ((index.bIdentifyMultiple) ? (GIGABYTEASBYTES / iLocalNumOfThreads) : GIGABYTEASBYTES) + iMult * (sizeof(uint64_t) + sizeof(double)) + uint64_t(iLocalNumOfThreads) * Utilities::sBitArray(index.iNumOfSpecies).sizeInBytes() + 14399756 + 4 * index.iNumOfSpecies;
+				int64_t iMemoryUsageOnAverage = ((index.bIdentifyMultiple) ? (GIGABYTEASBYTES / iLocalNumOfThreads) : GIGABYTEASBYTES) + iMult * (sizeof(uint64_t) + sizeof(double) + sizeof(uint64_t)) + uint64_t(iLocalNumOfThreads) * Utilities::sBitArray(index.iNumOfSpecies).sizeInBytes() + 14399756 + 4 * index.iNumOfSpecies;
 
 				// Set memory boundaries
 				int64_t iSoftMaxMemoryAvailable = 0;
@@ -1924,9 +1928,11 @@ namespace kASA {
 				// Initialize this here to calculate the average memory usage
 				
 				unique_ptr<double[]> vCount_all(new double[iMult]);
+				unique_ptr<uint64_t[]> vCount_total(new uint64_t[iMult]);
 				unique_ptr<uint64_t[]> vCount_unique(new uint64_t[iMult]);
 
 				fill_n(vCount_all.get(), iMult, 0.);
+				fill_n(vCount_total.get(), iMult, 0);
 				fill_n(vCount_unique.get(), iMult, 0);
 
 				debugBarrier
@@ -2269,14 +2275,14 @@ namespace kASA {
 
 						if (bRAM) {
 							if (index.bPartitioned) {
-								foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, index.getLibRAMHalf(), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+								foo = bind(&Compare::compareWithDatabase< vector<packedPair>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, index.getLibRAMHalf(), ref(vCount_all), ref(vCount_unique), ref(vCount_total), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 							}
 							else {
 								if (bUnfunny) {
 									//foo = bind(&Compare::compareWithDatabase_sloppy< vector<uint16_t>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, &vLib_RAM_taxaOnly, ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(iAmountOfSpecies), ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 								else {
-									foo = bind(&Compare::compareWithDatabase< vector<elemType>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, index.getLibRAMFull(), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase< vector<elemType>*>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, index.getLibRAMFull(), ref(vCount_all), ref(vCount_unique), ref(vCount_total), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 							}
 						}
@@ -2289,7 +2295,7 @@ namespace kASA {
 								else {
 									indexPtr = index.getIndexTP();
 								}
-								foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(*indexPtr), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+								foo = bind(&Compare::compareWithDatabase< unique_ptr<unique_ptr<const index_t_p>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(*indexPtr), ref(vCount_all), ref(vCount_unique), ref(vCount_total), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 							}
 							else {
 								if (bUnfunny) {
@@ -2303,7 +2309,7 @@ namespace kASA {
 									else {
 										indexPtr = index.getContentVecType();
 									}
-									foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(*indexPtr), ref(vCount_all), ref(vCount_unique), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
+									foo = bind(&Compare::compareWithDatabase<unique_ptr<unique_ptr<const contentVecType>[]>>, this, placeholders::_1, ref(vInputVec), placeholders::_2, placeholders::_3, ref(*indexPtr), ref(vCount_all), ref(vCount_unique), ref(vCount_total), ref(vReadIDtoTaxID), ref(index.iNumOfSpecies), ref(*index.mTaxToIdx));//, ref(transferBetweenRuns->mReadIDToArrayIdx));
 								}
 							}
 						}
@@ -2471,6 +2477,7 @@ namespace kASA {
 						for (uint64_t iIdx = 0; iIdx < uint64_t(Base::_iNumOfK)* index.iNumOfSpecies; ++iIdx) {
 							vCount_all[iIdx] += vCount_all[iStepsize + iIdx];
 							vCount_unique[iIdx] += vCount_unique[iStepsize + iIdx];
+							vCount_total[iIdx] += vCount_total[iStepsize + iIdx];
 						}
 					}
 #ifdef DEBUGOUT
@@ -2486,24 +2493,24 @@ namespace kASA {
 					// get profiling results
 					vector<uint64_t> vSumOfUniquekMers(Base::_iNumOfK);
 					vector<double> vSumOfNonUniques(Base::_iNumOfK);
-					vector<tuple<string, vector<pair<double, uint64_t>>, uint32_t>> vOut(index.iNumOfSpecies, tuple<string, vector<pair<double, uint64_t>>, uint32_t>("", vector<pair<double, uint64_t>>(Base::_iNumOfK), 0));
+					vector<tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>> vOut(index.iNumOfSpecies, tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>("", vector<tuple<double, uint64_t, uint64_t>>(Base::_iNumOfK), 0));
 					for (uint32_t iSpecIdx = 1; iSpecIdx < index.iNumOfSpecies; ++iSpecIdx) {
-						vector<pair<double, uint64_t>> vTemp(Base::_iNumOfK);
+						vector<tuple<double, uint64_t, uint64_t>> vTemp(Base::_iNumOfK);
 						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							const uint64_t& iTempScore = vCount_unique[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies];
 							vSumOfUniquekMers[ikMerlength] += iTempScore;
 							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies];
-							vTemp[ikMerlength] = make_pair(vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies], iTempScore);
+							vTemp[ikMerlength] = make_tuple(vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies], iTempScore, vCount_total[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies]);
 						}
 						vOut[iSpecIdx] = make_tuple(Utilities::replaceCharacter(index.mOrganisms->at(iSpecIdx), ',', ' '), vTemp, index.mIdxToTax->at(iSpecIdx));
 					}
-					sort(vOut.begin(), vOut.end(), [](const tuple<string, vector<pair<double, uint64_t>>, uint32_t>& a, const tuple<string, vector<pair<double, uint64_t>>, uint32_t>& b) {
+					sort(vOut.begin(), vOut.end(), [](const tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>& a, const tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>& b) {
 						for (uint64_t i = 0; i < get<1>(a).size(); ++i) {
-							if (get<1>(a)[i].second == get<1>(b)[i].second) {
+							if (get<1>(get<1>(a)[i]) == get<1>(get<1>(b)[i])) {
 								continue;
 							}
 							else {
-								return get<1>(a)[i].second > get<1>(b)[i].second;
+								return get<1>(get<1>(a)[i]) > get<1>(get<1>(b)[i]);
 							}
 						}
 						return false;
@@ -2587,52 +2594,63 @@ namespace kASA {
 						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							tableFileStream << "," << "Overall unique rel. freq. k=" << Base::_iMaxK - ikMerlength;
 						}
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << "Special Counts k=" << Base::_iMaxK - ikMerlength;
+						}
 						tableFileStream << "\n";
 
 						vector<double> vSumOfIdentified(Base::_iNumOfK, 0), vSumOfUniqueIdentified(Base::_iNumOfK, 0);
+						uint64_t iSpecIdx = 1;
 						for (const auto& entry : vOut) {
-							if (get<1>(entry)[Base::_iNumOfK - 1].first > 0) {
+							if (get<0>(get<1>(entry)[Base::_iNumOfK - 1]) > 0) {
 								// unique count
 								sOutStr << get<2>(entry) << "," << get<0>(entry);
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									sOutStr << "," << get<1>(entry)[ikMerlength].second;
+									sOutStr << "," << get<1>(get<1>(entry)[ikMerlength]);
 								}
 								// unique rel freq
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									if (get<1>(entry)[ikMerlength].second == 0) {
+									if (get<1>(get<1>(entry)[ikMerlength]) == 0) {
 										sOutStr << "," << 0.0;
 									}
 									else {
-										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / vSumOfUniquekMers[ikMerlength];
+										sOutStr << "," << static_cast<double>(get<1>(get<1>(entry)[ikMerlength])) / vSumOfUniquekMers[ikMerlength];
 									}
 								}
 								// non-unique count
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									sOutStr << "," << get<1>(entry)[ikMerlength].first;
+									sOutStr << "," << get<0>(get<1>(entry)[ikMerlength]);
 								}
 								// non-unique rel freq
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									if (get<1>(entry)[ikMerlength].first == 0) {
+									if (get<0>(get<1>(entry)[ikMerlength]) == 0) {
 										sOutStr << "," << 0.0;
 									}
 									else {
 										//sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength]) / (iNumberOfkMersInInput - aNonUniqueHits[ikMerlength] - (Base::_iMaxK - Base::_iMinK - ikMerlength) * 6 * iNumOfReadsSum);
-										sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / vSumOfNonUniques[ikMerlength];
+										sOutStr << "," << static_cast<double>(get<0>(get<1>(entry)[ikMerlength])) / vSumOfNonUniques[ikMerlength];
 									}
 								}
 								// Overall rel freq
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									vSumOfIdentified[ikMerlength] += get<1>(entry)[ikMerlength].first;
-									sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].first) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
+									vSumOfIdentified[ikMerlength] += get<0>(get<1>(entry)[ikMerlength]);
+									sOutStr << "," << static_cast<double>(get<0>(get<1>(entry)[ikMerlength])) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
 								}
 
 								// Overall unique rel freq
 								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									vSumOfUniqueIdentified[ikMerlength] += get<1>(entry)[ikMerlength].second;
-									sOutStr << "," << static_cast<double>(get<1>(entry)[ikMerlength].second) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
+									vSumOfUniqueIdentified[ikMerlength] += get<1>(get<1>(entry)[ikMerlength]);
+									sOutStr << "," << static_cast<double>(get<1>(get<1>(entry)[ikMerlength])) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
 								}
+
+								// Special count
+								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+									sOutStr << "," << get<2>(get<1>(entry)[ikMerlength]);
+								}
+								
 								sOutStr << "\n";
 							}
+							iSpecIdx++;
 						}
 						// last entry
 						tableFileStream << "0,not identified";
@@ -2648,6 +2666,9 @@ namespace kASA {
 						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfUniqueIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 						}
+						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+							tableFileStream << "," << 0.0;
+						}
 						tableFileStream << "\n" << sOutStr.str();
 
 						allSumOfIdentified = vSumOfIdentified[Base::_iNumOfK - 1];
@@ -2655,7 +2676,7 @@ namespace kASA {
 					}
 					else {
 						for (const auto& entry : vOut) {
-							allSumOfIdentified += get<1>(entry)[Base::_iNumOfK - 1].first;
+							allSumOfIdentified += get<0>(get<1>(entry)[Base::_iNumOfK - 1]);
 						}
 					}
 					debugBarrier
@@ -2686,10 +2707,10 @@ namespace kASA {
 					iTimeCompare = 0;
 					vReadNameAndLength.clear();
 
-					for (uint64_t i = 0; i < iMult; ++i) {
-						vCount_all[i] = 0.;
-						vCount_unique[i] = 0;
-					}
+
+					fill_n(vCount_all.get(), iMult, 0.);
+					fill_n(vCount_total.get(), iMult, 0);
+					fill_n(vCount_unique.get(), iMult, 0);
 
 					allFilesProgress = transferBetweenRuns->iCurrentOverallPercentage;
 				}

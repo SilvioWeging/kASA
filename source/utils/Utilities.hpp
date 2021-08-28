@@ -21,6 +21,7 @@
 #include <utility>
 #include <unordered_map>
 #include <chrono>
+#include <array>
 
 #include "WorkerThread.hpp"
 #include "BitArray.hpp"
@@ -992,6 +993,7 @@ namespace Utilities {
 		}
 		return static_cast<T2>(0);
 	}
+
 
 
 
