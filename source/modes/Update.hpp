@@ -19,24 +19,24 @@ namespace kASA {
 		typedef Read<vecType, elemType, intType> Base;
 
 	public:
-		Update(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : Read<vecType, elemType, intType>(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), Build<vecType, elemType>() {}
+		Update(const InputParameters& cParams) : Read<vecType, elemType, intType>(cParams), Build<vecType, elemType>() {}
 		Update(const kASA& obj, const bool& bUnfunny = false) : Read<vecType, elemType, intType>(obj, bUnfunny), Build<vecType, elemType>() {}
 
 	public:
 
 
-		void DeleteFromLib(const string& contentFile, const string& sLibFile, const string& fOutfile, const string& sDelNodesPath, const bool& bOverwrite, int64_t iMemory) {
+		void DeleteFromLib(const InputParameters& cParams, const bool& bOverwrite) {
 			try {
 				// test if files exists
-				if (!ifstream(sLibFile)) {
+				if (!ifstream(cParams.indexFile)) {
 					throw runtime_error("Library file does not exist");
 				}
 
-				if (!ifstream(sDelNodesPath)) {
+				if (!ifstream(cParams.delnodesFile)) {
 					throw runtime_error("delnodes.dmp not found");
 				}
 
-				ifstream deletedNodes(sDelNodesPath);
+				ifstream deletedNodes(cParams.delnodesFile);
 				string line = "";
 				unordered_set<uint32_t> vTaxIdsTBD;
 				while (getline(deletedNodes, line)) {
@@ -48,17 +48,17 @@ namespace kASA {
 				// Create new vector
 				string sTempFile = Base::_sTemporaryPath + "_update_temp_" + to_string(Base::_iNumOfCall);
 				{ // need a scope so that the stxxl releases the vector before copying in the case of overwrite == true
-					ifstream infoFile(sLibFile + "_info.txt");
+					ifstream infoFile(cParams.indexFile + "_info.txt");
 					uint64_t iLibSize;
 					infoFile >> iLibSize;
 					infoFile.close();
-					stxxlFile libFile(sLibFile, stxxl::file::RDONLY);
+					stxxlFile libFile(cParams.indexFile, stxxl::file::RDONLY);
 					const vecType vLib(&libFile, iLibSize);
 					ofstream dummy;
 					//dummy.exceptions(std::ifstream::failbit | std::ifstream::badbit); 
-					dummy.open((bOverwrite) ? sTempFile : fOutfile);
+					dummy.open((bOverwrite) ? sTempFile : cParams.sDBPathOut);
 					dummy.close();
-					stxxlFile outFile((bOverwrite) ? sTempFile : fOutfile, stxxl::file::RDWR);
+					stxxlFile outFile((bOverwrite) ? sTempFile : cParams.sDBPathOut, stxxl::file::RDWR);
 					vecType vOut(&outFile, iLibSize);
 
 					// All entries with valid taxonomic ids will be written to the other library
@@ -71,22 +71,22 @@ namespace kASA {
 					vOut.resize(itOut - vOut.begin(), true);
 					vOut.export_files("_");
 
-					ofstream infoFileOut(fOutfile + "_info.txt");
+					ofstream infoFileOut(cParams.sDBPathOut + "_info.txt");
 					infoFileOut << vOut.size();
 
 					Trie<intType> T(static_cast<int8_t>(((is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(Base::_iMinK), 6);
-					T.SaveToStxxlVec(&vOut, fOutfile);
+					T.SaveToStxxlVec(&vOut, cParams.sDBPathOut);
 				}
 				if (bOverwrite) {
-					remove(sLibFile.c_str());
-					Utilities::copyFile(sTempFile, fOutfile);
+					remove(cParams.indexFile.c_str());
+					Utilities::copyFile(sTempFile, cParams.sDBPathOut);
 				}
 
 				if (Base::_bVerbose) {
 					cout << "OUT: Creating frequency file... " << endl;
 				}
 
-				Base::template GetFrequencyK<vecType>(contentFile, fOutfile, iMemory);
+				Base::template GetFrequencyK<vecType>(cParams, cParams.contentFileIn, cParams.sDBPathOut);
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
@@ -96,20 +96,21 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Update an existing library with a fasta file
-		void UpdateFromFasta(const string& contentFile, const string& sLibFile, const string& sDirectory, string fOutFile, const bool& bOverwrite, const uint64_t& iMemory, const float& fPercentageOfThrowAway, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
+		void UpdateFromFasta(const InputParameters& cParams, const bool& bOverwrite, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys) {
 			try {
 
 				// test if files exists
-				if (!ifstream(contentFile) || !ifstream(sLibFile)) {
+				if (!ifstream(cParams.contentFileIn) || !ifstream(cParams.indexFile)) {
 					throw runtime_error("One of the files does not exist");
 				}
+
 
 				// Create new index
 				string sMergedIndexFileName = Base::_sTemporaryPath + "_tempUpdate_out_" + to_string(Base::_iNumOfCall);
 				string sTempIndexFileName = Base::_sTemporaryPath + "_tempUpdate_" + to_string(Base::_iNumOfCall);
 				unordered_map<uint32_t, uint32_t> mIDsAsIdx;
 				{
-					auto buildResults = this->BuildAll(contentFile, sDirectory, sTempIndexFileName, iMemory, fPercentageOfThrowAway, false, true);
+					auto buildResults = this->BuildAll(cParams, sTempIndexFileName, false, true);
 
 					mIDsAsIdx = get<0>(buildResults);
 					const uint64_t& iSizeOfTempIndex = get<1>(buildResults);
@@ -122,11 +123,11 @@ namespace kASA {
 
 					{ // new scope for merging so that the temporary can be removed afterwards
 						// get Size of Lib and open it for reading
-						fstream fLibInfo(sLibFile + "_info.txt", ios::in);
+						fstream fLibInfo(cParams.indexFile + "_info.txt", ios::in);
 						uint64_t iSizeOfLib = 0;
 						fLibInfo >> iSizeOfLib;
 						fLibInfo.close();
-						unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
+						unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(cParams.indexFile, stxxl::file::RDONLY));
 						unique_ptr<const vecType> vLibIn(new vecType(stxxlLibFile.get(), iSizeOfLib));
 						typename vecType::bufreader_type vCBuff(*vLibIn);
 
@@ -143,7 +144,7 @@ namespace kASA {
 					remove(sTempIndexFileName.c_str());
 					remove((sTempIndexFileName + "_info.txt").c_str());
 
-					ofstream fOutInfo(fOutFile + "_info.txt");
+					ofstream fOutInfo(cParams.sDBPathOut + "_info.txt");
 					fOutInfo << vOutVec->size();
 					if (is_same<vecType, contentVecType_128>::value) {
 						fOutInfo << endl << 128;
@@ -156,20 +157,20 @@ namespace kASA {
 					vOutVec->export_files("_");
 
 					Trie<intType> T(static_cast<int8_t>(((is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(Base::_iMinK), 6);
-					T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+					T.SaveToStxxlVec(vOutVec.get(), cParams.sDBPathOut);
 				}
 
 				// "overwrite" old index
 				if (bOverwrite) {
-					remove(sLibFile.c_str());
+					remove(cParams.indexFile.c_str());
 				}
-				Utilities::moveFile(sMergedIndexFileName, fOutFile);
+				Utilities::moveFile(sMergedIndexFileName, cParams.sDBPathOut);
 
 				if (Base::_bVerbose) {
 					cout << "OUT: Creating frequency file... " << endl;
 				}
 
-				Base::template GetFrequencyK<vecType>(contentFile, fOutFile, iMemory, mIDsAsIdx);
+				Base::template GetFrequencyK<vecType>(cParams, cParams.contentFileIn, cParams.sDBPathOut, mIDsAsIdx);
 
 			}
 			catch (...) {

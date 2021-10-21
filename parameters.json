@@ -1,0 +1,85 @@
+{
+"General": 
+	{
+	"Mode": "",
+	"Index": "",
+	"ContentFile": "",
+	"kHigh": 12,
+	"kLow": 7,
+	"NumberOfThreads": 1,
+	"AvailableRAMinGB": 1
+	}
+
+"Additional":
+	{
+	"FilePathForTemporaryFiles": "",
+	"CallIndex": 0,
+	"Verbose": false,
+	"AlphabetFile": "",
+	"AlphabetIndex": "0"
+	}
+
+"Input":
+	{
+	"InputFileOrFolder": "",
+	"PairedEnd-First": "",
+	"PairedEnd-Second": "",
+	"AlreadyTranslated": false
+	}
+
+"Build":
+	{
+	"TaxonomicLevel": "",
+	"AccessionToTaxIDFileOrFolder": "",
+	"TaxonomyFolder": "",
+	"TaxIDsAreStrings": false
+	}
+
+"Frames":
+	{
+	"One": false,
+	"Three": false,
+	"Six": true
+	}
+
+"IdentificationOutput":
+	{
+	"ProfileOutputfile": "",
+	"ReadIDtoTaxIDOutputfile": "",
+	"ReadIDtoTaxIDOutputFormat": ""
+	}
+
+"Identify":
+	{
+	"UseRAMOnly": false,
+	"NumberOfTaxaPerRead": 3,
+	"UniqueKmersOnly": false,
+	"ThresholdForScore": 0.0,
+	"PrintCoverage": false
+	}
+
+"Shrink":
+	{
+	"FileOfDeletedTaxa": "",
+	"ShrinkingStrategy": 2,
+	"ShrinkPercentage": 0
+	}
+
+"Update":
+	{
+	"ContentFile-First": "",
+	"ContentFile-Second": "",
+	"ContentFile-Out": "",
+	"FirstOldIndex": "",
+	"SecondOldIndex": "",
+	"NewIndex": ""
+	}
+
+"DeveloperOnly":
+	{
+	"Debug": false,
+	"Visualize": false,
+	"Spaced": false,
+	"SpacedMaskIdx": 0
+	}
+}

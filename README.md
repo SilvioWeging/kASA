@@ -141,6 +141,8 @@ In this part, you can learn how to `build` your index, `identify` known stuff, `
 
 The first letter after a "-" is the short version of a parameter, "--" is the longer one. If no `<...>` follows a parameter, it's a boolean flag.
 
+If you want, you can use a json file containing all parameters instead. Just use the one on this git and configure it. Give this file to kASA with `--parameters <file>` and everything will be fetched from there.
+
 ### Basic
 Some parameters which are used by most modes:
 ##### Mandatory
@@ -273,6 +275,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--one`: Use only one reading frame instead of three. Speeds up the tool significantly but sacrifices robustness. Default: off.
 * `-1`: First file in a paired-end pair.
 * `-2`: Second file in a paired-end pair. Both `-1` and `-2` must be used and `-i` will be ignored for this call. Paired-end can only be files, no folders.
+* `--coverage`: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Default: off.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -422,8 +425,8 @@ Both indices must have been created with the same bit size (64 or 128). The cont
 * `-c1 <file>`: Content file of the first index. Default: <index>_content.txt
 * `-c2 <file>`: Content file of the second index. Default: Same as above.
 * `-co <file>`: Content file in which the two will be merged. Default: Same as above.
-* `-d (--database) <file>`: First index.
-* `-i (--input) <file>`: Second index.
+* `--firstIndex <file>`: First index.
+* `--secondIndex <file>`: Second index.
 * `-o (--outgoing) <file>`: Resulting merged index. Default: None.
 
 ##### Example call

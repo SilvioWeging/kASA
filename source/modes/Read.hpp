@@ -25,7 +25,7 @@ namespace kASA {
 		vector<string> _translatedFramesForVisualization;
 
 	public:
-		Read(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : kASA(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames), _bUnfunny(bUnfunny) {}
+		Read(const InputParameters& cParams) : kASA(cParams), _bUnfunny(cParams.bUnfunny) {}
 		Read(const kASA& obj, const bool& bUnfunny = false) : kASA(obj), _bUnfunny(bUnfunny) {}
 	protected:
 
@@ -893,8 +893,9 @@ namespace kASA {
 					cerr << "ERROR: Your system does not have enough contiguous memory available (which happens if the system is powered on over a long period of time). You might try to restart or use a lower number after -m. FYI: You tried to use " + to_string(triedToAllocate) + " MB but had only " << to_string(iAvailMemory/(1024ull*1024ull)) << " MB available." << endl;	
 					throw;
 				}
-				const auto& chunkSize = iSumOfkMers / _iNumOfThreads;
-				auto chunkSizeOverhead = iSumOfkMers % _iNumOfThreads;
+
+				const auto& chunkSize = iSumOfkMers / threadPool.size();
+				auto chunkSizeOverhead = iSumOfkMers % threadPool.size();
 				size_t start = 0;
 				uint64_t iCurrentkMerCount = 0, iTotalkMerCount = 0;
 				int32_t iProcID = 0;
@@ -905,7 +906,7 @@ namespace kASA {
 				startTIME = std::chrono::high_resolution_clock::now();
 #endif
 
-				//vector<uint64_t> vRangesOfOutVec(_iNumOfThreads + 1);
+				//vector<uint64_t> vRangesOfOutVec(threadPool.size() + 1);
 				//cout << "Memory left: " << iSoftMaxSize << endl;
 				for (size_t iLineIdx = 0; iLineIdx < vLines.size(); ++iLineIdx) {
 					if (iCurrentkMerCount >= chunkSize + chunkSizeOverhead) {
@@ -936,10 +937,10 @@ namespace kASA {
 				//transfer->vRangesOfOutVec = vRangesOfOutVec;
 
 				// start Threads, join threads
-				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+				for (size_t iThreadID = 0; iThreadID < threadPool.size(); ++iThreadID) {
 					threadPool[iThreadID].startThread();
 				}
-				for (int32_t iThreadID = 0; iThreadID < _iNumOfThreads; ++iThreadID) {
+				for (size_t iThreadID = 0; iThreadID < threadPool.size(); ++iThreadID) {
 					threadPool[iThreadID].waitUntilFinished();
 				}
 
@@ -951,8 +952,8 @@ namespace kASA {
 
 				// merge sorted ranges. If number of threads is odd, one extra run must be done at the end
 				// even part
-				/*for (uint32_t j = 1; j < _iNumOfThreads; j *= 2) {
-					for (uint32_t i = 0; i < _iNumOfThreads / j; i += 2) {
+				/*for (uint32_t j = 1; j < threadPool.size(); j *= 2) {
+					for (uint32_t i = 0; i < threadPool.size() / j; i += 2) {
 						//cout << i << " " << j << " " << vRangesOfOutVec[i * j] << " " << vRangesOfOutVec[(i + 1) * j] << " " << vRangesOfOutVec[(i + 2) * j] << endl;
 						Utilities::my_inplace_merge(vOut.begin() + vRangesOfOutVec[i*j], vOut.begin() + vRangesOfOutVec[(i + 1)*j], vOut.begin() + vRangesOfOutVec[(i + 2)*j]);
 					}
@@ -1934,10 +1935,13 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Build the index from fasta files
-		tuple< unordered_map<uint32_t, uint32_t>, uint64_t >  BuildAll(const string& fContentFile, const string& sDirectory, const string& fOutFile, int64_t iMem, const float& fShrinkPercentage = 0.f, const bool& bContinue = false, const bool& bUpdate = false) {
+		tuple< unordered_map<uint32_t, uint32_t>, uint64_t >  BuildAll(const InputParameters& cParams, const string& fOutFile, const bool& bContinue = false, const bool& bUpdate = false) {
 			try {
+
+				int64_t iMem = static_cast<uint64_t>(cParams.iMemorySizeAvail * 0.9 - GIGABYTEASBYTES);
+
 				// test if files exists
-				if (!ifstream(fContentFile)) {
+				if (!ifstream(cParams.contentFileIn)) {
 					throw runtime_error("Content file not found.");
 				}
 
@@ -1962,7 +1966,7 @@ namespace kASA {
 				unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
 				//unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
 				unordered_map<string, uint32_t> mAccToID;
-				ifstream content(fContentFile);
+				ifstream content(cParams.contentFileIn);
 				string sDummy = "";
 
 				bool bTaxIdsAsStrings = false, bAlternativeMode = false;
@@ -2037,7 +2041,7 @@ Sorry!" << endl;
 
 				size_t overallCharsRead = 0;
 
-				auto filesAndSize = Utilities::gatherFilesFromPath(sDirectory);
+				auto filesAndSize = Utilities::gatherFilesFromPath(cParams.sInput);
 				if (!bContinue) {
 					for (auto& fileName : filesAndSize.first) {
 						if (_bVerbose) {
@@ -2065,10 +2069,10 @@ Sorry!" << endl;
 								if (bAlternativeMode) {
 									Utilities::FileReader<igzstream> fastaFileReader;
 									fastaFileReader.setFile(fastaFile_gz.get());
-									readFastaAlternativeMode(fastaFileReader, fContentFile, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage, iMemGiven);
+									readFastaAlternativeMode(fastaFileReader, cParams.contentFileIn, brick, 0, overallCharsRead, filesAndSize.second, cParams.fPercentageOfThrowAway, iMemGiven);
 								}
 								else {
-									readFasta(*fastaFile_gz, mAccToID, brick, 0, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+									readFasta(*fastaFile_gz, mAccToID, brick, 0, overallCharsRead, filesAndSize.second, cParams.fPercentageOfThrowAway);
 								}
 							}
 							else {
@@ -2085,10 +2089,10 @@ Sorry!" << endl;
 								if (bAlternativeMode) {
 									Utilities::FileReader<ifstream> fastaFileReader;
 									fastaFileReader.setFile(&fastaFile);
-									readFastaAlternativeMode(fastaFileReader, fContentFile, brick, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage, iMemGiven);
+									readFastaAlternativeMode(fastaFileReader, cParams.contentFileIn, brick, iFileLength, overallCharsRead, filesAndSize.second, cParams.fPercentageOfThrowAway, iMemGiven);
 								}
 								else {
-									readFasta(fastaFile, mAccToID, brick, iFileLength, overallCharsRead, filesAndSize.second, fShrinkPercentage);
+									readFasta(fastaFile, mAccToID, brick, iFileLength, overallCharsRead, filesAndSize.second, cParams.fPercentageOfThrowAway);
 								}
 							}
 						debugBarrier
@@ -2166,7 +2170,7 @@ Sorry!" << endl;
 					libVec.reset();
 					libFile.reset();
 					// create frequency file
-					this->GetFrequencyK<vecType>(fContentFile, fOutFile, iMemGiven, mIDsAsIdx);
+					this->GetFrequencyK<vecType>(cParams, cParams.contentFileIn, fOutFile, mIDsAsIdx);
 				}
 
 				debugBarrier
@@ -2183,33 +2187,34 @@ Sorry!" << endl;
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Merge two existing indices into a new one
-		void MergeTwoIndices(const string& index_1, const string& index_2, const string& index_out, const string& contentFile, const int64_t& iMemory, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys = make_pair(unordered_map<uint32_t, uint32_t>(), unordered_map<uint32_t, uint32_t>())) {
+		void MergeTwoIndices(const InputParameters& cParams, const pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>>& mapsForDummys = make_pair(unordered_map<uint32_t, uint32_t>(), unordered_map<uint32_t, uint32_t>())) {
 			try {
+
 				// test if files exists
-				if (!ifstream(contentFile)) {
+				if (!ifstream(cParams.contentFileAfterUpdate)) {
 					throw runtime_error("Content file not found.");
 				}
 
 				Build<vecType, elemType> brick;
 
 				// indices
-				ifstream fLibInfo(index_1 + "_info.txt");
+				ifstream fLibInfo(cParams.firstOldIndex + "_info.txt");
 				uint64_t iSizeOfFirstLib = 0, iSizeOfSecondLib = 0;
 				fLibInfo >> iSizeOfFirstLib;
 				fLibInfo.close();
-				unique_ptr<stxxlFile> stxxlVecI1(new stxxlFile(index_1, stxxl::file::RDONLY));
+				unique_ptr<stxxlFile> stxxlVecI1(new stxxlFile(cParams.firstOldIndex, stxxl::file::RDONLY));
 				unique_ptr<vecType> vec1(new vecType(stxxlVecI1.get(), iSizeOfFirstLib));
 				typename vecType::bufreader_type vec1Buff(*vec1);
 
-				fLibInfo.open(index_2 + "_info.txt");
+				fLibInfo.open(cParams.secondOldIndex + "_info.txt");
 				fLibInfo >> iSizeOfSecondLib;
 				fLibInfo.close();
-				unique_ptr<stxxlFile> stxxlVecI2(new stxxlFile(index_2, stxxl::file::RDONLY));
+				unique_ptr<stxxlFile> stxxlVecI2(new stxxlFile(cParams.secondOldIndex, stxxl::file::RDONLY));
 				unique_ptr<vecType> vec2(new vecType(stxxlVecI2.get(), iSizeOfSecondLib));
 				
 
-				Utilities::checkIfFileCanBeCreated(index_out);
-				unique_ptr<stxxlFile> stxxlVecOut(new stxxlFile(index_out, stxxl::file::RDWR));
+				Utilities::checkIfFileCanBeCreated(cParams.sDBPathOut);
+				unique_ptr<stxxlFile> stxxlVecOut(new stxxlFile(cParams.sDBPathOut, stxxl::file::RDWR));
 				unique_ptr<vecType> vecOut(new vecType(stxxlVecOut.get(), iSizeOfFirstLib + iSizeOfSecondLib));
 				typename vecType::bufwriter_type vecOutBuff(*vecOut);
 
@@ -2231,7 +2236,7 @@ Sorry!" << endl;
 
 				// trie
 				Trie<intType> T(static_cast<int8_t>(((is_same<vecType, contentVecType_128>::value) ? HIGHESTPOSSIBLEK : 12)), static_cast<int8_t>(_iMinK), 6);
-				T.SaveToStxxlVec(vecOut.get(), index_out);
+				T.SaveToStxxlVec(vecOut.get(), cParams.sDBPathOut);
 
 				vecOut.reset();
 				stxxlVecOut.reset();
@@ -2240,7 +2245,7 @@ Sorry!" << endl;
 					cout << "OUT: Creating frequency file... " << endl;
 				}
 
-				this->GetFrequencyK<vecType>(contentFile, index_out, iMemory);
+				this->GetFrequencyK<vecType>(cParams, cParams.contentFileAfterUpdate, cParams.sDBPathOut);
 			}
 			catch (...) {
 				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;

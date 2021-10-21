@@ -19,7 +19,7 @@ namespace kASA {
 	class Shrink : public kASA {
 
 	public:
-		Shrink(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "") : kASA(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode) {}
+		Shrink(const InputParameters& cParams) : kASA(cParams) {}
 
 		enum ShrinkingStrategy
 		{
@@ -308,20 +308,20 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Shrink the library by throwing all redundant kMers away
 		template<class vecType, class elemType, class intType>
-		void ShrinkLib(const string& sLibFile, const string& fOutFile, const ShrinkingStrategy& eDeleteStrategy, const string& sContentFile, const float& iPercOfThrownAway = 50.f) {
+		void ShrinkLib(const InputParameters& cParams, const ShrinkingStrategy& eShrinkingStrategy) {
 			try {
 				// test if files exists
-				if (!ifstream(sLibFile)) {
+				if (!ifstream(cParams.indexFile)) {
 					throw runtime_error("The library file could not be found");
 				}
-				if (!ifstream(sContentFile)) {
+				if (!ifstream(cParams.contentFileIn)) {
 					throw runtime_error("Content file not found");
 				}
 
 				uint32_t iIdxCounter = 1;
 				unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
 				unordered_map<uint32_t, string> mIdxToName; mIdxToName[0] = "non_unique";
-				ifstream content(sContentFile);
+				ifstream content(cParams.contentFileIn);
 				string sDummy = "";
 				bool bTaxIdsAsStrings = false;
 				while (getline(content, sDummy)) {
@@ -351,28 +351,28 @@ namespace kASA {
 				}
 
 				// get lib
-				fstream fLibInfo(sLibFile + "_info.txt", ios::in);
+				fstream fLibInfo(cParams.indexFile + "_info.txt", ios::in);
 				uint64_t iSizeOfLib = 0, iVecType = 0;
 				fLibInfo >> iSizeOfLib;
 				fLibInfo >> iVecType;
 				fLibInfo.close();
 
-				if (iVecType > 0 && eDeleteStrategy == TrieHalf) {
+				if (iVecType > 0 && eShrinkingStrategy == TrieHalf) {
 					throw runtime_error("This index is either already halved or of a type which cannot be halved. Sorry...");
 				}
 
-				if (iIdxCounter > 65535 && eDeleteStrategy == TrieHalf) {
+				if (iIdxCounter > 65535 && eShrinkingStrategy == TrieHalf) {
 					throw runtime_error("Index can only be halved, if less than 65535 species are inside the index!");
 				}
 
-				unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(sLibFile, stxxl::file::RDONLY));
+				unique_ptr<stxxlFile> stxxlLibFile(new stxxlFile(cParams.indexFile, stxxl::file::RDONLY));
 				unique_ptr<unique_ptr<const vecType>[]> vLibIn(new unique_ptr<const vecType>[_iNumOfThreads]);
 				for (int32_t i = 0; i < _iNumOfThreads; ++i) {
 					vLibIn[i].reset(new const vecType(stxxlLibFile.get(), iSizeOfLib));
 				}
 
 				// create reduced vec
-				Utilities::checkIfFileCanBeCreated(fOutFile);
+				Utilities::checkIfFileCanBeCreated(cParams.sDBPathOut);
 
 
 				unique_ptr<stxxlFile> stxxlOutFile;
@@ -381,12 +381,12 @@ namespace kASA {
 				unique_ptr<stxxlFile> stxxlFileP;
 				unique_ptr<index_t_p> vOutPVec;
 
-				if (eDeleteStrategy == TrieHalf || eDeleteStrategy == Overrepresented) {
-					stxxlFileP.reset(new stxxlFile(fOutFile, stxxl::file::RDWR));
+				if (eShrinkingStrategy == TrieHalf || eShrinkingStrategy == Overrepresented) {
+					stxxlFileP.reset(new stxxlFile(cParams.sDBPathOut, stxxl::file::RDWR));
 					vOutPVec.reset(new index_t_p(stxxlFileP.get(), iSizeOfLib));
 				}
 				else {
-					stxxlOutFile.reset(new stxxlFile(fOutFile, stxxl::file::RDWR));
+					stxxlOutFile.reset(new stxxlFile(cParams.sDBPathOut, stxxl::file::RDWR));
 					vOutVec.reset(new vecType(stxxlOutFile.get(), iSizeOfLib));
 				}
 
@@ -395,12 +395,12 @@ namespace kASA {
 				ofstream  newFreqFile;
 
 				// reduce
-				switch (eDeleteStrategy) {
+				switch (eShrinkingStrategy) {
 				case EveryNth:
 				{
-					deleteEveryNth<vecType, elemType>(vLibIn[0], vOutVec, fabsf(iPercOfThrownAway), mIDsAsIdx, arrFrequencies);
+					deleteEveryNth<vecType, elemType>(vLibIn[0], vOutVec, fabsf(cParams.fPercentageOfThrowAway), mIDsAsIdx, arrFrequencies);
 
-					newFreqFile.open(fOutFile + "_f.txt");
+					newFreqFile.open(cParams.sDBPathOut + "_f.txt");
 					for (uint32_t j = 0; j < iIdxCounter; ++j) {
 						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
 						newFreqFile << arrFrequencies[j * _iHighestK];
@@ -410,7 +410,7 @@ namespace kASA {
 						newFreqFile << endl;
 					}
 
-					fLibInfo.open(fOutFile + "_info.txt", ios::out);
+					fLibInfo.open(cParams.sDBPathOut + "_info.txt", ios::out);
 					fLibInfo << vOutVec->size();
 					if (is_same<vecType, contentVecType_128>::value) {
 						fLibInfo << endl << 128;
@@ -419,11 +419,11 @@ namespace kASA {
 
 					if (is_same<vecType, contentVecType_128>::value) {
 						Trie<intType> T(static_cast<int8_t>(HIGHESTPOSSIBLEK), static_cast<int8_t>(_iMinK), 6);
-						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+						T.SaveToStxxlVec(vOutVec.get(), cParams.sDBPathOut);
 					}
 					else {
 						Trie<intType> T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+						T.SaveToStxxlVec(vOutVec.get(), cParams.sDBPathOut);
 					}
 					
 
@@ -432,16 +432,16 @@ namespace kASA {
 				case TrieHalf:
 				{
 
-					putHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, fOutFile);
+					putHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, cParams.sDBPathOut);
 
-					fLibInfo.open(fOutFile + "_info.txt", ios::out);
+					fLibInfo.open(cParams.sDBPathOut + "_info.txt", ios::out);
 					fLibInfo << vOutPVec->size() << endl << 3;
 					vOutPVec->export_files("_");
 					fLibInfo.close();
 
 
-					oldFreqFile.open(sLibFile + "_f.txt", std::ios::binary);
-					newFreqFile.open(fOutFile + "_f.txt", std::ios::binary);
+					oldFreqFile.open(cParams.indexFile + "_f.txt", std::ios::binary);
+					newFreqFile.open(cParams.sDBPathOut + "_f.txt", std::ios::binary);
 
 					newFreqFile << oldFreqFile.rdbuf();
 
@@ -451,12 +451,12 @@ namespace kASA {
 				{
 					//deleteOverrepresentedAndputHalfInTrie(vLibIn[0], vOutPVec, mIDsAsIdx, fOutFile, arrFrequencies);
 
-					fLibInfo.open(fOutFile + "_info.txt", ios::out);
+					fLibInfo.open(cParams.sDBPathOut + "_info.txt", ios::out);
 					fLibInfo << vOutPVec->size() << endl << 3;
 					vOutPVec->export_files("_");
 					fLibInfo.close();
 
-					newFreqFile.open(fOutFile + "_f.txt");
+					newFreqFile.open(cParams.sDBPathOut + "_f.txt");
 					for (uint32_t j = 0; j < iIdxCounter; ++j) {
 						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
 						newFreqFile << arrFrequencies[j * _iHighestK];
@@ -471,7 +471,7 @@ namespace kASA {
 				case Entropy:
 					deleteViaEntropy<vecType>(vLibIn[0], vOutVec, mIDsAsIdx, arrFrequencies);
 
-					newFreqFile.open(fOutFile + "_f.txt");
+					newFreqFile.open(cParams.sDBPathOut + "_f.txt");
 					for (uint32_t j = 0; j < iIdxCounter; ++j) {
 						newFreqFile << Utilities::checkIfInMap(mIdxToName, j)->second << "\t";
 						newFreqFile << arrFrequencies[j * _iHighestK];
@@ -483,14 +483,14 @@ namespace kASA {
 
 					if (is_same<vecType, contentVecType_128>::value) {
 						Trie<intType> T(static_cast<int8_t>(HIGHESTPOSSIBLEK), static_cast<int8_t>(_iMinK), 6);
-						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+						T.SaveToStxxlVec(vOutVec.get(), cParams.sDBPathOut);
 					}
 					else {
 						Trie<intType> T(static_cast<int8_t>(12), static_cast<int8_t>(_iMinK), 6);
-						T.SaveToStxxlVec(vOutVec.get(), fOutFile);
+						T.SaveToStxxlVec(vOutVec.get(), cParams.sDBPathOut);
 					}
 
-					fLibInfo.open(fOutFile + "_info.txt", ios::out);
+					fLibInfo.open(cParams.sDBPathOut + "_info.txt", ios::out);
 					fLibInfo << vOutVec->size();
 					if (is_same<vecType, contentVecType_128>::value) {
 						fLibInfo << endl << 128;

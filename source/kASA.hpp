@@ -272,11 +272,13 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Constructor with paths e.g. "derp/"
-		kASA(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _bVerbose(bVerbose), _bSixFrames(bSixFrames) {
+		kASA(const InputParameters& cParams) : _sTemporaryPath(cParams.sTempPath), _iNumOfThreads(cParams.iNumOfThreads), _iNumOfCall(cParams.iNumOfCall), _iMaxK(cParams.iHigherK), _iMinK(cParams.iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _bVerbose(cParams.bVerbose), _bSixFrames(cParams.bSixFrames) {
+		//kASA(const string & tmpPath, const int32_t & iNumOfProcs, const int32_t & iHighestK, const int32_t & iHigherK, const int32_t & iLowerK, const int32_t & iNumOfCall, const bool& bVerbose = false, const string & stxxl_mode = "", const bool& bSixFrames = false) : _sTemporaryPath(tmpPath), _iNumOfThreads(iNumOfProcs), _iNumOfCall(iNumOfCall), _iMaxK(iHigherK), _iMinK(iLowerK), _iNumOfK(_iMaxK - _iMinK + 1), _bVerbose(bVerbose), _bSixFrames(bSixFrames) {
+
 #ifdef ENVIRONMENT32
 			_iMaxMemUsePerThread = (1024 / _iNumOfThreads) * 1024 * 1024;
 #else
-			_iMaxMemUsePerThread = (3072 / iNumOfProcs) * 1024 * 1024;
+			_iMaxMemUsePerThread = (3072 / _iNumOfThreads) * 1024 * 1024;
 #endif
 
 #if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
@@ -284,9 +286,9 @@ namespace kASA {
 			omp_set_nested(1);
 			omp_set_dynamic(_iNumOfThreads);
 #endif
-			_iHighestK = iHighestK;
-			_iMaxK = (iHigherK <= _iHighestK && iHigherK >= iLowerK) ? iHigherK : _iHighestK;
-			_iMinK = (iLowerK < _iLowestK) ? _iLowestK : _iMinK;
+			_iHighestK = cParams.iHighestK;
+			_iMaxK = (cParams.iHigherK <= _iHighestK && cParams.iHigherK >= cParams.iLowerK) ? cParams.iHigherK : _iHighestK;
+			_iMinK = (cParams.iLowerK < _iLowestK) ? _iLowestK : _iMinK;
 			_iNumOfK = _iMaxK - _iMinK + 1;
 
 			_sMaxKBlank = string(_iHighestK, ' ');
@@ -296,7 +298,7 @@ namespace kASA {
 				_aOfK[i] = _iMaxK - i;
 			}
 
-			createConfig("stxxl_temp_", iNumOfCall, stxxl_mode);
+			createConfig("stxxl_temp_", cParams.iNumOfCall, cParams.sStxxlMode);
 		}
 		
 		kASA(const kASA& obj) : _bVerbose(obj._bVerbose) {
@@ -441,10 +443,10 @@ namespace kASA {
 		// Counts the number of kMers for each taxon (frequency). 
 		// Usually this is counted while creating the index. If for some reason the frequency file got lost, it can be recreated with this.
 		template<class vecType>
-		inline void GetFrequencyK(const string& contentFile, const string& sLibFile, const int64_t& iMemoryAvail, const unordered_map<uint32_t, uint32_t>& mGivenContentMap = unordered_map<uint32_t, uint32_t>()) {
+		inline void GetFrequencyK(const InputParameters cParams, const string& contentFile, const string& sIndexFile, const unordered_map<uint32_t, uint32_t>& mGivenContentMap = unordered_map<uint32_t, uint32_t>()) {
 			try {
 				// test if files exists
-				if (!ifstream(contentFile) || !ifstream(sLibFile)) {
+				if (!ifstream(contentFile) || !ifstream(sIndexFile)) {
 					throw runtime_error("OUT: One of the files does not exist");
 				}
 
@@ -478,20 +480,20 @@ namespace kASA {
 
 				// Determine how many threads can be created
 				int32_t iLocalNumOfThreads = 0;
-				while (iMemoryUsage < iMemoryAvail && iLocalNumOfThreads < _iNumOfThreads) {
+				while (iMemoryUsage < cParams.iMemorySizeAvail && iLocalNumOfThreads < _iNumOfThreads) {
 					iMemoryUsage += iIdxCounter * iMaxNumK * sizeof(uint64_t);
 					iMemoryUsage += vecType::block_size * vecType::page_size * 4;
 					iLocalNumOfThreads++;
 				}
-				if (iLocalNumOfThreads == 1 && iMemoryUsage > iMemoryAvail) {
+				if (iLocalNumOfThreads == 1 && iMemoryUsage > cParams.iMemorySizeAvail) {
 					cerr << "OUT: WARNING! Due to the large content file, creating the frequency file will consume more memory than given. kASA may crash or slow down..." << endl;
 				}
 				
 
-				ifstream fInfo(sLibFile + "_info.txt");
+				ifstream fInfo(sIndexFile + "_info.txt");
 				uint64_t iSizeOfVec = 0;
 				fInfo >> iSizeOfVec;
-				stxxlFile libfile(sLibFile, stxxl::file::RDONLY);
+				stxxlFile libfile(sIndexFile, stxxl::file::RDONLY);
 				unique_ptr<unique_ptr<const vecType>[]> libvec(new unique_ptr<const vecType>[iLocalNumOfThreads]);
 				for (int32_t i = 0; i < iLocalNumOfThreads; ++i) {
 					libvec[i].reset(new const vecType(&libfile, iSizeOfVec));
@@ -540,7 +542,7 @@ namespace kASA {
 
 				// Write to file
 				fContent.open(contentFile);
-				ofstream outFile(sLibFile + "_f.txt");
+				ofstream outFile(sIndexFile + "_f.txt");
 				if (!outFile) {
 					throw runtime_error("Frequency file couldn't be opened for writing!");
 				}

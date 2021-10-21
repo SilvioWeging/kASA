@@ -98,6 +98,7 @@ Optional parameters:\n\
 --one: Use only one reading frame instead of three. Speeds the tool up significantly but sacrifices robustness. Default: off.\n\
 -1: First file in a paired-end pair.\n\
 -2: Second file in a paired - end pair.Both `-1` and `-2` must be used and `-i` will be ignored for this call.Paired - end can only be files, no folders.\n\
+--coverage: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Default: off.\n\
 ";
 		}
 		else if (m == "identify_multiple") {
@@ -199,27 +200,31 @@ Necessary parameters:\n\
 -c1 <file>: Content file of the first index. Default: <index>_content.txt\n\
 -c2 <file>: Content file of the second index. Default: Same as above.\n\
 -co <file> : Content file in which the two will be merged. Default: Same as above.\n\
--d(--database) < file > : First index.\n\
--i(--input) < file > : Second index.\n\
+--firstIndex < file > : First index.\n\
+--secondIndex < file > : Second index.\n\
 -o(--outgoing) < file > : Resulting merged index.Default: None.\n";
 		}
 		return out;
 	}
 }
 
+
 int main(int argc, char* argv[]) {
 	try {
 
-		vector<string> vParameters(argv, argv + argc);
-
-		string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", contentFileAfterUpdate = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
-		bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false;
 		kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
 		kASA::OutputFormat eOutputFormat = kASA::OutputFormat::Json;
-		int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3, iNumOfMask = 0;
-		int64_t iMemorySizeAvail = 0;
-		float fPercentageOfThrowAway = 0.f, threshold = 0.f;
-		uint8_t iTrieDepth = 6;//, iPrefixCheckMode = 0;
+
+		vector<string> vParameters(argv, argv + argc);
+
+		//string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", contentFileAfterUpdate = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
+		//bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false;
+		//kASA::Shrink::ShrinkingStrategy eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+		//kASA::OutputFormat eOutputFormat = kASA::OutputFormat::Json;
+		//int32_t iNumOfThreads = 1, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3, iNumOfMask = 0;
+		//int64_t iMemorySizeAvail = 0;
+		//float fPercentageOfThrowAway = 0.f, threshold = 0.f;
+		//uint8_t iTrieDepth = 6;//, iPrefixCheckMode = 0;
 
 		auto timeRightNow = chrono::system_clock::to_time_t(chrono::system_clock::now());
 		cout << "OUT: " << "kASA version " << kASA_VERSION_MAJOR << "." << kASA_VERSION_MINOR << "." << kASA_VERSION_PATCH << " ran on " <<
@@ -240,11 +245,11 @@ int main(int argc, char* argv[]) {
 
 		// Default temporary path:
 #if  _WIN64
-		sTempPath = string(getenv("appdata")) + "/";
+		GlobalInputParameters.sTempPath = string(getenv("appdata")) + "/";
 #elif __linux__
-		sTempPath = "/var/tmp/";
+		GlobalInputParameters.sTempPath = "/var/tmp/";
 #elif __APPLE__
-		sTempPath = "/private/tmp/";
+		GlobalInputParameters.sTempPath = "/private/tmp/";
 #else
 		cerr << "Default temporary path not found, please specify it if you didn't already..." << endl;
 #endif
@@ -254,256 +259,312 @@ int main(int argc, char* argv[]) {
 			return 0;
 			//throw runtime_error("No Parameters given!");
 		}
-		cMode = vParameters[1];
+		if (vParameters[1] == "--parameters") {
+			Utilities::readParametersFromJson(Utilities::removeSpaceAndEndline(vParameters[2]));
 
-		// still available parameters: w
+			switch (GlobalInputParameters.shrinkStrategy) {
+			case 1:
+				eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::EveryNth;
+				break;
+			case 2:
+				eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+				break;
+			case 3:
+				eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Entropy;
+				break;
+			case 4:
+				eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Overrepresented;
+				break;
+			default:
+				eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+				break;
+			}
 
-		for (int32_t i = 2; i < argc; ++i) {
-			string sParameter = vParameters[i];
-			if (sParameter == "-h" || sParameter == "--help") {
-				cout << "OUT: HELP CALLED FOR MODE " << cMode << "\n\n" << kASA_help::getHelp(cMode) << endl;
-				return 0;
+			switch (GlobalInputParameters.outputFormat) {
+			case 0:
+				eOutputFormat = kASA::OutputFormat::Kraken;
+				break;
+			case 1:
+				eOutputFormat = kASA::OutputFormat::Json;
+				break;
+			case 2:
+				eOutputFormat = kASA::OutputFormat::JsonL;
+				break;
+			case 3:
+				eOutputFormat = kASA::OutputFormat::tsv;
+				break;
+			default:
+				eOutputFormat = kASA::OutputFormat::Json;
+				break;
 			}
-			else if (sParameter == "-o" || sParameter == "--outgoing") {
-				sDBPathOut = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-t" || sParameter == "--temp") {
-				sTempPath = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-u" || sParameter == "--level") {
-				sTaxLevel = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (sTaxLevel == "sequence") {
-					sTaxLevel = "lowest";
+		}
+		else {
+
+			GlobalInputParameters.cMode = vParameters[1];
+
+			// still available parameters: w
+			for (int32_t i = 2; i < argc; ++i) {
+				string sParameter = vParameters[i];
+				if (sParameter == "-h" || sParameter == "--help") {
+					cout << "OUT: HELP CALLED FOR MODE " << GlobalInputParameters.cMode << "\n\n" << kASA_help::getHelp(GlobalInputParameters.cMode) << endl;
+					return 0;
 				}
-			}
-			else if (sParameter == "-e" || sParameter == "--unique") {
-				bUnique = true;
-			}
-			else if (sParameter == "--continue") {
-				bContinue = true;
-			}
-			else if (sParameter == "-f" || sParameter == "--acc2tax") {
-				sAccToTaxFiles = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-y" || sParameter == "--taxonomy") {
-				sTaxonomyPath = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-v" || sParameter == "--verbose") {
-				bVerbose = true;
-			}
-			else if (sParameter == "-z" || sParameter == "--translated") {
-				bTranslated = true;
-			}
-			else if (sParameter == "-j" || sParameter == "--sloppy") {
-				bUnfunny = true;
+				else if (sParameter == "-o" || sParameter == "--outgoing") {
+					GlobalInputParameters.sDBPathOut = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "-t" || sParameter == "--temp") {
+					GlobalInputParameters.sTempPath = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "-u" || sParameter == "--level") {
+					GlobalInputParameters.sTaxLevel = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (GlobalInputParameters.sTaxLevel == "sequence") {
+						GlobalInputParameters.sTaxLevel = "lowest";
+					}
+				}
+				else if (sParameter == "-e" || sParameter == "--unique") {
+					GlobalInputParameters.bUnique = true;
+				}
+				else if (sParameter == "--continue") {
+					GlobalInputParameters.bContinue = true;
+				}
+				else if (sParameter == "-f" || sParameter == "--acc2tax") {
+					GlobalInputParameters.sAccToTaxFiles = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "-y" || sParameter == "--taxonomy") {
+					GlobalInputParameters.sTaxonomyPath = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "-v" || sParameter == "--verbose") {
+					GlobalInputParameters.bVerbose = true;
+				}
+				else if (sParameter == "-z" || sParameter == "--translated") {
+					GlobalInputParameters.bTranslated = true;
+				}
+				else if (sParameter == "-j" || sParameter == "--sloppy") {
+					GlobalInputParameters.bUnfunny = true;
 #ifdef _DEBUG
-				//kASA::kASA::setAAToAATable(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					//kASA::kASA::setAAToAATable(Utilities::removeSpaceAndEndline(vParameters[++i]));
 #endif
-			}
-			else if (sParameter == "-d" || sParameter == "--database") {
-				indexFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (cMode != "build") {
-					if (!ifstream(indexFile)) {
+				}
+				else if (sParameter == "-d" || sParameter == "--database") {
+					GlobalInputParameters.indexFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (GlobalInputParameters.cMode != "build") {
+						if (!ifstream(GlobalInputParameters.indexFile)) {
+							throw runtime_error("Index file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_info.txt")) {
+							throw runtime_error("Info file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_f.txt") && GlobalInputParameters.cMode == "identify") {
+							throw runtime_error("Frequency file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_trie") && GlobalInputParameters.cMode == "identify") {
+							throw runtime_error("Trie file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_trie.txt") && GlobalInputParameters.cMode == "identify") {
+							throw runtime_error("Trie info file not found");
+						}
+					}
+				}
+				else if (sParameter == "--firstIndex") {
+					GlobalInputParameters.firstOldIndex = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.firstOldIndex)) {
 						throw runtime_error("Index file not found");
 					}
-					if (!ifstream(indexFile + "_info.txt")) {
-						throw runtime_error("Info file not found");
-					}
-					if (!ifstream(indexFile + "_f.txt") && cMode == "identify") {
-						throw runtime_error("Frequency file not found");
-					}
-					if (!ifstream(indexFile + "_trie") && cMode == "identify") {
-						throw runtime_error("Trie file not found");
-					}
-					if (!ifstream(indexFile + "_trie.txt") && cMode == "identify") {
-						throw runtime_error("Trie info file not found");
+				}
+				else if (sParameter == "--secondIndex") {
+					GlobalInputParameters.secondOldIndex = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.secondOldIndex)) {
+						throw runtime_error("Index file not found");
 					}
 				}
-			}
-			else if (sParameter == "-a" || sParameter == "--alphabet") {
-				codonTable = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				sCodonID = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-b" || sParameter == "--beasts") {
-				iNumOfBeasts = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-				if (iNumOfBeasts == 0) {
-					iNumOfBeasts = 1;
+				else if (sParameter == "-a" || sParameter == "--alphabet") {
+					GlobalInputParameters.codonTable = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					GlobalInputParameters.sCodonID = Utilities::removeSpaceAndEndline(vParameters[++i]);
 				}
-			}
-			else if (sParameter == "-r" || sParameter == "--ram") {
-				bRAM = true;
-			}
-			else if (sParameter == "-g" || sParameter == "--percentage") {
-				fPercentageOfThrowAway = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
-			}
-			else if (sParameter == "-x" || sParameter == "--callidx") {
-				iNumOfCall = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-			}
-			else if (sParameter == "-n" || sParameter == "--threads") {
-				iNumOfThreads = abs(stoi(Utilities::removeSpaceAndEndline(vParameters[++i])));
-			}
-			else if (sParameter == "-k") {
-				iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-				iLowerK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-				iHigherK = (iHigherK > HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : iHigherK;
-				iLowerK = (iLowerK < 1) ? 1 : iLowerK;
-				if (iLowerK > iHigherK) {
-					swap(iLowerK, iHigherK);
+				else if (sParameter == "-b" || sParameter == "--beasts") {
+					GlobalInputParameters.iNumOfBeasts = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					if (GlobalInputParameters.iNumOfBeasts == 0) {
+						GlobalInputParameters.iNumOfBeasts = 1;
+					}
 				}
-				bHighKSetByUser = true;
-			}
-			else if (sParameter == "--kH") {
-				iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-				iHigherK = (iHigherK > HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : iHigherK;
-				bHighKSetByUser = true;
-			}
-			else if (sParameter == "--kL") {
-				iLowerK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-				iLowerK = (iLowerK < 1) ? 1 : iLowerK;
-			}
-			else if (sParameter == "-i" || sParameter == "--input") {
-				sInput = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(sInput) && sInput.back() != '/' && sInput.back() != '\\') {
-					throw runtime_error("Input file not found");
+				else if (sParameter == "-r" || sParameter == "--ram") {
+					GlobalInputParameters.bRAM = true;
 				}
-			}
-			else if (sParameter == "-q" || sParameter == "--rtt") {
-				readToTaxaFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-p" || sParameter == "--profile") {
-				tableFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			else if (sParameter == "-m" || sParameter == "--memory") {
-				const auto& userGivenMemory = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (userGivenMemory == "inf") {
-					iMemorySizeAvail = numeric_limits<uint64_t>::max() / (1024ull * 1024ull);
+				else if (sParameter == "-g" || sParameter == "--percentage") {
+					GlobalInputParameters.fPercentageOfThrowAway = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				}
+				else if (sParameter == "-x" || sParameter == "--callidx") {
+					GlobalInputParameters.iNumOfCall = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				}
+				else if (sParameter == "-n" || sParameter == "--threads") {
+					GlobalInputParameters.iNumOfThreads = abs(stoi(Utilities::removeSpaceAndEndline(vParameters[++i])));
+				}
+				else if (sParameter == "-k") {
+					GlobalInputParameters.iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					GlobalInputParameters.iLowerK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					GlobalInputParameters.iHigherK = (GlobalInputParameters.iHigherK > HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : GlobalInputParameters.iHigherK;
+					GlobalInputParameters.iLowerK = (GlobalInputParameters.iLowerK < 1) ? 1 : GlobalInputParameters.iLowerK;
+					if (GlobalInputParameters.iLowerK > GlobalInputParameters.iHigherK) {
+						swap(GlobalInputParameters.iLowerK, GlobalInputParameters.iHigherK);
+					}
+					GlobalInputParameters.bHighKSetByUser = true;
+				}
+				else if (sParameter == "--kH") {
+					GlobalInputParameters.iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					GlobalInputParameters.iHigherK = (GlobalInputParameters.iHigherK > HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : GlobalInputParameters.iHigherK;
+					GlobalInputParameters.bHighKSetByUser = true;
+				}
+				else if (sParameter == "--kL") {
+					GlobalInputParameters.iLowerK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					GlobalInputParameters.iLowerK = (GlobalInputParameters.iLowerK < 1) ? 1 : GlobalInputParameters.iLowerK;
+				}
+				else if (sParameter == "-i" || sParameter == "--input") {
+					GlobalInputParameters.sInput = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.sInput) && GlobalInputParameters.sInput.back() != '/' && GlobalInputParameters.sInput.back() != '\\') {
+						throw runtime_error("Input file not found");
+					}
+				}
+				else if (sParameter == "-q" || sParameter == "--rtt") {
+					GlobalInputParameters.readToTaxaFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "-p" || sParameter == "--profile") {
+					GlobalInputParameters.tableFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "-m" || sParameter == "--memory") {
+					const auto& userGivenMemory = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (userGivenMemory == "inf") {
+						GlobalInputParameters.iMemorySizeAvail = numeric_limits<uint64_t>::max() / (1024ull * 1024ull);
+					}
+					else {
+						GlobalInputParameters.iMemorySizeAvail = 1024ull * stoi(userGivenMemory);
+					}
+					GlobalInputParameters.bCustomMemorySet = true;
+				}
+				else if (sParameter == "-s" || sParameter == "--strategy") {
+					int32_t iChoice = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+					switch (iChoice) {
+					case 1:
+						eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::EveryNth;
+						break;
+					case 2:
+						eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+						break;
+					case 3:
+						eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Entropy;
+						break;
+					case 4:
+						eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Overrepresented;
+						break;
+					default:
+						eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+						break;
+					}
+				}
+				else if (sParameter == "-c" || sParameter == "--content") {
+					GlobalInputParameters.contentFileIn = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.contentFileIn) && GlobalInputParameters.cMode != "build" && GlobalInputParameters.cMode != "generateCF" && GlobalInputParameters.cMode != "merge") {
+						throw runtime_error("Content file not found");
+					}
+				}
+				else if (sParameter == "-c1") {
+					GlobalInputParameters.contentFile1 = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.contentFile1)) {
+						throw runtime_error("Content file 1 not found");
+					}
+				}
+				else if (sParameter == "-c2") {
+					GlobalInputParameters.contentFile2 = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.contentFile2)) {
+						throw runtime_error("Content file 2 not found");
+					}
+				}
+				else if (sParameter == "-co") {
+					GlobalInputParameters.contentFileAfterUpdate = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					Utilities::checkIfFileCanBeCreated(GlobalInputParameters.contentFileAfterUpdate);
+				}
+				else if (sParameter == "-1") {
+					GlobalInputParameters.sPairedEnd1 = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.sPairedEnd1)) {
+						throw runtime_error("First paired-end file not found");
+					}
+				}
+				else if (sParameter == "-2") {
+					GlobalInputParameters.sPairedEnd2 = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.sPairedEnd2)) {
+						throw runtime_error("Second paired-end file not found");
+					}
+				}
+				else if (sParameter == "-l" || sParameter == "--deleted") {
+					GlobalInputParameters.delnodesFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					if (!ifstream(GlobalInputParameters.delnodesFile)) {
+						throw runtime_error("Deleted nodes file not found");
+					}
+				}
+				else if (sParameter == "--json") {
+					eOutputFormat = kASA::OutputFormat::Json;
+				}
+				else if (sParameter == "--jsonl") {
+					eOutputFormat = kASA::OutputFormat::JsonL;
+				}
+				else if (sParameter == "--tsv") {
+					eOutputFormat = kASA::OutputFormat::tsv;
+				}
+				else if (sParameter == "--kraken") {
+					eOutputFormat = kASA::OutputFormat::Kraken;
+				}
+				else if (sParameter == "--stxxl") {
+					GlobalInputParameters.sStxxlMode = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				/*else if (sParameter == "--array") {
+					iPrefixCheckMode = 2;
+				}
+				else if (sParameter == "--trie") {
+					iPrefixCheckMode = 1;
+				}
+				else if (sParameter == "--table") {
+					iPrefixCheckMode = 3;
+				}*/
+				else if (sParameter == "--six") {
+					GlobalInputParameters.bSixFrames = true;
+				}
+				else if (sParameter == "--three") {
+					GlobalInputParameters.bThreeFrames = true;
+				}
+				else if (sParameter == "--threshold") {
+					GlobalInputParameters.threshold = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				}
+				else if (sParameter == "--taxidasstr") {
+					GlobalInputParameters.bTaxIdsAsStrings = true;
+				}
+				else if (sParameter == "--debug") {
+					_bShowLineDebugMode = true;
+				}
+				else if (sParameter == "--visualize") {
+					GlobalInputParameters.bVisualize = true;
+				}
+				else if (sParameter == "--one") {
+					GlobalInputParameters.bOnlyOneFrame = true;
+				}
+				else if (sParameter == "--spaced") {
+					GlobalInputParameters.bSpaced = true;
+				}
+				else if (sParameter == "--mask") {
+					GlobalInputParameters.iNumOfMask = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				}
+				else if (sParameter == "--coverage") {
+					GlobalInputParameters.bCoverage = true;
 				}
 				else {
-					iMemorySizeAvail = 1024ull * stoi(userGivenMemory);
+					throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 				}
-				bCustomMemorySet = true;
-			}
-			else if (sParameter == "-s" || sParameter == "--strategy") {
-				int32_t iChoice = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-				switch (iChoice) {
-				case 1:
-					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::EveryNth;
-					break;
-				case 2:
-					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
-					break;
-				case 3:
-					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Entropy;
-					break;
-				case 4:
-					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::Overrepresented;
-					break;
-				default:
-					eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
-					break;
-				}
-			}
-			else if (sParameter == "-c" || sParameter == "--content") {
-				contentFileIn = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(contentFileIn) && cMode != "build" && cMode != "generateCF" && cMode != "merge") {
-					throw runtime_error("Content file not found");
-				}
-			}
-			else if (sParameter == "-c1") {
-				contentFile1 = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(contentFile1)) {
-					throw runtime_error("Content file 1 not found");
-				}
-			}
-			else if (sParameter == "-c2") {
-				contentFile2 = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(contentFile2)) {
-					throw runtime_error("Content file 2 not found");
-				}
-			}
-			else if (sParameter == "-co") {
-				contentFileAfterUpdate = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				Utilities::checkIfFileCanBeCreated(contentFileAfterUpdate);
-			}
-			else if (sParameter == "-1") {
-				sPairedEnd1 = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(sPairedEnd1)) {
-					throw runtime_error("First paired-end file not found");
-				}
-			}
-			else if (sParameter == "-2") {
-				sPairedEnd2 = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(sPairedEnd2)) {
-					throw runtime_error("Second paired-end file not found");
-				}
-			}
-			else if (sParameter == "-l" || sParameter == "--deleted") {
-				delnodesFile = Utilities::removeSpaceAndEndline(vParameters[++i]);
-				if (!ifstream(delnodesFile)) {
-					throw runtime_error("Deleted nodes file not found");
-				}
-			}
-			else if (sParameter == "--json") {
-				eOutputFormat = kASA::OutputFormat::Json;
-			}
-			else if (sParameter == "--jsonl") {
-				eOutputFormat = kASA::OutputFormat::JsonL;
-			}
-			else if (sParameter == "--tsv") {
-				eOutputFormat = kASA::OutputFormat::tsv;
-			}
-			else if (sParameter == "--kraken") {
-				eOutputFormat = kASA::OutputFormat::Kraken;
-			}
-			else if (sParameter == "--stxxl") {
-				sStxxlMode = Utilities::removeSpaceAndEndline(vParameters[++i]);
-			}
-			/*else if (sParameter == "--array") {
-				iPrefixCheckMode = 2;
-			}
-			else if (sParameter == "--trie") {
-				iPrefixCheckMode = 1;
-			}
-			else if (sParameter == "--table") {
-				iPrefixCheckMode = 3;
-			}*/
-			else if (sParameter == "--six") {
-				bSixFrames = true;
-			}
-			else if (sParameter == "--three") {
-				bThreeFrames = true;
-			}
-			else if (sParameter == "--threshold") {
-				threshold = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
-			}
-			else if (sParameter == "--taxidasstr") {
-				bTaxIdsAsStrings = true;
-			}
-			else if (sParameter == "--debug") {
-				_bShowLineDebugMode = true;
-			}
-			else if (sParameter == "--visualize") {
-				bVisualize = true;
-			}
-			else if (sParameter == "--one") {
-				bOnlyOneFrame = true;
-			}
-			else if (sParameter == "--spaced") {
-				bSpaced = true;
-			}
-			else if (sParameter == "--mask") {
-				iNumOfMask = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
-			}
-			else {
-				throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 			}
 		}
 #ifdef ENVIRONMENT32
-		iMemorySizeAvail = (iMemorySizeAvail == 0 || iMemorySizeAvail >= numeric_limits<uint32_t>::max() || iMemorySizeAvail >= 2048) ? 1024 : iMemorySizeAvail; // TODO: wenn kleiner als 1024, auf 1024 setzen, sonst bug in stxxl::sort
+		GlobalInputParameters.iMemorySizeAvail = (GlobalInputParameters.iMemorySizeAvail == 0 || GlobalInputParameters.iMemorySizeAvail >= numeric_limits<uint32_t>::max() || GlobalInputParameters.iMemorySizeAvail >= 2048) ? 1024 : GlobalInputParameters.iMemorySizeAvail; // TODO: wenn kleiner als 1024, auf 1024 setzen, sonst bug in stxxl::sort
 #else
-		iMemorySizeAvail = (iMemorySizeAvail == 0) ? 5120 : iMemorySizeAvail;
+		GlobalInputParameters.iMemorySizeAvail = (GlobalInputParameters.iMemorySizeAvail == 0) ? 5120 : GlobalInputParameters.iMemorySizeAvail;
 #endif
-		iMemorySizeAvail *= 1024ull * 1024ull;
+		GlobalInputParameters.iMemorySizeAvail *= 1024ull * 1024ull;
 
 		debugBarrier
 
@@ -511,8 +572,8 @@ int main(int argc, char* argv[]) {
 		MEMORYSTATUSEX statex;
 		statex.dwLength = sizeof(statex);
 		GlobalMemoryStatusEx(&statex);
-		if (statex.ullTotalPhys < static_cast<uint64_t>(iMemorySizeAvail)) {
-			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail/GIGABYTEASBYTES << "GB RAM is too much for your system (" << statex.ullTotalPhys / (GIGABYTEASBYTES) <<"GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
+		if (statex.ullTotalPhys < static_cast<uint64_t>(GlobalInputParameters.iMemorySizeAvail)) {
+			cout << "OUT: WARNING! The requested memory of " << GlobalInputParameters.iMemorySizeAvail/GIGABYTEASBYTES << "GB RAM is too much for your system (" << statex.ullTotalPhys / (GIGABYTEASBYTES) <<"GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
 		}
 
 #elif (__GNUC__ || __clang__) && !_MSC_VER
@@ -520,78 +581,78 @@ int main(int argc, char* argv[]) {
 		unsigned long long page_size = sysconf(_SC_PAGE_SIZE);
 		unsigned long long iMaxPhysMemory = pages * page_size;
 
-		if (iMaxPhysMemory < static_cast<uint64_t>(iMemorySizeAvail)) {
-			cout << "OUT: WARNING! The requested memory of " << iMemorySizeAvail / (GIGABYTEASBYTES) << "GB RAM is too much for your system (" << iMaxPhysMemory / (GIGABYTEASBYTES) << "GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
+		if (iMaxPhysMemory < static_cast<uint64_t>(GlobalInputParameters.iMemorySizeAvail)) {
+			cout << "OUT: WARNING! The requested memory of " << GlobalInputParameters.iMemorySizeAvail / (GIGABYTEASBYTES) << "GB RAM is too much for your system (" << iMaxPhysMemory / (GIGABYTEASBYTES) << "GB RAM in total). kASA may crash or slow down to a crawl..." << endl;
 		}
 #endif
 
-		if (thread::hardware_concurrency() < static_cast<uint32_t>(iNumOfThreads)) {
-			cout << "OUT: WARNING! The requested number of " << iNumOfThreads << " threads is too much for your system (" << thread::hardware_concurrency() << " cores available). kASA may crash or slow down to a crawl..." << endl;
+		if (thread::hardware_concurrency() < static_cast<uint32_t>(GlobalInputParameters.iNumOfThreads)) {
+			cout << "OUT: WARNING! The requested number of " << GlobalInputParameters.iNumOfThreads << " threads is too much for your system (" << thread::hardware_concurrency() << " cores available). kASA may crash or slow down to a crawl..." << endl;
 		}
 
-		if (int(bOnlyOneFrame) + int(bThreeFrames) + int(bSixFrames) >= 2) {
+		if (int(GlobalInputParameters.bOnlyOneFrame) + int(GlobalInputParameters.bThreeFrames) + int(GlobalInputParameters.bSixFrames) >= 2) {
 			throw runtime_error("You'll have to decide between using one, three, or six frames. Currently, more than one option was chosen. Please check your parameters!");
 		}
 
 		// Set for build and update
-		if (bTranslated) {
-			bThreeFrames = true;
+		if (GlobalInputParameters.bTranslated) {
+			GlobalInputParameters.bThreeFrames = true;
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		if (cMode == "build") {
-			const int32_t& iHighestK = ((iHigherK > 12) ? 25 : 12);
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
-			if (codonTable != "") {
-				kASAObj.setCodonTable(codonTable, sCodonID);
+		if (GlobalInputParameters.cMode == "build") {
+			GlobalInputParameters.iHighestK = (GlobalInputParameters.iHigherK > 12) ? 25 : 12;
+			kASA::kASA kASAObj(GlobalInputParameters);
+			if (GlobalInputParameters.codonTable != "") {
+				kASAObj.setCodonTable(GlobalInputParameters.codonTable, GlobalInputParameters.sCodonID);
 			}
 
-			if (bSpaced) {
+			if (GlobalInputParameters.bSpaced) {
 				kASAObj._bSpaced = true;
-				kASAObj._iWhichMask = iNumOfMask;
+				kASAObj._iWhichMask = GlobalInputParameters.iNumOfMask;
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
 
 			// No content file yet created
-			if (contentFileIn == "" || ((sAccToTaxFiles != "" && sTaxonomyPath != ""))) {
-				if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
+			if (GlobalInputParameters.contentFileIn == "" || ((GlobalInputParameters.sAccToTaxFiles != "" && GlobalInputParameters.sTaxonomyPath != ""))) {
+				if (GlobalInputParameters.sTaxLevel != "lowest" && (GlobalInputParameters.sAccToTaxFiles == "" || GlobalInputParameters.sTaxonomyPath == "")) {
 					throw runtime_error("No acc2Tax file or taxonomy path given...");
 				}
 				else {
-					if (contentFileIn == "") {
-						contentFileIn = indexFile + "_content.txt";
+					if (GlobalInputParameters.contentFileIn == "") {
+						GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 					}
-					if (bVerbose) {
-						cout << "OUT: Creating content file: " << contentFileIn << endl;
+					if (GlobalInputParameters.bVerbose) {
+						cout << "OUT: Creating content file: " << GlobalInputParameters.contentFileIn << endl;
 					}
 
 					kASA::ContentFile genCFObj(kASAObj);
-					genCFObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings, iMemorySizeAvail);
+					genCFObj.generateContentFile(GlobalInputParameters, GlobalInputParameters.contentFileIn);
 				}
 			}
-			if (iMemorySizeAvail * 0.9 < GIGABYTEASBYTES) {
+			if (GlobalInputParameters.iMemorySizeAvail * 0.9 < GIGABYTEASBYTES) {
 				throw runtime_error("Not enough memory given!");
 			}
 
 
-			if (iHigherK <= 12) {
-				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bUnfunny);
+			if (GlobalInputParameters.iHigherK <= 12) {
+				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, GlobalInputParameters.bUnfunny);
 
-				if (bOnlyOneFrame) {
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					readObj._bOnlyOneFrame = true;
 				}
 
-				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, bContinue);
+				readObj.BuildAll(GlobalInputParameters, GlobalInputParameters.indexFile, GlobalInputParameters.bContinue);
 			}
 			else {
-				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bUnfunny);
+				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, GlobalInputParameters.bUnfunny);
 
-				if (bOnlyOneFrame) {
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					readObj._bOnlyOneFrame = true;
 				}
 
-				readObj.BuildAll(contentFileIn, sInput, indexFile, static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, bContinue);
+				readObj.BuildAll(GlobalInputParameters, GlobalInputParameters.indexFile, GlobalInputParameters.bContinue);
 			}
 
 
@@ -599,19 +660,19 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "generateCF") {
-			if (contentFileIn == "") {
+		else if (GlobalInputParameters.cMode == "generateCF") {
+			if (GlobalInputParameters.contentFileIn == "") {
 				throw runtime_error("Where should I put the content file?");
 			}
-			if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
+			if (GlobalInputParameters.sTaxLevel != "lowest" && (GlobalInputParameters.sAccToTaxFiles == "" || GlobalInputParameters.sTaxonomyPath == "")) {
 				throw runtime_error("No acc2Tax file or taxonomy path given...");
 			}
-			kASA::ContentFile CFObj(sTempPath, iNumOfThreads, iHigherK, iLowerK, iNumOfCall, bVerbose);
-			CFObj.generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, contentFileIn, sTaxLevel, bTaxIdsAsStrings, iMemorySizeAvail);
+			kASA::ContentFile CFObj(GlobalInputParameters);
+			CFObj.generateContentFile(GlobalInputParameters, GlobalInputParameters.contentFileIn);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "update") {
-			ifstream fLibInfo(indexFile + "_info.txt");
+		else if (GlobalInputParameters.cMode == "update") {
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -622,72 +683,72 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(GlobalInputParameters);
 			
 			auto start = std::chrono::high_resolution_clock::now();
 
-			if (codonTable != "") {
-				kASAObj.setCodonTable(codonTable, sCodonID);
+			if (GlobalInputParameters.codonTable != "") {
+				kASAObj.setCodonTable(GlobalInputParameters.codonTable, GlobalInputParameters.sCodonID);
 			}
 
 			// Content file was created together with the index
 			string sContentFileOut = "";
-			if (contentFileAfterUpdate != "") {
-				sContentFileOut = contentFileAfterUpdate;
+			if (GlobalInputParameters.contentFileAfterUpdate != "") {
+				sContentFileOut = GlobalInputParameters.contentFileAfterUpdate;
 			}
 			else {
-				if (contentFileIn == "") {
-					sContentFileOut = sDBPathOut + "_content.txt";
+				if (GlobalInputParameters.contentFileIn == "") {
+					sContentFileOut = GlobalInputParameters.sDBPathOut + "_content.txt";
 				} // else: create no new content file and instead take the one provided
 			}
 
-			if (contentFileIn == "") {
-				contentFileIn = indexFile + "_content.txt";
+			if (GlobalInputParameters.contentFileIn == "") {
+				GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 			}
 
 			// get taxIds that are new and map the accession numbers to those
 			pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> mapsForDummys;
 			if (sContentFileOut != "") {
-				if (sTaxLevel != "lowest" && (sAccToTaxFiles == "" || sTaxonomyPath == "")) {
+				if (GlobalInputParameters.sTaxLevel != "lowest" && (GlobalInputParameters.sAccToTaxFiles == "" || GlobalInputParameters.sTaxonomyPath == "")) {
 					throw runtime_error("No acc2Tax file or taxonomy path given...");
 				}
 
 
-				if (bVerbose) {
+				if (GlobalInputParameters.bVerbose) {
 					cout << "OUT: Creating content file: " << sContentFileOut << endl;
 				}
 
 				kASA::ContentFile genCFObj(kASAObj);
-				mapsForDummys = genCFObj.addToContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, sTaxLevel, contentFileIn, sContentFileOut, bTaxIdsAsStrings, iMemorySizeAvail);
-				contentFileIn = sContentFileOut; // newly created content file will now be taken for the updated index
+				mapsForDummys = genCFObj.addToContentFile(GlobalInputParameters, sContentFileOut);
+				GlobalInputParameters.contentFileIn = sContentFileOut; // newly created content file will now be taken for the updated index
 			}
 			
 			if (iVecType != 128) {
-				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bUnfunny);
-				if (bOnlyOneFrame) {
+				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, GlobalInputParameters.bUnfunny);
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
-				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, mapsForDummys);
+				updateObj.UpdateFromFasta(GlobalInputParameters, (GlobalInputParameters.indexFile == GlobalInputParameters.sDBPathOut) || (GlobalInputParameters.sDBPathOut == ""), mapsForDummys);
 			}
 			else {
-				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bUnfunny);
-				if (bOnlyOneFrame) {
+				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, GlobalInputParameters.bUnfunny);
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					updateObj._bOnlyOneFrame = true;
 				}
-				updateObj.UpdateFromFasta(contentFileIn, indexFile, sInput, sDBPathOut, (indexFile == sDBPathOut) || (sDBPathOut == ""), static_cast<uint64_t>(iMemorySizeAvail * 0.9 - GIGABYTEASBYTES), fPercentageOfThrowAway, mapsForDummys);
+				updateObj.UpdateFromFasta(GlobalInputParameters, (GlobalInputParameters.indexFile == GlobalInputParameters.sDBPathOut) || (GlobalInputParameters.sDBPathOut == ""), mapsForDummys);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "delete") {
+		else if (GlobalInputParameters.cMode == "delete") {
 
-			if (sDBPathOut == "") {
+			if (GlobalInputParameters.sDBPathOut == "") {
 				throw runtime_error("No output file given!");
 			}
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -702,27 +763,28 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("Halved indices cannot be modified in this way. Sorry...");
 			}
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(GlobalInputParameters);
+
 			auto start = std::chrono::high_resolution_clock::now();
 			if (iVecType != 128) {
-				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, bUnfunny);
-				updateObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), iMemorySizeAvail);
+				kASA::Update<contentVecType_32p, packedBigPair, uint64_t> updateObj(kASAObj, GlobalInputParameters.bUnfunny);
+				updateObj.DeleteFromLib(GlobalInputParameters, (GlobalInputParameters.indexFile == GlobalInputParameters.sDBPathOut));
 			}
 			else {
-				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, bUnfunny);
-				updateObj.DeleteFromLib(contentFileIn, indexFile, sDBPathOut, delnodesFile, (indexFile == sDBPathOut), iMemorySizeAvail);
+				kASA::Update<contentVecType_128, packedLargePair, uint128_t> updateObj(kASAObj, GlobalInputParameters.bUnfunny);
+				updateObj.DeleteFromLib(GlobalInputParameters, (GlobalInputParameters.indexFile == GlobalInputParameters.sDBPathOut));
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "shrink") {
-			if (indexFile == sDBPathOut) {
+		else if (GlobalInputParameters.cMode == "shrink") {
+			if (GlobalInputParameters.indexFile == GlobalInputParameters.sDBPathOut) {
 				throw runtime_error("Paths and names of input and output are the same!");
 			}
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -735,50 +797,51 @@ int main(int argc, char* argv[]) {
 
 			// Default value
 			bool bCopyContentFile = false;
-			if (sDBPathOut == "") {
-				sDBPathOut = indexFile + "_s";
+			if (GlobalInputParameters.sDBPathOut == "") {
+				GlobalInputParameters.sDBPathOut = GlobalInputParameters.indexFile + "_s";
 			}
 
 			// Content file was created together with the index
-			if (contentFileIn == "") {
-				contentFileIn = indexFile + "_content.txt";
+			if (GlobalInputParameters.contentFileIn == "") {
+				GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 				bCopyContentFile = true;
 			}
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::Shrink kASAObj(GlobalInputParameters);
+
 			if (iVecType == 0) {
-				if (bCustomMemorySet && fPercentageOfThrowAway == 0.f && eShrinkingStrategy == kASA::Shrink::ShrinkingStrategy::EveryNth) {
+				if (GlobalInputParameters.bCustomMemorySet && GlobalInputParameters.fPercentageOfThrowAway == 0.f && eShrinkingStrategy == kASA::Shrink::ShrinkingStrategy::EveryNth) {
 					// index shall be of a maximum size
-					fPercentageOfThrowAway = 100.f - 100.f * float(iMemorySizeAvail) / (iSizeOfLib * sizeof(packedBigPair));
-					if (bVerbose) {
-						cout << "Reducing by " << fPercentageOfThrowAway << "%" << endl;
+					GlobalInputParameters.fPercentageOfThrowAway = 100.f - 100.f * float(GlobalInputParameters.iMemorySizeAvail) / (iSizeOfLib * sizeof(packedBigPair));
+					if (GlobalInputParameters.bVerbose) {
+						cout << "Reducing by " << GlobalInputParameters.fPercentageOfThrowAway << "%" << endl;
 					}
 				}
 
-				kASAObj.ShrinkLib<contentVecType_32p, packedBigPair, uint64_t>(indexFile, sDBPathOut, eShrinkingStrategy, contentFileIn, fPercentageOfThrowAway);
+				kASAObj.ShrinkLib<contentVecType_32p, packedBigPair, uint64_t>(GlobalInputParameters, eShrinkingStrategy);
 			}
 			else {
 				if (eShrinkingStrategy == kASA::Shrink::ShrinkingStrategy::TrieHalf) {
 					throw runtime_error("If k is larger than 12, the index can not be halved as of now!");
 				}
 
-				if (bCustomMemorySet && fPercentageOfThrowAway == 0.f) {
+				if (GlobalInputParameters.bCustomMemorySet && GlobalInputParameters.fPercentageOfThrowAway == 0.f) {
 					// index shall be of a maximum size
-					fPercentageOfThrowAway = 100.f - 100.f * float(iMemorySizeAvail) / (iSizeOfLib * sizeof(packedLargePair));
-					if (bVerbose) {
-						cout << "Reducing by " << fPercentageOfThrowAway << "%" << endl;
+					GlobalInputParameters.fPercentageOfThrowAway = 100.f - 100.f * float(GlobalInputParameters.iMemorySizeAvail) / (iSizeOfLib * sizeof(packedLargePair));
+					if (GlobalInputParameters.bVerbose) {
+						cout << "Reducing by " << GlobalInputParameters.fPercentageOfThrowAway << "%" << endl;
 					}
 				}
 
-				kASAObj.ShrinkLib<contentVecType_128, packedLargePair, uint128_t>(indexFile, sDBPathOut, eShrinkingStrategy, contentFileIn, fPercentageOfThrowAway);
+				kASAObj.ShrinkLib<contentVecType_128, packedLargePair, uint128_t>(GlobalInputParameters, eShrinkingStrategy);
 			}
 			
 
 			if (bCopyContentFile) {
 				// Copy file so that both indices can be used by default parameters for -c
-				ifstream CFile(contentFileIn, std::ios::binary);
-				ofstream SCFile(sDBPathOut + "_content.txt", std::ios::binary);
+				ifstream CFile(GlobalInputParameters.contentFileIn, std::ios::binary);
+				ofstream SCFile(GlobalInputParameters.sDBPathOut + "_content.txt", std::ios::binary);
 				if (!SCFile || !CFile) {
 					throw runtime_error("Content file couldn't be opened for reading/writing!");
 				}
@@ -786,17 +849,17 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "merge") {
+		else if (GlobalInputParameters.cMode == "merge") {
 			auto start = std::chrono::high_resolution_clock::now();
 
-			if (indexFile == sInput) {
+			if (GlobalInputParameters.firstOldIndex == GlobalInputParameters.secondOldIndex) {
 				throw runtime_error("-d and -i must point to different indices!");
 			}
-			if (indexFile == sDBPathOut || sInput == sDBPathOut) {
+			if (GlobalInputParameters.firstOldIndex == GlobalInputParameters.sDBPathOut || GlobalInputParameters.secondOldIndex == GlobalInputParameters.sDBPathOut) {
 				throw runtime_error("You can't overwrite indices (yet)!");
 			}
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.firstOldIndex + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -806,7 +869,7 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("Info file for the first index can not be found!");
 			}
 			fLibInfo.close();
-			fLibInfo.open(sInput + "_info.txt");
+			fLibInfo.open(GlobalInputParameters.secondOldIndex + "_info.txt");
 			uint64_t iSizeOfLib2 = 0, iVecType2 = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib2;
@@ -817,47 +880,47 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode, !bThreeFrames);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(GlobalInputParameters);
 
 			// Content file was created together with the index
 
-			if (contentFileIn == "") {
-				if (contentFile1 == "") {
-					contentFile1 = indexFile + "_content.txt";
+			if (GlobalInputParameters.contentFileIn == "") {
+				if (GlobalInputParameters.contentFile1 == "") {
+					GlobalInputParameters.contentFile1 = GlobalInputParameters.firstOldIndex + "_content.txt";
 				}
-				if (contentFile2 == "") {
-					contentFile2 = sInput + "_content.txt";
+				if (GlobalInputParameters.contentFile2 == "") {
+					GlobalInputParameters.contentFile2 = GlobalInputParameters.secondOldIndex + "_content.txt";
 				}
-				if (contentFileAfterUpdate == "") {
-					contentFileAfterUpdate = sDBPathOut + "_content.txt";
+				if (GlobalInputParameters.contentFileAfterUpdate == "") {
+					GlobalInputParameters.contentFileAfterUpdate = GlobalInputParameters.sDBPathOut + "_content.txt";
 				}
 			}
 
 			// call Merge on the content files and indices
 			if (iVecType != 128 && iVecType2 != 128) {
-				if (iHigherK > 12) {
+				if (GlobalInputParameters.iHigherK > 12) {
 					cerr << "This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
-					iHigherK = 12;
+					GlobalInputParameters.iHigherK = 12;
 				}
-				if (iLowerK > 12) {
+				if (GlobalInputParameters.iLowerK > 12) {
 					cerr << "This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
-					iLowerK = 12;
+					GlobalInputParameters.iLowerK = 12;
 				}
 
 				// call merge
-				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, bUnfunny);
-				if (contentFileAfterUpdate != "") {
+				kASA::Read<contentVecType_32p, packedBigPair, uint64_t> readObj(kASAObj, GlobalInputParameters.bUnfunny);
+				if (GlobalInputParameters.contentFileAfterUpdate != "") {
 					kASA::ContentFile genCFObj(kASAObj);
-					auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileAfterUpdate);
-					readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileAfterUpdate, iMemorySizeAvail, res);
+					auto res = genCFObj.mergeContentFiles(GlobalInputParameters.contentFile1, GlobalInputParameters.contentFile2, true, GlobalInputParameters.contentFileAfterUpdate);
+					readObj.MergeTwoIndices(GlobalInputParameters, res);
 				}
 				else {
-					if (contentFileIn != "") {
-						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, iMemorySizeAvail);
+					if (GlobalInputParameters.contentFileIn != "") {
+						readObj.MergeTwoIndices(GlobalInputParameters);
 					}
 					else {
-						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFile1, iMemorySizeAvail);
+						readObj.MergeTwoIndices(GlobalInputParameters);
 					}
 				}
 			}
@@ -869,18 +932,18 @@ int main(int argc, char* argv[]) {
 				}
 				kASAObj._iHighestK = 25;
 				kASAObj._iMaxK = 25;
-				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, bUnfunny);
-				if (contentFileAfterUpdate != "") {
+				kASA::Read<contentVecType_128, packedLargePair, uint128_t> readObj(kASAObj, GlobalInputParameters.bUnfunny);
+				if (GlobalInputParameters.contentFileAfterUpdate != "") {
 					kASA::ContentFile genCFObj(kASAObj);
-					auto res = genCFObj.mergeContentFiles(contentFile1, contentFile2, true, contentFileAfterUpdate);
-					readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileAfterUpdate, iMemorySizeAvail, res);
+					auto res = genCFObj.mergeContentFiles(GlobalInputParameters.contentFile1, GlobalInputParameters.contentFile2, true, GlobalInputParameters.contentFileAfterUpdate);
+					readObj.MergeTwoIndices(GlobalInputParameters, res);
 				}
 				else {
-					if (contentFileIn != "") {
-						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFileIn, iMemorySizeAvail);
+					if (GlobalInputParameters.contentFileIn != "") {
+						readObj.MergeTwoIndices(GlobalInputParameters);
 					}
 					else {
-						readObj.MergeTwoIndices(indexFile, sInput, sDBPathOut, contentFile1, iMemorySizeAvail);
+						readObj.MergeTwoIndices(GlobalInputParameters);
 					}
 				}
 			}
@@ -888,10 +951,10 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "identify") {
+		else if (GlobalInputParameters.cMode == "identify") {
 			auto start = std::chrono::high_resolution_clock::now();
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -902,122 +965,123 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-
-			if (bVisualize) {
-				iNumOfThreads = 1;
+			if (GlobalInputParameters.bVisualize) {
+				GlobalInputParameters.iNumOfThreads = 1;
 			}
 
-			if (sPairedEnd1 != "" && sInput != "") {
+			if (GlobalInputParameters.sPairedEnd1 != "" && GlobalInputParameters.sInput != "") {
 				cerr << "Paired-end reads were selected, file(s) given with -i will be ignored!" << endl;
 			}
-			if (sPairedEnd1 != "" && sPairedEnd2 == "") {
+			if (GlobalInputParameters.sPairedEnd1 != "" && GlobalInputParameters.sPairedEnd2 == "") {
 				throw runtime_error("No paired-end file given in -2!");
 			}
-			if (sPairedEnd1 == "" && sPairedEnd2 != "") {
+			if (GlobalInputParameters.sPairedEnd1 == "" && GlobalInputParameters.sPairedEnd2 != "") {
 				throw runtime_error("No paired-end file given in -1!");
 			}
-			if (sPairedEnd1 != "" && sPairedEnd2 != "") {
-				if (sPairedEnd1.back() == '/' || sPairedEnd2.back() == '/') {
+			if (GlobalInputParameters.sPairedEnd1 != "" && GlobalInputParameters.sPairedEnd2 != "") {
+				if (GlobalInputParameters.sPairedEnd1.back() == '/' || GlobalInputParameters.sPairedEnd2.back() == '/') {
 					throw runtime_error("Paired-end can only be files, no folders!");
 				}
-				sInput = sPairedEnd1 + char(0xB) + sPairedEnd2;
+				GlobalInputParameters.sInput = GlobalInputParameters.sPairedEnd1 + char(0xB) + GlobalInputParameters.sPairedEnd2;
 			}
 
 			if (iVecType != 128) {
-				if (iHigherK > 12) {
+				if (GlobalInputParameters.iHigherK > 12) {
 					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
-					iHigherK = 12;
+					GlobalInputParameters.iHigherK = 12;
 				}
-				if (iLowerK > 12) {
+				if (GlobalInputParameters.iLowerK > 12) {
 					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
-					iLowerK = 12;
+					GlobalInputParameters.iLowerK = 12;
 				}
-				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
+				GlobalInputParameters.iHighestK = 12;
+				kASA::Compare<contentVecType_32p, packedBigPair, uint64_t> kASAObj(GlobalInputParameters);
 
-				if (bSpaced) {
+				if (GlobalInputParameters.bSpaced) {
 					kASAObj._bSpaced = true;
-					kASAObj._iWhichMask = iNumOfMask;
+					kASAObj._iWhichMask = GlobalInputParameters.iNumOfMask;
 				}
 
-				if (bVisualize) {
+				if (GlobalInputParameters.bVisualize) {
 					kASAObj._bVisualize = true;
 				}
 
-				if (bOnlyOneFrame) {
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					kASAObj._bOnlyOneFrame = true;
 				}
 
-				if (codonTable != "") {
-					kASAObj.setCodonTable(codonTable, sCodonID);
+				if (GlobalInputParameters.codonTable != "") {
+					kASAObj.setCodonTable(GlobalInputParameters.codonTable, GlobalInputParameters.sCodonID);
 				}
 
 				// Content file was created together with the index
-				if (contentFileIn == "") {
-					contentFileIn = indexFile + "_content.txt";
+				if (GlobalInputParameters.contentFileIn == "") {
+					GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 				}
 
 
 				kASAObj.format = eOutputFormat;
 
-				kASAObj.index.set(bRAM, false, iNumOfThreads);
-				kASAObj.index.setFile(indexFile);
-				kASAObj.index.loadTrie(indexFile, iHigherK, iLowerK);
+				kASAObj.index.set(GlobalInputParameters.bRAM, false, GlobalInputParameters.iNumOfThreads);
+				kASAObj.index.setFile(GlobalInputParameters.indexFile);
+				kASAObj.index.loadTrie(GlobalInputParameters.indexFile, GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK);
 
-				iMemorySizeAvail -= kASAObj.index.trieForVector->GetSize();
+				GlobalInputParameters.iMemorySizeAvail -= kASAObj.index.trieForVector->GetSize();
 
-				kASAObj.index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
+				kASAObj.index.loadContentAndFrequencyFiles(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.indexFile, GlobalInputParameters.contentFileIn, GlobalInputParameters.iMemorySizeAvail);
 
 				debugBarrier
 
-				kASAObj.index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
+				kASAObj.index.loadIndex(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.iMemorySizeAvail);
 
-				kASAObj.CompareWithLib_partialSort(sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bRAM, bUnique, threshold);
+				kASAObj.CompareWithLib_partialSort(GlobalInputParameters.sInput, GlobalInputParameters.readToTaxaFile, GlobalInputParameters.tableFile, GlobalInputParameters.iMemorySizeAvail, GlobalInputParameters.bRAM, GlobalInputParameters.bUnique, GlobalInputParameters.threshold);
 			}
 			else {
-				if (!bHighKSetByUser) {
-					iHigherK = HIGHESTPOSSIBLEK;
+				if (!GlobalInputParameters.bHighKSetByUser) {
+					GlobalInputParameters.iHigherK = HIGHESTPOSSIBLEK;
 				}
 
-				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny);
+				GlobalInputParameters.iHighestK = 25;
+				kASA::Compare<contentVecType_128, packedLargePair, uint128_t> kASAObj(GlobalInputParameters);
 
-				if (bSpaced) {
+
+				if (GlobalInputParameters.bSpaced) {
 					kASAObj._bSpaced = true;
-					kASAObj._iWhichMask = iNumOfMask;
+					kASAObj._iWhichMask = GlobalInputParameters.iNumOfMask;
 				}
 
-				if (bVisualize) {
+				if (GlobalInputParameters.bVisualize) {
 					kASAObj._bVisualize = true;
 				}
 
-				if (bOnlyOneFrame) {
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					kASAObj._bOnlyOneFrame = true;
 				}
 
-				if (codonTable != "") {
-					kASAObj.setCodonTable(codonTable, sCodonID);
+				if (GlobalInputParameters.codonTable != "") {
+					kASAObj.setCodonTable(GlobalInputParameters.codonTable, GlobalInputParameters.sCodonID);
 				}
 
 				// Content file was created together with the index
-				if (contentFileIn == "") {
-					contentFileIn = indexFile + "_content.txt";
+				if (GlobalInputParameters.contentFileIn == "") {
+					GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 				}
 
 				kASAObj.format = eOutputFormat;
 
-				kASAObj.index.set(bRAM, false, iNumOfThreads);
-				kASAObj.index.setFile(indexFile);
-				kASAObj.index.loadTrie(indexFile, iHigherK, iLowerK);
+				kASAObj.index.set(GlobalInputParameters.bRAM, false, GlobalInputParameters.iNumOfThreads);
+				kASAObj.index.setFile(GlobalInputParameters.indexFile);
+				kASAObj.index.loadTrie(GlobalInputParameters.indexFile, GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK);
 
-				iMemorySizeAvail -= kASAObj.index.trieForVector->GetSize();
+				GlobalInputParameters.iMemorySizeAvail -= kASAObj.index.trieForVector->GetSize();
 
-				kASAObj.index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
+				kASAObj.index.loadContentAndFrequencyFiles(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.indexFile, GlobalInputParameters.contentFileIn, GlobalInputParameters.iMemorySizeAvail);
 
 				debugBarrier
 
-				kASAObj.index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
+				kASAObj.index.loadIndex(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.iMemorySizeAvail);
 
-				kASAObj.CompareWithLib_partialSort(sInput, readToTaxaFile, tableFile, iTrieDepth, iMemorySizeAvail, bRAM, bUnique, threshold);
+				kASAObj.CompareWithLib_partialSort(GlobalInputParameters.sInput, GlobalInputParameters.readToTaxaFile, GlobalInputParameters.tableFile, GlobalInputParameters.iMemorySizeAvail, GlobalInputParameters.bRAM, GlobalInputParameters.bUnique, GlobalInputParameters.threshold);
 			}
 			auto end = std::chrono::high_resolution_clock::now();
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
@@ -1026,10 +1090,10 @@ int main(int argc, char* argv[]) {
 #endif
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "identify_multiple") {
+		else if (GlobalInputParameters.cMode == "identify_multiple") {
 			auto start = std::chrono::high_resolution_clock::now();
 			
-			if (iNumOfThreads < 2) {
+			if (GlobalInputParameters.iNumOfThreads < 2) {
 				throw runtime_error("Number of threads after -n must be larger than 1!");
 			}
 
@@ -1037,11 +1101,11 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("This mode only makes sense if you load the index into primary memory (RAM)!");
 			}*/
 
-			if (sPairedEnd1 != "" || sPairedEnd2 != "") {
+			if (GlobalInputParameters.sPairedEnd1 != "" || GlobalInputParameters.sPairedEnd2 != "") {
 				throw runtime_error("No paired-end allowed in this mode!");
 			}
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -1052,13 +1116,13 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
 
-			if (sInput.back() != '/' && sInput.back() != '\\') {
+			if (GlobalInputParameters.sInput.back() != '/' && GlobalInputParameters.sInput.back() != '\\') {
 				throw runtime_error("Input must be a folder with multiple files in it!");
 			}
 
-			auto files = Utilities::gatherFilesAndSizesFromPath(sInput);
+			auto files = Utilities::gatherFilesAndSizesFromPath(GlobalInputParameters.sInput);
 			if (files.size() < 2) {
 				throw runtime_error("Input must be a folder with more than one file in it!");
 			}
@@ -1067,8 +1131,8 @@ int main(int argc, char* argv[]) {
 			debugBarrier
 			sort(files.begin(), files.end(), [](const pair<string, size_t>& a, const pair<string, size_t>& b) { return a.second > b.second; });
 			vector<int32_t> vThreadsPerFile(files.size(), 1);
-			const int32_t& iDiff = (static_cast<int32_t>(files.size()) >= iNumOfThreads) ? 0 : iNumOfThreads - static_cast<int32_t>(files.size());
-			int32_t iUsedThreads = (static_cast<int32_t>(files.size()) >= iNumOfThreads) ? iNumOfThreads : static_cast<int32_t>(files.size());
+			const int32_t& iDiff = (static_cast<int32_t>(files.size()) >= GlobalInputParameters.iNumOfThreads) ? 0 : GlobalInputParameters.iNumOfThreads - static_cast<int32_t>(files.size());
+			int32_t iUsedThreads = (static_cast<int32_t>(files.size()) >= GlobalInputParameters.iNumOfThreads) ? GlobalInputParameters.iNumOfThreads : static_cast<int32_t>(files.size());
 			for (int32_t i = 0; i < iDiff;) {
 				for (size_t j = 0; j < files.size() && i < iDiff; ++j) {
 					vThreadsPerFile[j]++;
@@ -1081,55 +1145,55 @@ int main(int argc, char* argv[]) {
 			uint64_t iLocalMemoryAvail = 0;
 
 			if (iVecType != 128) {
-				if (iHigherK > 12) {
+				if (GlobalInputParameters.iHigherK > 12) {
 					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
-					iHigherK = 12;
+					GlobalInputParameters.iHigherK = 12;
 				}
-				if (iLowerK > 12) {
+				if (GlobalInputParameters.iLowerK > 12) {
 					cerr << "WARNING: This index can not be used with a k higher than 12! Setting to this maximum..." << endl;
-					iLowerK = 12;
+					GlobalInputParameters.iLowerK = 12;
 				}
 
 				debugBarrier
-				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(sTempPath, 1, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny));
+				kASAObj.reset(new kASA::Compare<contentVecType_32p, packedBigPair, uint64_t>(GlobalInputParameters));
 
-				if (bSpaced) {
+				if (GlobalInputParameters.bSpaced) {
 					kASAObj->_bSpaced = true;
-					kASAObj->_iWhichMask = iNumOfMask;
+					kASAObj->_iWhichMask = GlobalInputParameters.iNumOfMask;
 				}
 
-				if (codonTable != "") {
-					kASAObj->setCodonTable(codonTable, sCodonID);
+				if (GlobalInputParameters.codonTable != "") {
+					kASAObj->setCodonTable(GlobalInputParameters.codonTable, GlobalInputParameters.sCodonID);
 				}
 
-				if (bOnlyOneFrame) {
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					kASAObj->_bOnlyOneFrame = true;
 				}
 
 				// Content file was created together with the index
-				if (contentFileIn == "") {
-					contentFileIn = indexFile + "_content.txt";
+				if (GlobalInputParameters.contentFileIn == "") {
+					GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 				}
 
 				debugBarrier
-				kASAObj->index.set(bRAM, false, iNumOfThreads);
-				kASAObj->index.setFile(indexFile);
+				kASAObj->index.set(GlobalInputParameters.bRAM, false, GlobalInputParameters.iNumOfThreads);
+				kASAObj->index.setFile(GlobalInputParameters.indexFile);
 				kASAObj->index.bIdentifyMultiple = true;
-				kASAObj->index.loadTrie(indexFile, iHigherK, iLowerK);
+				kASAObj->index.loadTrie(GlobalInputParameters.indexFile, GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK);
 
-				iMemorySizeAvail -= kASAObj->index.trieForVector->GetSize();
+				GlobalInputParameters.iMemorySizeAvail -= kASAObj->index.trieForVector->GetSize();
 
-				kASAObj->index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
+				kASAObj->index.loadContentAndFrequencyFiles(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.indexFile, GlobalInputParameters.contentFileIn, GlobalInputParameters.iMemorySizeAvail);
 
 				debugBarrier
 
-				if (bRAM) {
-					kASAObj->index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
+				if (GlobalInputParameters.bRAM) {
+					kASAObj->index.loadIndex(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.iMemorySizeAvail);
 				}
 
-				if (iMemorySizeAvail < 0) {
+				if (GlobalInputParameters.iMemorySizeAvail < 0) {
 					cerr << "WARNING: Not enough memory given. Adding 1GB. May lead to bad_alloc errors..." << endl;
-					iMemorySizeAvail = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
+					GlobalInputParameters.iMemorySizeAvail = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
 				}
 
 				kASAObj->format = eOutputFormat;
@@ -1138,46 +1202,46 @@ int main(int argc, char* argv[]) {
 			else {
 				debugBarrier
 
-				if (!bHighKSetByUser) {
-					iHigherK = HIGHESTPOSSIBLEK;
+				if (!GlobalInputParameters.bHighKSetByUser) {
+					GlobalInputParameters.iHigherK = HIGHESTPOSSIBLEK;
 				}
 
-				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t> (sTempPath, 1, iHighestK, iHigherK, iLowerK, iNumOfCall, iNumOfBeasts, bVerbose, sStxxlMode, bSixFrames, bUnfunny) );
+				kASAObj128.reset(new kASA::Compare<contentVecType_128, packedLargePair, uint128_t>(GlobalInputParameters) );
 
-				if (bSpaced) {
+				if (GlobalInputParameters.bSpaced) {
 					kASAObj128->_bSpaced = true;
-					kASAObj128->_iWhichMask = iNumOfMask;
+					kASAObj128->_iWhichMask = GlobalInputParameters.iNumOfMask;
 				}
 
-				if (codonTable != "") {
-					kASAObj128->setCodonTable(codonTable, sCodonID);
+				if (GlobalInputParameters.codonTable != "") {
+					kASAObj128->setCodonTable(GlobalInputParameters.codonTable, GlobalInputParameters.sCodonID);
 				}
 
-				if (bOnlyOneFrame) {
+				if (GlobalInputParameters.bOnlyOneFrame) {
 					kASAObj128->_bOnlyOneFrame = true;
 				}
 
 				// Content file was created together with the index
-				if (contentFileIn == "") {
-					contentFileIn = indexFile + "_content.txt";
+				if (GlobalInputParameters.contentFileIn == "") {
+					GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 				}
 
 				debugBarrier
-				kASAObj128->index.set(bRAM, false, iNumOfThreads);
-				kASAObj128->index.setFile(indexFile);
+				kASAObj128->index.set(GlobalInputParameters.bRAM, false, GlobalInputParameters.iNumOfThreads);
+				kASAObj128->index.setFile(GlobalInputParameters.indexFile);
 				kASAObj128->index.bIdentifyMultiple = true;
-				kASAObj128->index.loadTrie(indexFile, iHigherK, iLowerK);
-				iMemorySizeAvail -= kASAObj128->index.trieForVector->GetSize();
-				kASAObj128->index.loadContentAndFrequencyFiles(indexFile, contentFileIn, iMemorySizeAvail);
+				kASAObj128->index.loadTrie(GlobalInputParameters.indexFile, GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK);
+				GlobalInputParameters.iMemorySizeAvail -= kASAObj128->index.trieForVector->GetSize();
+				kASAObj128->index.loadContentAndFrequencyFiles(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.indexFile, GlobalInputParameters.contentFileIn, GlobalInputParameters.iMemorySizeAvail);
 				debugBarrier
 
-				if (bRAM) {
-					kASAObj128->index.loadIndex(iHigherK, iLowerK, iMemorySizeAvail);
+				if (GlobalInputParameters.bRAM) {
+					kASAObj128->index.loadIndex(GlobalInputParameters.iHigherK, GlobalInputParameters.iLowerK, GlobalInputParameters.iMemorySizeAvail);
 				}
 
-				if (iMemorySizeAvail < 0) {
+				if (GlobalInputParameters.iMemorySizeAvail < 0) {
 					cerr << "WARNING: Not enough memory given. Adding 1GB. May lead to bad_alloc errors..." << endl;
-					iMemorySizeAvail = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
+					GlobalInputParameters.iMemorySizeAvail = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
 				}
 
 				kASAObj128->format = eOutputFormat;
@@ -1186,10 +1250,10 @@ int main(int argc, char* argv[]) {
 
 			// How much memory for each call? Is it less than 2GB? If so, reduce number of concurrent calls. Everything below 2GB is usually too slow.
 			int32_t iUsedThreadsBefore = iUsedThreads;
-			iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
+			iLocalMemoryAvail = GlobalInputParameters.iMemorySizeAvail / iUsedThreads;
 			while (iLocalMemoryAvail < 2 * GIGABYTEASBYTES && iUsedThreads > 1) {
 				iUsedThreads--;
-				iLocalMemoryAvail = iMemorySizeAvail / iUsedThreads;
+				iLocalMemoryAvail = GlobalInputParameters.iMemorySizeAvail / iUsedThreads;
 			}
 			// Add now available threads to the largest files
 			iUsedThreadsBefore -= iUsedThreads;
@@ -1205,7 +1269,7 @@ int main(int argc, char* argv[]) {
 			for (size_t iFileIdx = 0; iFileIdx < files.size(); ++iFileIdx) {
 				string fileName = "", rttFile = "", csvFile = "";
 
-				const auto& vRawNameSplit = Utilities::split(files[iFileIdx].first.substr(sInput.size(), files[iFileIdx].first.size()), '.');
+				const auto& vRawNameSplit = Utilities::split(files[iFileIdx].first.substr(GlobalInputParameters.sInput.size(), files[iFileIdx].first.size()), '.');
 				if (vRawNameSplit.size() == 1) {
 					fileName = vRawNameSplit[0];
 				}
@@ -1215,19 +1279,19 @@ int main(int argc, char* argv[]) {
 					}
 					fileName.pop_back();
 				}
-				if (readToTaxaFile != "") {
-					rttFile = readToTaxaFile + fileName +  ( (kASAObj != nullptr) ? kASAObj->getOutputFormatFileEnding() : kASAObj128->getOutputFormatFileEnding());
+				if (GlobalInputParameters.readToTaxaFile != "") {
+					rttFile = GlobalInputParameters.readToTaxaFile + fileName +  ( (kASAObj != nullptr) ? kASAObj->getOutputFormatFileEnding() : kASAObj128->getOutputFormatFileEnding());
 				}
 
-				if (tableFile != "") {
-					csvFile = tableFile + fileName + ".csv";
+				if (GlobalInputParameters.tableFile != "") {
+					csvFile = GlobalInputParameters.tableFile + fileName + ".csv";
 				}
 				
 				if (kASAObj != nullptr) {
-					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iTrieDepth, iLocalMemoryAvail, bRAM, bUnique, threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
+					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iLocalMemoryAvail, GlobalInputParameters.bRAM, GlobalInputParameters.bUnique, GlobalInputParameters.threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
 				}
 				else {
-					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj128->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iTrieDepth, iLocalMemoryAvail, bRAM, bUnique, threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
+					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj128->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iLocalMemoryAvail, GlobalInputParameters.bRAM, GlobalInputParameters.bUnique, GlobalInputParameters.threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
 				}
 				iLocalThreadIdxStart += vThreadsPerFile[iFileIdx];
 			}
@@ -1244,13 +1308,13 @@ int main(int argc, char* argv[]) {
 	#endif
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "getFrequency") {
+		else if (GlobalInputParameters.cMode == "getFrequency") {
 			
-			if (contentFileIn == "") {
-				contentFileIn = indexFile + "_content.txt";
+			if (GlobalInputParameters.contentFileIn == "") {
+				GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 			}
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -1261,26 +1325,26 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(GlobalInputParameters);
 
 			if (iVecType != 128) {
-				kASAObj.GetFrequencyK<contentVecType_32p>(contentFileIn, indexFile, iMemorySizeAvail);
+				kASAObj.GetFrequencyK<contentVecType_32p>(GlobalInputParameters, GlobalInputParameters.contentFileIn, GlobalInputParameters.indexFile);
 			}
 			else {
-				kASAObj.GetFrequencyK<contentVecType_128>(contentFileIn, indexFile, iMemorySizeAvail);
+				kASAObj.GetFrequencyK<contentVecType_128>(GlobalInputParameters, GlobalInputParameters.contentFileIn, GlobalInputParameters.indexFile);
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "redundancy") {
+		else if (GlobalInputParameters.cMode == "redundancy") {
 			// Content file was created together with the index
-			if (contentFileIn == "") {
-				contentFileIn = indexFile + "_content.txt";
+			if (GlobalInputParameters.contentFileIn == "") {
+				GlobalInputParameters.contentFileIn = GlobalInputParameters.indexFile + "_content.txt";
 			}
 
 			
 			uint32_t iIdxCounter = 1;
-			ifstream content(contentFileIn);
+			ifstream content(GlobalInputParameters.contentFileIn);
 			string sDummy = "";
 			while (getline(content, sDummy)) {
 				if (sDummy != "") {
@@ -1288,7 +1352,7 @@ int main(int argc, char* argv[]) {
 				}
 			}
 
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -1303,10 +1367,10 @@ int main(int argc, char* argv[]) {
 				throw runtime_error("redundancy cannot be called on shrunken indices!");
 			}
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::Shrink kASAObj(GlobalInputParameters);
 
-			stxxlFile libFile(indexFile, stxxlFile::RDONLY);
+			stxxlFile libFile(GlobalInputParameters.indexFile, stxxlFile::RDONLY);
 			uint32_t iCutoffNumber = 0;
 			if (iVecType != 128) {
 				unique_ptr<const contentVecType_32p> libVec(new const contentVecType_32p(&libFile, iSizeOfLib));
@@ -1330,9 +1394,9 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "trie") {
+		else if (GlobalInputParameters.cMode == "trie") {
 			
-			ifstream fLibInfo(indexFile + "_info.txt");
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0, iVecType = 0;
 			if (fLibInfo) {
 				fLibInfo >> iSizeOfLib;
@@ -1343,24 +1407,24 @@ int main(int argc, char* argv[]) {
 			}
 			fLibInfo.close();
 
-			const int32_t& iHighestK = ((iVecType == 128) ? 25 : 12);
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			GlobalInputParameters.iHighestK = ((iVecType == 128) ? 25 : 12);
+			kASA::kASA kASAObj(GlobalInputParameters);
 
 			auto start = std::chrono::high_resolution_clock::now();
 
 			if (iVecType == 128) {
-				stxxlFile libFile(indexFile, stxxlFile::RDONLY);
+				stxxlFile libFile(GlobalInputParameters.indexFile, stxxlFile::RDONLY);
 				const contentVecType_128 libVec(&libFile, iSizeOfLib);
 
-				Trie<uint128_t> T(static_cast<int8_t>(HIGHESTPOSSIBLEK), static_cast<int8_t>(iLowerK), iTrieDepth);
-				T.SaveToStxxlVec(&libVec, indexFile);
+				Trie<uint128_t> T(static_cast<int8_t>(HIGHESTPOSSIBLEK), static_cast<int8_t>(GlobalInputParameters.iLowerK), GlobalInputParameters.iTrieDepth);
+				T.SaveToStxxlVec(&libVec, GlobalInputParameters.indexFile);
 			}
 			else {
-				stxxlFile libFile(indexFile, stxxlFile::RDONLY);
+				stxxlFile libFile(GlobalInputParameters.indexFile, stxxlFile::RDONLY);
 				const contentVecType_32p libVec(&libFile, iSizeOfLib);
 
-				Trie<uint64_t> T(static_cast<int8_t>(12), static_cast<int8_t>(iLowerK), iTrieDepth);
-				T.SaveToStxxlVec(&libVec, indexFile);
+				Trie<uint64_t> T(static_cast<int8_t>(12), static_cast<int8_t>(GlobalInputParameters.iLowerK), GlobalInputParameters.iTrieDepth);
+				T.SaveToStxxlVec(&libVec, GlobalInputParameters.indexFile);
 			}
 			
 
@@ -1368,21 +1432,22 @@ int main(int argc, char* argv[]) {
 			cout << "OUT: Time: " << chrono::duration_cast<std::chrono::seconds>(end - start).count() << " s" << endl;
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "checkContentFile") {
-			kASA::kASA kASAObj(sTempPath, iNumOfThreads, 12, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
-			Utilities::checkIfContentFileIsCorrupted(contentFile1, contentFile2);
+		else if (GlobalInputParameters.cMode == "checkContentFile") {
+			kASA::kASA kASAObj(GlobalInputParameters);
+			Utilities::checkIfContentFileIsCorrupted(GlobalInputParameters.contentFile1, GlobalInputParameters.contentFile2);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "half") {
-			if (indexFile == sDBPathOut) {
+		else if (GlobalInputParameters.cMode == "half") {
+			if (GlobalInputParameters.indexFile == GlobalInputParameters.sDBPathOut) {
 				throw runtime_error("Paths and names of input and output are the same!");
 			}
-			kASA::Shrink kASAObj(sTempPath, iNumOfThreads, 12, iHigherK, iLowerK, iNumOfCall, bVerbose, sStxxlMode);
+			kASA::Shrink kASAObj(GlobalInputParameters);
 			//kASAObj.GetFrequencyK(contentFileIn, databaseFile, sDBPathOut + "_f.txt");
-			kASAObj.ShrinkLib<contentVecType_32p, packedBigPair, uint64_t>(indexFile, sDBPathOut, kASA::Shrink::ShrinkingStrategy::TrieHalf, contentFileIn);
+			eShrinkingStrategy = kASA::Shrink::ShrinkingStrategy::TrieHalf;
+			kASAObj.ShrinkLib<contentVecType_32p, packedBigPair, uint64_t>(GlobalInputParameters, eShrinkingStrategy);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "debug") {
+		else if (GlobalInputParameters.cMode == "debug") {
 			//kASA::Compare UnitTests(sTempPath, 1, 12, 9, 0, iNumOfBeasts);
 			//UnitTests.testC2V_1();
 			//UnitTests.testC2V_2();
@@ -1394,14 +1459,14 @@ int main(int argc, char* argv[]) {
 			//UnitTests.testC2V_8();
 			//UnitTests.testC2V_9();
 		}
-		else if (cMode == "translate") {
-			kASA::Read<contentVecType_32p, packedBigPair, uint64_t> derpObj(sTempPath,1,12,12,7,0);
-			derpObj.translateFileInOneFrame(sInput, sDBPathOut);
+		else if (GlobalInputParameters.cMode == "translate") {
+			kASA::Read<contentVecType_32p, packedBigPair, uint64_t> derpObj(GlobalInputParameters);
+			derpObj.translateFileInOneFrame(GlobalInputParameters.sInput, GlobalInputParameters.sDBPathOut);
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "test") {
-			stxxlFile temp(indexFile, stxxl::file::RDONLY);
-			ifstream fLibInfo(indexFile + "_info.txt");
+		else if (GlobalInputParameters.cMode == "test") {
+			stxxlFile temp(GlobalInputParameters.indexFile, stxxl::file::RDONLY);
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0;
 			fLibInfo >> iSizeOfLib;
 
@@ -1438,13 +1503,13 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "howmuchtaxids") {
-			stxxlFile temp(indexFile, stxxl::file::RDONLY);
-			ifstream fLibInfo(indexFile + "_info.txt");
+		else if (GlobalInputParameters.cMode == "howmuchtaxids") {
+			stxxlFile temp(GlobalInputParameters.indexFile, stxxl::file::RDONLY);
+			ifstream fLibInfo(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSizeOfLib = 0;
 			fLibInfo >> iSizeOfLib;
 
-			ofstream searchFile(sTempPath+"frequentkMers.txt");
+			ofstream searchFile(GlobalInputParameters.sTempPath+"frequentkMers.txt");
 			uint64_t iSeenkMer = 0;
 			uint32_t iSearchCounter = 0;
 			uint32_t iMagicNumber = 4;
@@ -1472,9 +1537,9 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "showVec") {
-			stxxlFile temp(indexFile, stxxl::file::RDONLY);
-			ifstream sizeFile(indexFile + "_info.txt");
+		else if (GlobalInputParameters.cMode == "showVec") {
+			stxxlFile temp(GlobalInputParameters.indexFile, stxxl::file::RDONLY);
+			ifstream sizeFile(GlobalInputParameters.indexFile + "_info.txt");
 			uint64_t iSize = 0;
 			sizeFile >> iSize;
 			int32_t index_t = 0;
@@ -1492,25 +1557,25 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "transform") {
-			stxxlFile temp(indexFile, stxxl::file::RDONLY);
+		else if (GlobalInputParameters.cMode == "transform") {
+			stxxlFile temp(GlobalInputParameters.indexFile, stxxl::file::RDONLY);
 
-			ifstream sizeFile(indexFile + "_info.txt"); // "_info.txt"
+			ifstream sizeFile(GlobalInputParameters.indexFile + "_info.txt"); // "_info.txt"
 			uint64_t iSize = 0;
 			sizeFile >> iSize;
 
 			const contentVecType_32p tempV(&temp, iSize);
 
-			Utilities::checkIfFileCanBeCreated(sDBPathOut);
-			Utilities::checkIfFileCanBeCreated(sDBPathOut + "_2");
+			Utilities::checkIfFileCanBeCreated(GlobalInputParameters.sDBPathOut);
+			Utilities::checkIfFileCanBeCreated(GlobalInputParameters.sDBPathOut + "_2");
 
-			stxxlFile tempOut(sDBPathOut, stxxl::file::RDWR);
+			stxxlFile tempOut(GlobalInputParameters.sDBPathOut, stxxl::file::RDWR);
 			stxxl::VECTOR_GENERATOR<uint64_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV(&tempOut, iSize);
 
-			stxxlFile tempOut2(sDBPathOut+"_2", stxxl::file::RDWR);
+			stxxlFile tempOut2(GlobalInputParameters.sDBPathOut+"_2", stxxl::file::RDWR);
 			stxxl::VECTOR_GENERATOR<uint32_t, 4U, 4U, 2101248, stxxl::RC>::result tempPV2(&tempOut2, iSize);
 			
-			ofstream countsFile(sDBPathOut+"_counts.txt");
+			ofstream countsFile(GlobalInputParameters.sDBPathOut+"_counts.txt");
 
 			auto t1It = tempV.cbegin();
 			auto tOIt = tempPV.begin();
@@ -1534,18 +1599,18 @@ int main(int argc, char* argv[]) {
 
 			tempPV.resize(tOIt - tempPV.begin(), true);
 
-			ofstream outSizeFile(sDBPathOut + "_info.txt");
+			ofstream outSizeFile(GlobalInputParameters.sDBPathOut + "_info.txt");
 			outSizeFile << tempPV.size() << endl << iSize;
 			tempPV.export_files("_");
 			tempPV2.export_files("_");
 		}
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		else if (cMode == "fuckit") {
+		else if (GlobalInputParameters.cMode == "fuckit") {
 
 
 			uint32_t iIdxCounter = 1;
 			unordered_map<uint32_t, uint32_t> mIDsAsIdx; mIDsAsIdx[0] = 0;
-			ifstream content(contentFileIn);
+			ifstream content(GlobalInputParameters.contentFileIn);
 			string sDummy = "";
 			while (getline(content, sDummy)) {
 				if (sDummy != "") {
@@ -1557,16 +1622,16 @@ int main(int argc, char* argv[]) {
 				}
 			}
 
-			ifstream sizeFile(indexFile + "_info.txt"); // "_info.txt"
+			ifstream sizeFile(GlobalInputParameters.indexFile + "_info.txt"); // "_info.txt"
 			uint64_t iSize = 0;
 			sizeFile >> iSize;
 
-			stxxlFile temp(indexFile, stxxl::file::RDONLY);
+			stxxlFile temp(GlobalInputParameters.indexFile, stxxl::file::RDONLY);
 			const contentVecType_32p tempV(&temp, iSize);
 
-			Utilities::checkIfFileCanBeCreated(sTempPath + "_tmp");
+			Utilities::checkIfFileCanBeCreated(GlobalInputParameters.sTempPath + "_tmp");
 
-			stxxlFile tempOut(sTempPath + "_tmp", stxxl::file::RDWR);
+			stxxlFile tempOut(GlobalInputParameters.sTempPath + "_tmp", stxxl::file::RDWR);
 			contentVecType_32p tempPV(&tempOut, iSize);
 
 
@@ -1593,10 +1658,10 @@ int main(int argc, char* argv[]) {
 				packedBigPair max_value() const { packedBigPair t; t.first = numeric_limits<uint64_t>::max(); t.second = numeric_limits<uint32_t>::max(); return t; }
 			};
 
-			stxxl::sort(tempPV.begin(), tempPV.end(), SCompareStructForSTXXLSort(), iMemorySizeAvail);
+			stxxl::sort(tempPV.begin(), tempPV.end(), SCompareStructForSTXXLSort(), GlobalInputParameters.iMemorySizeAvail);
 
-			Utilities::checkIfFileCanBeCreated(sDBPathOut);
-			stxxlFile realOut(sDBPathOut, stxxl::file::RDWR);
+			Utilities::checkIfFileCanBeCreated(GlobalInputParameters.sDBPathOut);
+			stxxlFile realOut(GlobalInputParameters.sDBPathOut, stxxl::file::RDWR);
 			taxaOnly realIdx(&realOut, iSize);
 
 			auto realIt = realIdx.begin();
@@ -1607,16 +1672,16 @@ int main(int argc, char* argv[]) {
 				++tOIt;
 			}
 
-			ofstream outSizeFile(sDBPathOut + "_info.txt");
+			ofstream outSizeFile(GlobalInputParameters.sDBPathOut + "_info.txt");
 			outSizeFile << tempPV.size();
 			outSizeFile.close();
-			ifstream oldFreqFile(indexFile + "_f.txt", std::ios::binary);
-			ofstream newFreqFile(sDBPathOut + "_f.txt", std::ios::binary);
+			ifstream oldFreqFile(GlobalInputParameters.indexFile + "_f.txt", std::ios::binary);
+			ofstream newFreqFile(GlobalInputParameters.sDBPathOut + "_f.txt", std::ios::binary);
 
 			newFreqFile << oldFreqFile.rdbuf();
 
-			Trie<uint64_t> T(static_cast<int8_t>(12), static_cast<int8_t>(iLowerK), iTrieDepth);
-			T.SaveToStxxlVec(&tempPV, sDBPathOut);
+			Trie<uint64_t> T(static_cast<int8_t>(12), static_cast<int8_t>(GlobalInputParameters.iLowerK), GlobalInputParameters.iTrieDepth);
+			T.SaveToStxxlVec(&tempPV, GlobalInputParameters.sDBPathOut);
 
 
 			realIdx.export_files("_");

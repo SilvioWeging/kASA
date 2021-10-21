@@ -15,7 +15,7 @@ namespace kASA {
 
 	class ContentFile : public kASA {
 	public:
-		ContentFile(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false) : kASA(tmpPath, iNumOfProcs, 12, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames) {}
+		ContentFile(const InputParameters& cParams) : kASA(cParams) {}
 		ContentFile(const kASA& obj) : kASA(obj) {}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -303,17 +303,17 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// C++ version of the python script that creates the content file
-		inline void generateContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sOutput, string sTaxonomicLevel, const bool& bTaxIdsAsStrings, const uint64_t& iMemoryAvailable, pair<uint32_t, uint32_t> poolAndNames = make_pair(numeric_limits<uint32_t>::max() - 1, 0UL)) {
+		inline void generateContentFile(const InputParameters& cParams, const string& sContentFile, pair<uint32_t, uint32_t> poolAndNames = make_pair(numeric_limits<uint32_t>::max() - 1, 0UL)) {
 			try {
-				if (sTaxonomicLevel != "lowest") {
-					if (!ifstream(sTaxonomyPath + "names.dmp") || !ifstream(sTaxonomyPath + "nodes.dmp")) {
+				if (cParams.sTaxLevel != "lowest") {
+					if (!ifstream(cParams.sTaxonomyPath + "names.dmp") || !ifstream(cParams.sTaxonomyPath + "nodes.dmp")) {
 						throw runtime_error("The taxonomy files couldn't be found");
 					}
 				}
 				debugBarrier
-				Utilities::checkIfFileCanBeCreated(sOutput);
+				Utilities::checkIfFileCanBeCreated(sContentFile);
 
-				auto files = Utilities::gatherFilesFromPath(sInput).first;
+				auto files = Utilities::gatherFilesFromPath(cParams.sInput).first;
 
 				if (_bVerbose) {
 					cout << "OUT: Going through fasta(s), gathering accession number(s)..." << endl;
@@ -360,7 +360,7 @@ namespace kASA {
 								if (acc != "") {
 									vAccessions.insert(make_pair(acc, false));
 									iMemoryAllocated += sizeof(pair<string, bool>) + sizeof(char) * acc.length();
-									if (sTaxonomicLevel == "lowest") {
+									if (cParams.sTaxLevel == "lowest") {
 										vNamesFromFasta.insert(make_pair(acc, Utilities::replaceCharacter(sDummy, ',', ' ')));
 										iMemoryAllocated += sizeof(pair<string, string>) + sizeof(char) * 2 * acc.length();
 									}
@@ -372,11 +372,11 @@ namespace kASA {
 								iMemoryAllocated += sizeof(pair<string, unordered_set<string>>) + sizeof(char) * acc.length() + sizeof(char) * 9
 									+ sizeof(pair<string, string>) + sizeof(char) * 30; // numbers are rough approximations of maximum string lengths for iIdentifiedCounter and length of species name
 							}
-							if (iMemoryAllocated > iMemoryAvailable) {
+							if (iMemoryAllocated > static_cast<uint64_t>(cParams.iMemorySizeAvail)) {
 								iNumOfLegitAccessions += vAccessions.size();
 								iNumOfDummys += vEntriesWithoutAccNr.size();
 								debugBarrier
-								generateTemporaryContentFile(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCounter) + ".txt", sTaxonomyPath, sTaxonomicLevel, bTaxIdsAsStrings, sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
+								generateTemporaryContentFile(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCounter) + ".txt", cParams.sTaxonomyPath, cParams.sTaxLevel, cParams.bTaxIdsAsStrings, cParams.sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
 								++iTemporaryCounter;
 								iMemoryAllocated = 0;
 								debugBarrier
@@ -396,12 +396,12 @@ namespace kASA {
 							<< "OUT: Creating content file..." << endl;
 					}
 					debugBarrier
-					generateTemporaryContentFile(sOutput, sTaxonomyPath, sTaxonomicLevel, bTaxIdsAsStrings, sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
+					generateTemporaryContentFile(sContentFile, cParams.sTaxonomyPath, cParams.sTaxLevel, cParams.bTaxIdsAsStrings, cParams.sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
 				}
 				else {
 					if (vAccessions.size()) {
 						debugBarrier
-						generateTemporaryContentFile(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCounter) + ".txt", sTaxonomyPath, sTaxonomicLevel, bTaxIdsAsStrings, sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
+						generateTemporaryContentFile(_sTemporaryPath + "content_" + Utilities::itostr(_iNumOfCall) + "_" + Utilities::itostr(iTemporaryCounter) + ".txt", cParams.sTaxonomyPath, cParams.sTaxLevel, cParams.bTaxIdsAsStrings, cParams.sAccToTaxFiles, poolAndNames, vAccessions, vEntriesWithoutAccNr, vNamesFromFasta);
 						++iTemporaryCounter;
 					}
 
@@ -425,7 +425,7 @@ namespace kASA {
 						remove(currentFile.c_str());
 					}
 					debugBarrier
-					Utilities::moveFile(sTempFinal1, sOutput);
+					Utilities::moveFile(sTempFinal1, sContentFile);
 					remove(sTempFinal2.c_str());
 
 				}
@@ -605,7 +605,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Add new stuff to an existing content file
-		inline pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> addToContentFile(const string& sTaxonomyPath, const string& sAccToTaxFiles, const string& sInput, const string& sTaxonomicLevel, const string& sExistingContentFile, const string& sNewContentFile, const bool& bTaxIdsAsStrings, const uint64_t& iMemoryAvail) {
+		inline pair<unordered_map<uint32_t, uint32_t>, unordered_map<uint32_t, uint32_t>> addToContentFile(const InputParameters& cParams, const string& sContentFileOut) {
 			// Warning: taxonomic levels must not change in an update
 			const string& temporaryContentFile = _sTemporaryPath + Utilities::itostr(_iNumOfCall) + "_tempContent.txt";
 			const string& temporaryContentOutFile = _sTemporaryPath + Utilities::itostr(_iNumOfCall) + "_tempContentOut.txt";
@@ -614,16 +614,16 @@ namespace kASA {
 				cout << "OUT: Generating temporary content file from new data..." << endl;
 			}
 			debugBarrier
-			generateContentFile(sTaxonomyPath, sAccToTaxFiles, sInput, temporaryContentFile, sTaxonomicLevel, bTaxIdsAsStrings, iMemoryAvail);
+			generateContentFile(cParams, temporaryContentFile);
 
 			if (_bVerbose) {
 				cout << "OUT: Merging content file from new data with the existing one..." << endl;
 			}
 			debugBarrier
-			const auto& result = mergeContentFiles(sExistingContentFile, temporaryContentFile, true, temporaryContentOutFile);
+			const auto& result = mergeContentFiles(cParams.contentFileIn, temporaryContentFile, true, temporaryContentOutFile);
 			remove(temporaryContentFile.c_str());
-			remove(sNewContentFile.c_str());
-			Utilities::moveFile(temporaryContentOutFile, sNewContentFile);
+			remove(sContentFileOut.c_str());
+			Utilities::moveFile(temporaryContentOutFile, sContentFileOut);
 
 			return result;
 		}

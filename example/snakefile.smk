@@ -6,7 +6,7 @@ rule all:
 		json="work/results/example.json",
 		json2="work/results/example_s.json",
 		json3="work/results/example_u.json",
-		freq="work/index/exampleIndex_u_f.txt",
+		freq="work/results/freqsAreEqual.txt",
 		trie="work/index/exampleIndex_trie.txt",
 		red="work/results/redundancy.txt",
 		mergedIndex="work/index/index_merged",
@@ -144,9 +144,10 @@ rule identify_u:
 rule reconstructFrequency:
 	input:
 		dummyLink=rules.identify_u.output.json3,
+		dummyLink2=rules.update.output.index,
 		index="work/index/exampleIndex_u"
 	output:
-		freqRec="work/index/exampleIndex_u_f.txt"
+		freqRec=touch("work/results/freqsAreEqual.txt")
 	params:
 		ram=config["ram"],
 		callIdx="8"
@@ -202,12 +203,12 @@ rule mergeIndices:
 		{config[kASAExec]}kASA build -i work/db/example.fasta -d work/index/index_1 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species"
 		{config[kASAExec]}kASA build -i work/db/16S_NCBI.fasta -d work/index/index_2 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species"
 		
-		{config[kASAExec]}kASA merge -i work/index/index_1 -d work/index/index_2 -o work/index/index_merged -x {params.callIdx} -n {threads} -m {params.ram}
+		{config[kASAExec]}kASA merge --firstIndex work/index/index_1 --secondIndex work/index/index_2 -o work/index/index_merged -x {params.callIdx} -n {threads} -m {params.ram}
 		
 		{config[kASAExec]}kASA build -i work/db/example.fasta -d work/index/index_1_128 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species" --kH 25
 		{config[kASAExec]}kASA build -i work/db/16S_NCBI.fasta -d work/index/index_2_128 -n {threads} -m {params.ram} -x {params.callIdx} -y taxonomy/ -f taxonomy/acc2tax/acc2Tax.txt -u "species" --kH 25
 		
-		{config[kASAExec]}kASA merge -i work/index/index_1_128 -d work/index/index_2_128 -o work/index/index_merged_128 -x {params.callIdx} -n {threads} -m {params.ram}
+		{config[kASAExec]}kASA merge --firstIndex work/index/index_1_128 --secondIndex work/index/index_2_128 -o work/index/index_merged_128 -x {params.callIdx} -n {threads} -m {params.ram}
 		"""
 
 rule pairedEnd:

@@ -178,6 +178,7 @@ namespace kASA {
 								pair.second = res->second;
 							}
 						}
+						
 						vNCIt << pair;
 						++it;
 						++ivCSizeCounter;
@@ -194,6 +195,7 @@ namespace kASA {
 										pair.second = res->second;
 									}
 								}
+
 								vNCIt << pair;
 								++it;
 								++ivCSizeCounter;
@@ -209,6 +211,7 @@ namespace kASA {
 											pair.second = res->second;
 										}
 									}
+
 									vNCIt << pair;
 									++vIntItC;
 									++iElemCounter;
@@ -222,6 +225,7 @@ namespace kASA {
 											pair.second = res->second;
 										}
 									}
+									
 									vNCIt << pair;
 									++it;
 									++ivCSizeCounter;
@@ -238,7 +242,8 @@ namespace kASA {
 								if (res != mapsForDummys.second.end()) {
 									pair.second = res->second;
 								}
-							}
+							}					
+
 							vNCIt << pair;
 							++vIntItC;
 							++iElemCounter;
@@ -257,6 +262,7 @@ namespace kASA {
 							pair.second = res->second;
 						}
 					}
+
 					vNCIt << pair;
 					++it;
 					++iElemCounter;
@@ -280,6 +286,7 @@ namespace kASA {
 							pair.second = res->second;
 						}
 					}
+
 					vNCIt << pair;
 					++vIntItC;
 					++iElemCounter;

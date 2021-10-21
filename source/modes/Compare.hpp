@@ -32,14 +32,14 @@ namespace kASA {
 
 		typedef Read<contentVecType, elemType, intType> Base;
 
-		bool bUnfunny = false;
+		bool bUnfunny = false, bCoverage = false;
 		mutex m_exceptionLock;
 		exception_ptr someThingWentWrong;
 
 		vector<pair<string, uint32_t>> _matchedkMers;
 
 	public:
-		Compare(const string& tmpPath, const int32_t& iNumOfProcs, const int32_t& iHighestK, const int32_t& iHigherK, const int32_t& iLowerK, const int32_t& iNumOfCall, const int32_t& iNumOfBeasts, const bool& bVerbose = false, const string& stxxl_mode = "", const bool& bSixFrames = false, const bool& bUnfunny = false) : Read<contentVecType, elemType, intType>(tmpPath, iNumOfProcs, iHighestK, iHigherK, iLowerK, iNumOfCall, bVerbose, stxxl_mode, bSixFrames, bUnfunny), bUnfunny(bUnfunny), iNumOfBeasts(iNumOfBeasts) {}
+		Compare(const InputParameters& cParams) : Read<contentVecType, elemType, intType>(cParams), bUnfunny(cParams.bUnfunny), bCoverage(cParams.bCoverage), iNumOfBeasts(cParams.iNumOfBeasts) {}
 
 		// for output
 		int32_t iNumOfBeasts = 3;
@@ -47,7 +47,6 @@ namespace kASA {
 		OutputFormat format = OutputFormat::Json;
 
 		struct ReadIndex {
-
 			shared_ptr<stxxlFile> stxxlLibFile;
 			unique_ptr<unique_ptr<const contentVecType>[]> vLib;
 			unique_ptr<unique_ptr<const index_t_p>[]> vLibParted_p;
@@ -71,7 +70,7 @@ namespace kASA {
 			shared_ptr< vector<string> > mOrganisms;
 			shared_ptr< unordered_map<uint32_t, uint32_t> > mTaxToIdx;
 			shared_ptr< vector<uint32_t> > mIdxToTax;
-			vector<uint64_t> mFrequencies;
+			vector<vector<uint64_t>> mFrequencies;
 
 			ReadIndex() {}
 
@@ -109,7 +108,7 @@ namespace kASA {
 				stxxlLibFile.reset(new stxxlFile(sLibFile, stxxl::file::RDONLY));
 			}
 
-			inline void loadContentAndFrequencyFiles(const string& sLibFile, const string& sContentFile, int64_t& iAvailableMemory) {
+			inline void loadContentAndFrequencyFiles(const int32_t& iMaxK, const int32_t& iMinK, const string& sLibFile, const string& sContentFile, int64_t& iAvailableMemory) {
 
 				if (!ifstream(sContentFile) || !ifstream(sLibFile + "_f.txt")) {
 					throw runtime_error("The content file or the frequency file cannot be found!");
@@ -156,7 +155,7 @@ namespace kASA {
 				// hash tables do cost some memory!
 				iAvailableMemory -= Utilities::calculateSizeInByteOfUnorderedMap(*mTaxToIdx);
 				iAvailableMemory -= this->mIdxToTax->size() * sizeof(uint32_t);
-				iAvailableMemory -= iNumberOfSpecies * sizeof(uint64_t); // frequencies
+				iAvailableMemory -= iNumberOfSpecies * sizeof(uint64_t) * (iMaxK - iMinK); // frequencies
 
 				if (iAvailableMemory < 0) {
 					cerr << "WARNING: Loading the metadata (content file, frequency file) consumes more memory than given. kASA will try to continue with 1GB nevertheless..." << endl;
@@ -170,7 +169,12 @@ namespace kASA {
 				while (getline(fFrequencies, sTempLine)) {
 					if (sTempLine != "") {
 						const auto& vLine = Utilities::split(sTempLine, '\t');
-						mFrequencies[iCounterForFreqs++] = stoull(vLine[1]);
+						const auto& numOfK = vLine.size() - 1;
+						mFrequencies[iCounterForFreqs].resize(numOfK);
+						for (uint8_t i = iMaxK, j = 0; i >= iMinK; --i, ++j) {
+							mFrequencies[iCounterForFreqs][j] = stoull(vLine[1 + numOfK - i]);
+						}
+						iCounterForFreqs++;
 					}
 				}
 			}
@@ -731,7 +735,9 @@ namespace kASA {
 												const auto& tempIndex = iPartialTempIndex + (*it);
 
 												vCount[tempIndex] += double(numOfHits) / numOfEntries;
-												vCountTotal[tempIndex] += numOfHits;
+												if (this->bCoverage) {
+													vCountTotal[tempIndex] += 1;
+												}
 
 												if (numOfEntries == 1) {
 													vCountUnique[tempIndex] += numOfHits;
@@ -838,7 +844,9 @@ namespace kASA {
 							
 							vCount[tempIndex] += double(numOfHits) / numOfEntries;
 
-							vCountTotal[tempIndex] += numOfHits;
+							if (this->bCoverage) {
+								vCountTotal[tempIndex] += 1;
+							}
 
 							if (numOfEntries == 1) {
 								vCountUnique[tempIndex] += numOfHits;
@@ -1060,7 +1068,7 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Score all of them
-		inline void scoringFunc(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<uint64_t>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
+		inline void scoringFunc(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<vector<uint64_t>>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
 			try {
 				debugBarrier
 				vector<tuple<size_t, float, double>> resultVec(iNumberOfSpecies);
@@ -1085,10 +1093,10 @@ namespace kASA {
 							kMerScore = vReadIDtoGenID[readIdx][iSpecIdx];
 							debugBarrier
 							if (Base::_bProtein) {
-								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK + 1)));
+								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx][0] * double(currentReadLengthAndName.second - Base::_iHighestK + 1)));
 							}
 							else {
-								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx] * double(currentReadLengthAndName.second - Base::_iHighestK * 3 + 1)));
+								relativeScore = kMerScore / (1.0 + log2(mFrequencies[iSpecIdx][0] * double(currentReadLengthAndName.second - Base::_iHighestK * 3 + 1)));
 							}
 							debugBarrier
 								
@@ -1416,7 +1424,7 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Score one of them
-		inline void scoringFunc(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, const vector<uint64_t>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
+		inline void scoringFunc(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, const vector<vector<uint64_t>>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
 			try {
 				debugBarrier
 				Utilities::BufferedWriter outStreamer(fOut, 524288ull);
@@ -1430,10 +1438,10 @@ namespace kASA {
 				for (auto it = vTempResultVec.begin(); it != vTempResultVec.end();) {
 					double relativeScore = 0.0;
 					if (Base::_bProtein) {
-						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - Base::_iHighestK + 1)));
+						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)][0] * double(vReadNameAndLength.second - Base::_iHighestK + 1)));
 					}
 					else {
-						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)] * double(vReadNameAndLength.second - Base::_iHighestK * 3 + 1)));
+						relativeScore = double(get<1>(*it)) / (1.0 + log2(mFrequencies[get<0>(*it)][0] * double(vReadNameAndLength.second - Base::_iHighestK * 3 + 1)));
 					}
 					if (relativeScore >= fThreshold) {
 						get<2>(*it) = relativeScore;
@@ -1741,7 +1749,7 @@ namespace kASA {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// save results from read to tax ID
-		inline void saveResults(const bool transferBetweenRuns_finished, const bool transferBetweenRuns_addTail, vector<tuple<readIDType, float, double>>& vSavedScores, const Utilities::Non_contiguousArray& vReadIDtoTaxID, list<pair<string, uint32_t>> vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const vector<uint64_t>& mFrequencies, uint64_t& iNumOfReadsSum, uint64_t& iNumOfReadsOld, uint64_t iNumOfReads, const float& fThreshold, ofstream& fOut) {
+		inline void saveResults(const bool transferBetweenRuns_finished, const bool transferBetweenRuns_addTail, vector<tuple<readIDType, float, double>>& vSavedScores, const Utilities::Non_contiguousArray& vReadIDtoTaxID, list<pair<string, uint32_t>> vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const vector<vector<uint64_t>>& mFrequencies, uint64_t& iNumOfReadsSum, uint64_t& iNumOfReadsOld, uint64_t iNumOfReads, const float& fThreshold, ofstream& fOut) {
 
 			auto getVecOfScored = [&iNumberOfSpecies](const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iIdx) {
 				try {
@@ -1831,7 +1839,7 @@ namespace kASA {
 	public:
 
 		/////////////////////////////////////////////////////////////////////////////////
-		void CompareWithLib_partialSort(const string& fInFile, const string& fOutFile, const string& fTableFile, const uint8_t&, const int64_t& iMemory, bool bRAM, const bool& bUnique, const float& fThreshold, int32_t iLocalNumOfThreads = 0) {
+		void CompareWithLib_partialSort(const string& fInFile, const string& fOutFile, const string& fTableFile, const int64_t& iMemory, bool bRAM, const bool& bUnique, const float& fThreshold, int32_t iLocalNumOfThreads = 0) {
 			try {
 				if (iLocalNumOfThreads == 0) {
 					iLocalNumOfThreads = Base::_iNumOfThreads;
@@ -1915,24 +1923,28 @@ namespace kASA {
 					iSoftMaxMemoryAvailable = iMemory; // 1024ull * 1024ull * 1024ull
 				}
 
-				if (index.bIdentifyMultiple) {
+				bRAM = index.bRAM; // if not enough primary memory is available, the variable will be set to false inside "index"
+				if (index.bIdentifyMultiple && !bRAM) {
 					localIndex->loadIndex(Base::_iMaxK, Base::_iMinK, iSoftMaxMemoryAvailable);
 					if (iSoftMaxMemoryAvailable < 0)  {
 						cerr << "WARNING: Not enough memory given, trying with 1GB but may lead to bad_alloc errors..." << endl;
 						iSoftMaxMemoryAvailable = static_cast<int64_t>(GIGABYTEASBYTES); // 1024ull * 1024ull * 1024ull
 					}
 				}
-				bRAM = index.bRAM; // if not enough primary memory is available, the variable will be set to false inside "index"
+				
 
 				// This holds the hits for each organism
 				// Initialize this here to calculate the average memory usage
 				
 				unique_ptr<double[]> vCount_all(new double[iMult]);
-				unique_ptr<uint64_t[]> vCount_total(new uint64_t[iMult]);
+				unique_ptr<uint64_t[]> vCount_total;
 				unique_ptr<uint64_t[]> vCount_unique(new uint64_t[iMult]);
+				if (this->bCoverage) {
+					vCount_total.reset(new uint64_t[iMult]);
+					fill_n(vCount_total.get(), iMult, 0);
+				}
 
 				fill_n(vCount_all.get(), iMult, 0.);
-				fill_n(vCount_total.get(), iMult, 0);
 				fill_n(vCount_unique.get(), iMult, 0);
 
 				debugBarrier
@@ -2450,6 +2462,10 @@ namespace kASA {
 						}
 						charsReadOverall = transferBetweenRuns->iNumOfAllCharsRead;
 
+						if (bIsGood && this->bCoverage) {
+							cerr << "WARNING: File could not be processed completely in one run. This messes up the coverage values so please increase given RAM or use a smaller file!" << endl;
+						}
+
 #ifdef TIME
 						endTIME = std::chrono::high_resolution_clock::now();
 						cout << "Saving results_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
@@ -2472,14 +2488,16 @@ namespace kASA {
 					fOut.flush(); // empty the buffer to avoid memory leak
 					debugBarrier
 					// sum up parallel results
-					for (int32_t iThreadID = 1; iThreadID < iLocalNumOfThreads; ++iThreadID) {
-						const uint64_t& iStepsize = uint64_t(iThreadID) * Base::_iNumOfK * index.iNumOfSpecies;
-						for (uint64_t iIdx = 0; iIdx < uint64_t(Base::_iNumOfK)* index.iNumOfSpecies; ++iIdx) {
-							vCount_all[iIdx] += vCount_all[iStepsize + iIdx];
-							vCount_unique[iIdx] += vCount_unique[iStepsize + iIdx];
-							vCount_total[iIdx] += vCount_total[iStepsize + iIdx];
+						for (int32_t iThreadID = 1; iThreadID < iLocalNumOfThreads; ++iThreadID) {
+							const uint64_t& iStepsize = uint64_t(iThreadID) * Base::_iNumOfK * index.iNumOfSpecies;
+							for (uint64_t iIdx = 0; iIdx < uint64_t(Base::_iNumOfK) * index.iNumOfSpecies; ++iIdx) {
+								vCount_all[iIdx] += vCount_all[iStepsize + iIdx];
+								vCount_unique[iIdx] += vCount_unique[iStepsize + iIdx];
+								if (this->bCoverage) {
+									vCount_total[iIdx] += vCount_total[iStepsize + iIdx];
+								}
+							}
 						}
-					}
 #ifdef DEBUGOUT
 					for (int i = 0; i < 4; ++i) {
 						cout << amountArr[i] << endl;
@@ -2490,21 +2508,26 @@ namespace kASA {
 					}
 #endif
 					debugBarrier
-					// get profiling results
-					vector<uint64_t> vSumOfUniquekMers(Base::_iNumOfK);
+						// get profiling results
+						vector<uint64_t> vSumOfUniquekMers(Base::_iNumOfK);
 					vector<double> vSumOfNonUniques(Base::_iNumOfK);
-					vector<tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>> vOut(index.iNumOfSpecies, tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>("", vector<tuple<double, uint64_t, uint64_t>>(Base::_iNumOfK), 0));
+					vector<tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t, uint64_t>> vOut(index.iNumOfSpecies, tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t, uint64_t>("", vector<tuple<double, uint64_t, uint64_t>>(Base::_iNumOfK), 0, 0));
 					for (uint32_t iSpecIdx = 1; iSpecIdx < index.iNumOfSpecies; ++iSpecIdx) {
 						vector<tuple<double, uint64_t, uint64_t>> vTemp(Base::_iNumOfK);
 						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							const uint64_t& iTempScore = vCount_unique[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies];
 							vSumOfUniquekMers[ikMerlength] += iTempScore;
 							vSumOfNonUniques[ikMerlength] += vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies];
-							vTemp[ikMerlength] = make_tuple(vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies], iTempScore, vCount_total[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies]);
+							if (this->bCoverage) {
+								vTemp[ikMerlength] = make_tuple(vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies], iTempScore, vCount_total[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies]);
+							}
+							else {
+								vTemp[ikMerlength] = make_tuple(vCount_all[iSpecIdx + uint64_t(ikMerlength) * index.iNumOfSpecies], iTempScore, 0);
+							}
 						}
-						vOut[iSpecIdx] = make_tuple(Utilities::replaceCharacter(index.mOrganisms->at(iSpecIdx), ',', ' '), vTemp, index.mIdxToTax->at(iSpecIdx));
+						vOut[iSpecIdx] = make_tuple(Utilities::replaceCharacter(index.mOrganisms->at(iSpecIdx), ',', ' '), vTemp, index.mIdxToTax->at(iSpecIdx), iSpecIdx);
 					}
-					sort(vOut.begin(), vOut.end(), [](const tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>& a, const tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t>& b) {
+					sort(vOut.begin(), vOut.end(), [](const tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t, uint64_t>& a, const tuple<string, vector<tuple<double, uint64_t, uint64_t>>, uint32_t, uint64_t>& b) {
 						for (uint64_t i = 0; i < get<1>(a).size(); ++i) {
 							if (get<1>(get<1>(a)[i]) == get<1>(get<1>(b)[i])) {
 								continue;
@@ -2514,12 +2537,12 @@ namespace kASA {
 							}
 						}
 						return false;
-					});
+						});
 
 					debugBarrier
-					// Because of the padding at the end to get useful k-mers between max_k and min_k (see sFalsekMerMarker), overall relative frequency is distorted
-					// therefore we need to calculate how many there were to get the number right, how many could have possibly matched
-					vector<uint64_t> vNumberOfGarbagekMersPerK(Base::_iNumOfK, 0);
+						// Because of the padding at the end to get useful k-mers between max_k and min_k (see sFalsekMerMarker), overall relative frequency is distorted
+						// therefore we need to calculate how many there were to get the number right, how many could have possibly matched
+						vector<uint64_t> vNumberOfGarbagekMersPerK(Base::_iNumOfK, 0);
 					const uint64_t iFrameMultiplier = (this->_bOnlyOneFrame) ? 1 : ((Base::_bSixFrames) ? 6 : 3);
 					for (int32_t i = Base::_iMaxK - Base::_iMinK, j = 0; i > 0; --i, ++j) {
 						vNumberOfGarbagekMersPerK[j] = iNumOfReadsSum * iFrameMultiplier * i; //Number of reads * 2(forward,reverse complement) * 3(frames) * dist(max_k,min_k)
@@ -2594,8 +2617,13 @@ namespace kASA {
 						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							tableFileStream << "," << "Overall unique rel. freq. k=" << Base::_iMaxK - ikMerlength;
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << "Special Counts k=" << Base::_iMaxK - ikMerlength;
+						if (this->bCoverage) {
+							for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+								tableFileStream << "," << "Special Counts k=" << Base::_iMaxK - ikMerlength;
+							}
+							for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+								tableFileStream << "," << "Genome Coverage k=" << Base::_iMaxK - ikMerlength;
+							}
 						}
 						tableFileStream << "\n";
 
@@ -2642,12 +2670,17 @@ namespace kASA {
 									vSumOfUniqueIdentified[ikMerlength] += get<1>(get<1>(entry)[ikMerlength]);
 									sOutStr << "," << static_cast<double>(get<1>(get<1>(entry)[ikMerlength])) / (iNumberOfkMersInInput - vNumberOfGarbagekMersPerK[ikMerlength]);
 								}
+								if (this->bCoverage) {
+									// Special count
+									for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+										sOutStr << "," << get<2>(get<1>(entry)[ikMerlength]);
+									}
 
-								// Special count
-								for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-									sOutStr << "," << get<2>(get<1>(entry)[ikMerlength]);
+									// Genome coverage
+									for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
+										sOutStr << "," << static_cast<double>(get<2>(get<1>(entry)[ikMerlength])) / index.mFrequencies[get<3>(entry)][ikMerlength];
+									}
 								}
-								
 								sOutStr << "\n";
 							}
 							iSpecIdx++;
@@ -2666,8 +2699,10 @@ namespace kASA {
 						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
 							tableFileStream << "," << (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]) - static_cast<double>(vSumOfUniqueIdentified[ikMerlength])) / (static_cast<double>(iNumberOfkMersInInput) - static_cast<double>(vNumberOfGarbagekMersPerK[ikMerlength]));
 						}
-						for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK; ++ikMerlength) {
-							tableFileStream << "," << 0.0;
+						if (this->bCoverage) {
+							for (int32_t ikMerlength = 0; ikMerlength < Base::_iNumOfK * 2; ++ikMerlength) {
+								tableFileStream << "," << 0.0;
+							}
 						}
 						tableFileStream << "\n" << sOutStr.str();
 
@@ -2678,11 +2713,11 @@ namespace kASA {
 						for (const auto& entry : vOut) {
 							allSumOfIdentified += get<0>(get<1>(entry)[Base::_iNumOfK - 1]);
 						}
-					}
+							}
 					debugBarrier
 
 #ifdef TIME
-					endTIME = std::chrono::high_resolution_clock::now();
+						endTIME = std::chrono::high_resolution_clock::now();
 					cout << "Save profile_" << chrono::duration_cast<std::chrono::nanoseconds>(endTIME - startTIME).count() << endl;
 					startTIME = std::chrono::high_resolution_clock::now();
 #endif
@@ -2709,8 +2744,10 @@ namespace kASA {
 
 
 					fill_n(vCount_all.get(), iMult, 0.);
-					fill_n(vCount_total.get(), iMult, 0);
 					fill_n(vCount_unique.get(), iMult, 0);
+					if (this->bCoverage) {
+						fill_n(vCount_total.get(), iMult, 0);
+					}
 
 					allFilesProgress = transferBetweenRuns->iCurrentOverallPercentage;
 				}

@@ -62,9 +62,7 @@ namespace Utilities {
 	///////////////////////////////////////////////////////
 	inline string removeCharFromString(const string& sIn, const char& c) {
 		string sOut = sIn;
-		sOut.erase(find_if(sOut.rbegin(), sOut.rend(), [&c](char ch) {
-			return !(ch == c);
-		}).base(), sOut.end());
+		sOut.erase(std::remove(sOut.begin(), sOut.end(), c), sOut.end());
 		return sOut;
 	}
 
@@ -391,6 +389,20 @@ namespace Utilities {
 	inline vector<string> split(const string &s, char delim) {
 		vector<string> elems;
 		split(s, delim, back_inserter(elems));
+		return elems;
+	}
+
+	///////////////////////////////////////////////////////
+	inline vector<string> splitAtFirstOccurence(const string& s, const char& delim) {
+		vector<string> elems;
+		auto res = find(s.begin(), s.end(), delim);
+		if (res != s.end()) {
+			elems.push_back(string(s.begin(), res));
+			elems.push_back(string(res + 1, s.end()));
+		}
+		else {
+			elems.push_back(s);
+		}
 		return elems;
 	}
 
@@ -994,7 +1006,235 @@ namespace Utilities {
 		return static_cast<T2>(0);
 	}
 
+	///////////////////////////////////////////////////////
+	// Shitty conversion function because using real json is too much of a hassle in C++
+	// Maybe, someday, I'll use https://github.com/nlohmann/json
+	inline void readParametersFromJson(const string& sJsonFile) {
+		if (!ifstream(sJsonFile)) {
+			throw runtime_error("Json file not found!");
+		}
+		ifstream jsonFile(sJsonFile);
+		string sLine = "";
+		while (getline(jsonFile, sLine)) {
+			sLine = Utilities::lstrip(sLine);
+			if (sLine.back() == ',') {
+				sLine.pop_back();
+			}
+			auto parameterPair = Utilities::splitAtFirstOccurence(sLine, ':');
+			if (parameterPair.size() > 1) {
+				// long ugly list 
+				parameterPair[0] = Utilities::removeCharFromString(parameterPair[0], '"');
+				parameterPair[1] = Utilities::removeCharFromString(parameterPair[1], '"');
+				parameterPair[1] = Utilities::lstrip(parameterPair[1]);
 
+				if (parameterPair[0] == "Mode") {
+					GlobalInputParameters.cMode = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "Index") {
+					GlobalInputParameters.indexFile = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "ContentFile") {
+					GlobalInputParameters.contentFileIn = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "kHigh") {
+					GlobalInputParameters.iHigherK = stoi(parameterPair[1]);
+					GlobalInputParameters.iHigherK = (GlobalInputParameters.iHigherK > HIGHESTPOSSIBLEK) ? HIGHESTPOSSIBLEK : GlobalInputParameters.iHigherK;
+					GlobalInputParameters.bHighKSetByUser = true;
+					continue;
+				}
+				if (parameterPair[0] == "kLow") {
+					GlobalInputParameters.iLowerK = stoi(parameterPair[1]);
+					GlobalInputParameters.iLowerK = (GlobalInputParameters.iLowerK < 1) ? 1 : GlobalInputParameters.iLowerK;
+					continue;
+				}
+				if (parameterPair[0] == "NumberOfThreads") {
+					GlobalInputParameters.iNumOfThreads = stoi(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "AvailableRAMinGB") {
+					GlobalInputParameters.iMemorySizeAvail = 1024ull * stoi(parameterPair[1]);
+					GlobalInputParameters.bCustomMemorySet = true;
+					continue;
+				}
+				if (parameterPair[0] == "FilePathForTemporaryFiles") {
+					GlobalInputParameters.sTempPath = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "CallIndex") {
+					GlobalInputParameters.iNumOfCall = stoi(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "Verbose") {
+					GlobalInputParameters.bVerbose = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "AlphabetFile") {
+					GlobalInputParameters.codonTable = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "AlphabetIndex") {
+					GlobalInputParameters.sCodonID = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "InputFileOrFolder") {
+					GlobalInputParameters.sInput = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "PairedEnd-First") {
+					GlobalInputParameters.sPairedEnd1 = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "PairedEnd-Second") {
+					GlobalInputParameters.sPairedEnd2 = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "AlreadyTranslated") {
+					GlobalInputParameters.bTranslated = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "TaxonomicLevel") {
+					GlobalInputParameters.sTaxLevel = parameterPair[1];
+					if (GlobalInputParameters.sTaxLevel == "sequence") {
+						GlobalInputParameters.sTaxLevel = "lowest";
+					}
+					continue;
+				}
+				if (parameterPair[0] == "AccessionToTaxIDFileOrFolder") {
+					GlobalInputParameters.sAccToTaxFiles = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "TaxonomyFolder") {
+					GlobalInputParameters.sTaxonomyPath = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "TaxIDsAreStrings") {
+					GlobalInputParameters.bTaxIdsAsStrings = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "One") {
+					GlobalInputParameters.bOnlyOneFrame = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "Three") {
+					GlobalInputParameters.bThreeFrames = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "Six") {
+					GlobalInputParameters.bSixFrames = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "ProfileOutputfile") {
+					GlobalInputParameters.tableFile = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "ReadIDtoTaxIDOutputfile") {
+					GlobalInputParameters.readToTaxaFile = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "ReadIDtoTaxIDOutputFormat") {
+					if (parameterPair[1] == "") {
+						continue;
+					}
+					if (parameterPair[1] == "json") {
+						GlobalInputParameters.outputFormat = 1;
+						continue;
+					}
+					if (parameterPair[1] == "jsonl") {
+						GlobalInputParameters.outputFormat = 2;
+						continue;
+					}
+					if (parameterPair[1] == "kraken") {
+						GlobalInputParameters.outputFormat = 0;
+						continue;
+					}
+					if (parameterPair[1] == "tsv") {
+						GlobalInputParameters.outputFormat = 3;
+						continue;
+					}
+					continue;
+				}
+				if (parameterPair[0] == "UseRAMOnly") {
+					GlobalInputParameters.bRAM = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "NumberOfTaxaPerRead") {
+					GlobalInputParameters.iNumOfBeasts = stoi(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "UniqueKmersOnly") {
+					GlobalInputParameters.bUnique = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "ThresholdForScore") {
+					GlobalInputParameters.threshold = stof(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "PrintCoverage") {
+					GlobalInputParameters.bCoverage = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "FileOfDeletedTaxa") {
+					GlobalInputParameters.delnodesFile = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "ShrinkingStrategy") {
+					GlobalInputParameters.shrinkStrategy = stoi(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "ShrinkPercentage") {
+					GlobalInputParameters.fPercentageOfThrowAway = stof(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "ContentFile-First") {
+					GlobalInputParameters.contentFile1 = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "ContentFile-Second") {
+					GlobalInputParameters.contentFile2 = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "ContentFile-Out") {
+					GlobalInputParameters.contentFileAfterUpdate = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "FirstOldIndex") {
+					GlobalInputParameters.firstOldIndex = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "SecondOldIndex") {
+					GlobalInputParameters.secondOldIndex = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "NewIndex") {
+					GlobalInputParameters.sDBPathOut = parameterPair[1];
+					continue;
+				}
+				if (parameterPair[0] == "Debug") {
+					_bShowLineDebugMode = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "Visualize") {
+					GlobalInputParameters.bVisualize = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "Spaced") {
+					GlobalInputParameters.bSpaced = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "SpacedMaskIdx") {
+					GlobalInputParameters.iNumOfMask = stoi(parameterPair[1]);
+					continue;
+				}
+				//if (parameterPair[0] == "Mode") {
+				//	GlobalInputParameters.cMode = parameterPair[1];
+				//	continue;
+				//}
 
+			}
+		}
+	}
 
 } // namespace
