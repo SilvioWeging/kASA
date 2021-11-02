@@ -1,0 +1,90 @@
+####################### config file for kASA #######################
+##### Part of kASA: https://github.com/SilvioWeging/kASA
+##### Copyright (C) 2021 Silvio Weging <silvio.weging@gmail.com>
+##### Distributed under the Boost Software License, Version 1.0.
+####################################################################
+
+# Most parameters are self explaining. If not, please refer to the wiki or the README file on GitHub
+# Folders end with / or \
+# Every parameter ending in "" is meant to be parsed as a string, everything else as either boolean or integer/float
+
+General: 
+ # modes available: generateCF, build, update, delete, shrink, merge, identify, identify_multiple, getFrequency, trie, redundancy, checkContentFile
+ Mode: "build"
+ Index: ""
+ ContentFile: ""
+ kHigh: 12
+ kLow: 7
+ NumberOfThreads: 2
+ AvailableRAMinGB: 5
+
+Additional:
+ FilePathForTemporaryFiles: ""
+ # If multiple instances of kASA are run concurrently, CallIndex helps distinguishing them
+ CallIndex: 0
+ Verbose: false
+ # Please see the NCBI alphabet file gc.prt for more information
+ AlphabetFile: ""
+ AlphabetIndex: 0
+
+Input:
+ InputFileOrFolder: ""
+ PairedEnd-First: ""
+ PairedEnd-Second: ""
+ AlreadyTranslated: false
+
+Build:
+ # Taxonomic levels supported: lowest, subspecies, species, genus, family, order, class, phylum, kingdom, superkingdom, domain
+ TaxonomicLevel: "species"
+ AccessionToTaxIDFileOrFolder: ""
+ TaxonomyFolder: ""
+ TaxIDsAreStrings: false
+
+# This specifies the number of frames used for translation. Only one of them can be true.
+Frames:
+ One: false
+ Three: false
+ Six: true
+
+IdentificationOutput:
+ ProfileOutputfile: ""
+ ReadIDtoTaxIDOutputfile: ""
+ # Available formats: json, jsonl, tsv, kraken
+ ReadIDtoTaxIDOutputFormat: "json"
+
+Identify:
+ UseRAMOnly: false
+ NumberOfTaxaPerRead: 3
+ UniqueKmersOnly: false
+ ThresholdForScore: 0.0
+ PrintCoverage: false
+ # Filters out matched reads. Specify the parameter as follows (no whitespace allowed!): /some/path/clean /some/path/contaminated 
+ # This way two files will be created depending on the file type (fasta or fastq) and if they should be gziped or not. For example: clean.fastq.gz
+ # If one of those output files is not desired, replace it with _
+ # Supports paired-end input and output
+ Filter: "_ _"
+ # Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match, -1: even the reverse complement matched
+ ErrorThreshold: 0.5
+ # Gzips the filtered outputs
+ Gzip: false
+
+Shrink:
+ FileWithDeletedTaxa: ""
+ # 1: Via Percentage, 2: Lossless in half, 3: Entropy
+ ShrinkingStrategy: 2
+ ShrinkPercentage: 0
+
+Update:
+ ContentFile-First: ""
+ ContentFile-Second: ""
+ ContentFile-Out: ""
+ FirstOldIndex: ""
+ SecondOldIndex: ""
+ NewIndex: ""
+
+# Ignore this part please!
+DeveloperOnly:
+ Debug: false
+ Visualize: false
+ Spaced: false
+ SpacedMaskIdx: 0

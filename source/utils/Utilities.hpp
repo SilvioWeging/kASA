@@ -1009,17 +1009,22 @@ namespace Utilities {
 	///////////////////////////////////////////////////////
 	// Shitty conversion function because using real json is too much of a hassle in C++
 	// Maybe, someday, I'll use https://github.com/nlohmann/json
-	inline void readParametersFromJson(const string& sJsonFile) {
-		if (!ifstream(sJsonFile)) {
-			throw runtime_error("Json file not found!");
+	inline void readParametersFromYaml(const string& sYamlFile) {
+		if (!ifstream(sYamlFile)) {
+			throw runtime_error("Config file not found!");
 		}
-		ifstream jsonFile(sJsonFile);
+		ifstream jsonFile(sYamlFile);
 		string sLine = "";
 		while (getline(jsonFile, sLine)) {
-			sLine = Utilities::lstrip(sLine);
-			if (sLine.back() == ',') {
-				sLine.pop_back();
+			if (sLine.empty()) {
+				continue;
 			}
+
+			sLine = Utilities::lstrip(sLine);
+			if (sLine.front() == '#') {
+				continue;
+			}
+			
 			auto parameterPair = Utilities::splitAtFirstOccurence(sLine, ':');
 			if (parameterPair.size() > 1) {
 				// long ugly list 
@@ -1176,7 +1181,24 @@ namespace Utilities {
 					GlobalInputParameters.bCoverage = (parameterPair[1] == "true") ? true : false;
 					continue;
 				}
-				if (parameterPair[0] == "FileOfDeletedTaxa") {
+				if (parameterPair[0] == "Filter") {
+					auto filterFiles = Utilities::split(parameterPair[1], ' ');
+					if (filterFiles[0] != "_" || filterFiles[1] != "_") {
+						GlobalInputParameters.bFilter = true;
+						GlobalInputParameters.sFilteredCleanOut = Utilities::removeSpaceAndEndline(filterFiles[0]);
+						GlobalInputParameters.sFilteredContaminantsOut = Utilities::removeSpaceAndEndline(filterFiles[1]);
+					}
+					continue;
+				}
+				if (parameterPair[0] == "ErrorThreshold") {
+					GlobalInputParameters.fErrorThreshold = stof(parameterPair[1]);
+					continue;
+				}
+				if (parameterPair[0] == "Gzip") {
+					GlobalInputParameters.bGzipOut = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "FileWithDeletedTaxa") {
 					GlobalInputParameters.delnodesFile = parameterPair[1];
 					continue;
 				}

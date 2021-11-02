@@ -275,7 +275,10 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--one`: Use only one reading frame instead of three. Speeds up the tool significantly but sacrifices robustness. Default: off.
 * `-1`: First file in a paired-end pair.
 * `-2`: Second file in a paired-end pair. Both `-1` and `-2` must be used and `-i` will be ignored for this call. Paired-end can only be files, no folders.
-* `--coverage`: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Default: off.
+* `--coverage`: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Also, `--six` must be chosen as number of frames if the index was build with six frames. Default: off.
+* `--filter <out for clean fastq/as> <out for contaminated fastq/as>`: Filters out matched reads and puts out two types of files, clean and contaminated fastq/fasta (depending on the input). File endings are generated automatically so you only need to specify the prefix, e.g. /some/path/clean. If one of the outputs is not desired, replace it with _. Supports paired-end input and output. Default: no filtering.
+* `--errorThreshold <float>`: Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match, -1: even the reverse complement matched. Default: 0.5.
+* `--gzip`: Gzips the filtered outputs. Default: off.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -484,7 +487,7 @@ This gives you a hint whether you should look at the unique relative frequencies
 - ~~TaxIDs can now be strings as well~~
 - ~~Consideration of paired-end information~~
 - ~~Larger k's than 12~~
-- Profiles normalized to genome length, for now you could hack that with the frequency file
+- ~~Profiles normalized to genome length, for now you could hack that with the frequency file~~
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
 - Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - Small collection of adapter sequences

@@ -11,7 +11,7 @@
 
 #define kASA_VERSION_MAJOR 1
 #define kASA_VERSION_MINOR 4
-#define kASA_VERSION_PATCH 4
+#define kASA_VERSION_PATCH 5
 
 #include <iostream>
 #include <cstdint>
@@ -152,10 +152,10 @@ constexpr auto HIGHESTPOSSIBLEK = 25;
 constexpr uint64_t GIGABYTEASBYTES = 1024ull * 1024ull * 1024ull;
 
 struct InputParameters {
-	string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", contentFileAfterUpdate = "", firstOldIndex = "", secondOldIndex = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "";
-	bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false, bCoverage = false;
+	string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", contentFileAfterUpdate = "", firstOldIndex = "", secondOldIndex = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "", sFilteredCleanOut = "_", sFilteredContaminantsOut = "_";
+	bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false, bCoverage = false, bFilter = false, bGzipOut = false;
 	int32_t iNumOfThreads = 1, iHighestK = 12, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3, iNumOfMask = 0;
 	int64_t iMemorySizeAvail = 0;
-	float fPercentageOfThrowAway = 0.f, threshold = 0.f;
+	float fPercentageOfThrowAway = 0.f, threshold = 0.f, fErrorThreshold = 0.5f;
 	uint8_t iTrieDepth = 6, outputFormat = 1, shrinkStrategy = 1;//, iPrefixCheckMode = 0;
 } GlobalInputParameters;

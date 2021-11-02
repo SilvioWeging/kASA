@@ -1068,7 +1068,7 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Score all of them
-		inline void scoringFunc(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<vector<uint64_t>>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
+		inline void scoringFunc(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<vector<uint64_t>>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, vector<uint64_t>& vReadIDsToBeFiltered, ofstream&& fOut) {
 			try {
 				debugBarrier
 				vector<tuple<size_t, float, double>> resultVec(iNumberOfSpecies);
@@ -1080,7 +1080,12 @@ namespace kASA {
 
 					float bestScore = 0.f;
 					for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
-						bestScore += (currentReadLengthAndName.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i];
+						if (Base::_bProtein) {
+							bestScore += (currentReadLengthAndName.second - i + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+						}
+						else {
+							bestScore += (currentReadLengthAndName.second - i * 3 + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+						}
 					}
 
 					debugBarrier
@@ -1174,6 +1179,13 @@ namespace kASA {
 							}
 						}
 
+						// Calculate error and if Error is too high, filter it out later
+						if (GlobalInputParameters.bFilter) {
+							if ((bestScore - double(maxValue)) / bestScore < GlobalInputParameters.fErrorThreshold) {
+								vReadIDsToBeFiltered.push_back(iRealReadIDStart + readIdx);
+							}
+						}
+
 						string sOut = "", sOut2 = "", sOut3 = "";
 						auto it = resultVec.begin();
 						float iValueBefore = 0;
@@ -1219,7 +1231,7 @@ namespace kASA {
 								outStreamer += "\t";
 								outStreamer += sOut3;
 								outStreamer += "\t";
-								dtoa_milo((bestScore - get<1>(resultVec[0])) / bestScore, outStreamer.getString());
+								dtoa_milo((bestScore - get<1>(*it)) / bestScore, outStreamer.getString());
 								outStreamer += "\n";
 							}
 							debugBarrier
@@ -1424,13 +1436,18 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Score one of them
-		inline void scoringFunc(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, const vector<vector<uint64_t>>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, ofstream&& fOut) {
+		inline void scoringFunc(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, const vector<vector<uint64_t>>& mFrequencies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const float& fThreshold, vector<uint64_t>& vReadIDsToBeFiltered, ofstream&& fOut) {
 			try {
 				debugBarrier
 				Utilities::BufferedWriter outStreamer(fOut, 524288ull);
 				float bestScore = 0.f;
 				for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
-					bestScore += (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i];
+					if (Base::_bProtein) {
+						bestScore += (vReadNameAndLength.second - i + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+					}
+					else {
+						bestScore += (vReadNameAndLength.second - i * 3 + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+					}
 					//cout << (vReadNameAndLength.second - i * 3 + 1)*arrWeightingFactors[Base::_iHighestK - i] << " " << vReadNameAndLength.second << " " << i << " " << vReadNameAndLength.second - i * 3 + 1 <<" " << arrWeightingFactors[Base::_iHighestK - i] << endl;
 				}
 				debugBarrier
@@ -1509,6 +1526,14 @@ namespace kASA {
 							break;
 						}
 					}
+
+					// Calculate error and if Error is too high, filter it out later
+					if (GlobalInputParameters.bFilter) {
+						if ((bestScore - double(maxValue)) / bestScore < GlobalInputParameters.fErrorThreshold) {
+							vReadIDsToBeFiltered.push_back(iReadNum);
+						}
+					}
+
 					debugBarrier
 					string sOut = "", sOut2 = "", sOut3 = "";
 					sOut.reserve(1000);
@@ -1746,10 +1771,63 @@ namespace kASA {
 			}
 		}
 
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Calculate relative score and filter out the ones crossing the threshold
+		inline void scoringFuncWithFilterNoOutput(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, vector<uint64_t>& vReadIDsToBeFiltered) {
+			debugBarrier
+			for (uint64_t readIdx = iStart; readIdx < iEnd; ++readIdx) {
+				auto currentReadLengthAndName = vReadNameAndLength.front();
+
+				float bestScore = 0.f;
+				for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
+					if (Base::_bProtein) {
+						bestScore += (currentReadLengthAndName.second - i + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+					}
+					else {
+						bestScore += (currentReadLengthAndName.second - i * 3 + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+					}
+				}
+
+				for (size_t iSpecIdx = 1; iSpecIdx < iNumberOfSpecies; ++iSpecIdx) {
+					if (vReadIDtoGenID[readIdx][iSpecIdx] > 0.f) {
+						// Calculate error and if Error is too high, filter it out
+						if ((bestScore - double(vReadIDtoGenID[readIdx][iSpecIdx])) / bestScore < GlobalInputParameters.fErrorThreshold) {
+							vReadIDsToBeFiltered.push_back(iRealReadIDStart + readIdx);
+							break; // it suffices, that one species was hit "good enough"
+						}
+					}
+				}
+			}
+			debugBarrier
+		}
+
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Calculate error and filter out the ones below the threshold
+		inline void scoringFuncWithFilterNoOutputOne(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, vector<uint64_t>& vReadIDsToBeFiltered) {
+			debugBarrier
+			float bestScore = 0.f;
+			for (int32_t i = Base::_iMinK; i <= Base::_iMaxK; ++i) {
+				if (Base::_bProtein) {
+					bestScore += (vReadNameAndLength.second - i + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+				}
+				else {
+					bestScore += (vReadNameAndLength.second - i * 3 + 1) * arrWeightingFactors[HIGHESTPOSSIBLEK - i];
+				}
+			}
+			
+			for (auto it = vTempResultVec.begin(); it != vTempResultVec.end();) {
+				// Calculate error and if Error is too high, filter it out
+				if ((bestScore - double(get<1>(*it))) / bestScore < GlobalInputParameters.fErrorThreshold) {
+					vReadIDsToBeFiltered.push_back(iReadNum);
+					break;
+				}
+			}
+			debugBarrier
+		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// save results from read to tax ID
-		inline void saveResults(const bool transferBetweenRuns_finished, const bool transferBetweenRuns_addTail, vector<tuple<readIDType, float, double>>& vSavedScores, const Utilities::Non_contiguousArray& vReadIDtoTaxID, list<pair<string, uint32_t>> vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const vector<vector<uint64_t>>& mFrequencies, uint64_t& iNumOfReadsSum, uint64_t& iNumOfReadsOld, uint64_t iNumOfReads, const float& fThreshold, ofstream& fOut) {
+		inline void saveResults(const bool transferBetweenRuns_finished, const bool transferBetweenRuns_addTail, vector<tuple<readIDType, float, double>>& vSavedScores, const Utilities::Non_contiguousArray& vReadIDtoTaxID, list<pair<string, uint32_t>> vReadNameAndLength, const uint64_t& iNumberOfSpecies, const vector<uint32_t>& mIdxToTax, const vector<string>& mOrganisms, const vector<vector<uint64_t>>& mFrequencies, uint64_t& iNumOfReadsSum, uint64_t& iNumOfReadsOld, uint64_t iNumOfReads, const float& fThreshold, vector<uint64_t>& vReadIDsToBeFiltered, ofstream& fOut) {
 
 			auto getVecOfScored = [&iNumberOfSpecies](const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iIdx) {
 				try {
@@ -1787,7 +1865,19 @@ namespace kASA {
 				lastScoreVec.push_back(seen);
 				vSavedScores.swap(lastScoreVec);
 				debugBarrier
-				scoringFunc(move(vSavedScores), (iReadIDStart++) + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, fThreshold, move(fOut));
+
+				if (fOut.good()) {
+					scoringFunc(move(vSavedScores), (iReadIDStart++) + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, fThreshold, vReadIDsToBeFiltered, move(fOut));
+				}
+				else {
+					if (GlobalInputParameters.bFilter) {
+						scoringFuncWithFilterNoOutputOne(move(vSavedScores), (iReadIDStart++) + iNumOfReadsSum, vReadNameAndLength.front(), vReadIDsToBeFiltered);
+					}
+					else {
+						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw runtime_error("Cannot write to identification output!");
+					}
+				}
+				
 				vSavedScores.clear();
 
 				vReadNameAndLength.pop_front();
@@ -1818,8 +1908,17 @@ namespace kASA {
 
 				debugBarrier
 				// save the finished ones
-				scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, mFrequencies, mIdxToTax, mOrganisms, fThreshold, move(fOut));
-
+				if (fOut.good()) {
+					scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, mFrequencies, mIdxToTax, mOrganisms, fThreshold, vReadIDsToBeFiltered, move(fOut));
+				}
+				else {
+					if (GlobalInputParameters.bFilter) {
+						scoringFuncWithFilterNoOutput(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, vReadIDsToBeFiltered);
+					}
+					else {
+						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw runtime_error("Cannot write to identification output!");
+					}
+				}
 
 				iNumOfReadsSum += iNumOfReads - 1;
 				iNumOfReadsOld = (iNumOfReads - 1 < iNumOfReadsOld) ? iNumOfReadsOld : iNumOfReads - 1;
@@ -1827,7 +1926,17 @@ namespace kASA {
 			else {
 				debugBarrier
 				// reads finished
-				scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, mFrequencies, mIdxToTax, mOrganisms, fThreshold, move(fOut));
+				if (fOut.good()) {
+					scoringFunc(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, mFrequencies, mIdxToTax, mOrganisms, fThreshold, vReadIDsToBeFiltered, move(fOut));
+				}
+				else {
+					if (GlobalInputParameters.bFilter) {
+						scoringFuncWithFilterNoOutput(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, vReadIDsToBeFiltered);
+					}
+					else {
+						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw runtime_error("Cannot write to identification output!");
+					}
+				}
 
 				iNumOfReadsSum += iNumOfReads;
 				iNumOfReadsOld = iNumOfReads;
@@ -1835,6 +1944,146 @@ namespace kASA {
 			debugBarrier
 		}
 
+		template <typename inFileType, typename outFileType>
+		inline void filter(const vector<uint64_t>& vReadIDsToBeFiltered, unique_ptr<inFileType>& inFile1, unique_ptr<inFileType>& inFile2, const bool& bIsFasta, const bool& bIsPairedEnd) {
+			unique_ptr<outFileType> fOutClean_1;
+			unique_ptr<outFileType> fOutClean_2;
+			unique_ptr<outFileType> fOutContaminated_1;
+			unique_ptr<outFileType> fOutContaminated_2;
+			string fastqOrA = (bIsFasta) ? "a" : "q";
+			string gzipOrNot = (GlobalInputParameters.bGzipOut) ? ".gz" : "";
+
+			// open files for writing
+			if (bIsPairedEnd) {
+				if (GlobalInputParameters.sFilteredCleanOut != "_") {
+					fOutClean_1.reset(new outFileType((GlobalInputParameters.sFilteredCleanOut + "_1.fast" + fastqOrA + gzipOrNot).c_str()));
+					fOutClean_2.reset(new outFileType((GlobalInputParameters.sFilteredCleanOut + "_2.fast" + fastqOrA + gzipOrNot).c_str()));
+					if (fOutClean_1->fail() || fOutClean_2->fail()) {
+						throw runtime_error("Filtered output files could not be opened for writing, did you use the correct path?");
+					}
+				}
+				if (GlobalInputParameters.sFilteredContaminantsOut != "_") {
+					fOutContaminated_1.reset(new outFileType((GlobalInputParameters.sFilteredContaminantsOut + "_1.fast" + fastqOrA + gzipOrNot).c_str()));
+					fOutContaminated_2.reset(new outFileType((GlobalInputParameters.sFilteredContaminantsOut + "_2.fast" + fastqOrA + gzipOrNot).c_str()));
+					if (fOutContaminated_1->fail() || fOutContaminated_2->fail()) {
+						throw runtime_error("Contaminants output files could not be opened for writing, did you use the correct path?");
+					}
+				}
+			}
+			else {
+				if (GlobalInputParameters.sFilteredCleanOut != "_") {
+					fOutClean_1.reset(new outFileType((GlobalInputParameters.sFilteredCleanOut + ".fast" + fastqOrA + gzipOrNot).c_str()));
+					if (fOutClean_1->fail()) {
+						throw runtime_error("Filtered output files could not be opened for writing, did you use the correct path?");
+					}
+				}
+				if (GlobalInputParameters.sFilteredContaminantsOut != "_") {
+					fOutContaminated_1.reset(new outFileType((GlobalInputParameters.sFilteredContaminantsOut + ".fast" + fastqOrA + gzipOrNot).c_str()));
+					if (fOutContaminated_1->fail()) {
+						throw runtime_error("Contaminants output files could not be opened for writing, did you use the correct path?");
+					}
+				}
+			}
+
+			// go through input
+			uint64_t iReadID = 0, iFilterVecIdx = 0;
+			bool bCleanOrContaminated = true;
+			if (bIsFasta) {
+				string sDummyString_1 = "", sDummyString_2 = "";
+				while (getline(*inFile1, sDummyString_1)) {
+					if (bIsPairedEnd) {
+						getline(*inFile2, sDummyString_2);
+					}
+					if (sDummyString_1 == "") {
+						continue;
+					}
+
+					if (sDummyString_1.front() == '>') {
+						if (iReadID == vReadIDsToBeFiltered[iFilterVecIdx]) {
+							// contaminated
+							bCleanOrContaminated = false;
+							iReadID++;
+							iFilterVecIdx++;
+						}
+						else {
+							// Clean
+							bCleanOrContaminated = true;
+							iReadID++;
+						}
+					}
+
+					// write to respective output
+					if (bCleanOrContaminated) {
+						(*fOutClean_1) << sDummyString_1 << endl;
+						if (bIsPairedEnd) {
+							(*fOutClean_2) << sDummyString_2 << endl;
+						}
+					}
+					else {
+						(*fOutContaminated_1) << sDummyString_1 << endl;
+						if (bIsPairedEnd) {
+							(*fOutContaminated_2) << sDummyString_2 << endl;
+						}
+					}
+				}
+			}
+			else { // fastq
+				while (inFile1->good()) {
+					array<string, 4> fastqContent, fastqContent2;
+					getline(*inFile1, fastqContent[0]); // specifier
+					getline(*inFile1, fastqContent[1]); // dna/protein sequence
+					getline(*inFile1, fastqContent[2]); // +
+					getline(*inFile1, fastqContent[3]); // quality
+
+					if (bIsPairedEnd) {
+						getline(*inFile2, fastqContent2[0]);
+						getline(*inFile2, fastqContent2[1]);
+						getline(*inFile2, fastqContent2[2]);
+						getline(*inFile2, fastqContent2[3]);
+					}
+
+					if (fastqContent[0] == "") {
+						continue;
+					}
+
+					if (iReadID == vReadIDsToBeFiltered[iFilterVecIdx]) {
+						// contaminated
+						bCleanOrContaminated = false;
+						iReadID++;
+						iFilterVecIdx++;
+					}
+					else {
+						// Clean
+						bCleanOrContaminated = true;
+						iReadID++;
+					}
+
+					// write to respective output
+					if (bCleanOrContaminated) {
+						for (int i = 0; i < 4; ++i) {
+							(*fOutClean_1) << fastqContent[i] << endl;
+						}
+
+						if (bIsPairedEnd) {
+							for (int i = 0; i < 4; ++i) {
+								(*fOutClean_2) << fastqContent2[i] << endl;
+							}
+						}
+					}
+					else {
+						for (int i = 0; i < 4; ++i) {
+							(*fOutContaminated_1) << fastqContent[i] << endl;
+						}
+
+						if (bIsPairedEnd) {
+							for (int i = 0; i < 4; ++i) {
+								(*fOutContaminated_2) << fastqContent2[i] << endl;
+							}
+						}
+					}
+				}
+			}
+		}
 
 	public:
 
@@ -1990,6 +2239,8 @@ namespace kASA {
 				Utilities::Non_contiguousArray vReadIDtoTaxID;
 
 				list<pair<string, uint32_t>> vReadNameAndLength;
+
+				vector<uint64_t> vReadIDsToBeFiltered; // in case filtering is enabled
 
 				uint64_t iNumberOfkMersInInput = 0;
 
@@ -2448,7 +2699,7 @@ namespace kASA {
 
 						///////////////////////////
 						if (bReadIDsAreInteresting) {
-							tOutputThread.reset(new thread(&Compare::saveResults, this, transferBetweenRuns->finished, transferBetweenRuns->addTail, ref(vSavedScores), ref(vReadIDtoTaxID), vReadNameAndLength, ref(index.iNumOfSpecies), ref(*index.mIdxToTax), ref(*index.mOrganisms), ref(index.mFrequencies), ref(iNumOfReadsSum), ref(iNumOfReadsOld), iNumOfReads, ref(fThreshold), ref(fOut)));
+							tOutputThread.reset(new thread(&Compare::saveResults, this, transferBetweenRuns->finished, transferBetweenRuns->addTail, ref(vSavedScores), ref(vReadIDtoTaxID), vReadNameAndLength, ref(index.iNumOfSpecies), ref(*index.mIdxToTax), ref(*index.mOrganisms), ref(index.mFrequencies), ref(iNumOfReadsSum), ref(iNumOfReadsOld), iNumOfReads, ref(fThreshold), ref(vReadIDsToBeFiltered), ref(fOut)));
 						}
 
 						vReadNameAndLength.clear();
@@ -2734,6 +2985,49 @@ namespace kASA {
 						cout << endl;
 						cout << "OUT: Time fastq: " << iTimeFastq << " ns" << endl;
 						cout << "OUT: Time compare: " << iTimeCompare << " ns" << endl;
+					}
+
+
+					// filtering
+					if (GlobalInputParameters.bFilter) {
+						if (isGzipped) {
+							// reset input files
+							fast_q_a_File_gz.reset(new igzstream());
+							fast_q_a_File_gz->rdbuf()->pubsetbuf(&inFilebuffer[0], 2097152);
+							fast_q_a_File_gz->open(inFile.first.c_str());
+
+							if (bIsPairedEnd) {
+								fast_q_a_File_gz2.reset(new igzstream());
+								fast_q_a_File_gz2->rdbuf()->pubsetbuf(&inFilebuffer2[0], 2097152);
+								fast_q_a_File_gz2->open(vPairedEndFiles[1].c_str());
+							}
+
+							if (GlobalInputParameters.bGzipOut) {
+								filter<igzstream,ogzstream>(vReadIDsToBeFiltered, fast_q_a_File_gz, fast_q_a_File_gz2, bIsFasta, bIsPairedEnd);
+							}
+							else {
+								filter<igzstream, ofstream>(vReadIDsToBeFiltered, fast_q_a_File_gz, fast_q_a_File_gz2, bIsFasta, bIsPairedEnd);
+							}
+						}
+						else {
+							fast_q_a_File.reset(new ifstream());
+							fast_q_a_File->rdbuf()->pubsetbuf(&inFilebuffer[0], 2097152);
+							fast_q_a_File->open(inFile.first.c_str());
+
+							if (bIsPairedEnd) {
+								fast_q_a_File2.reset(new ifstream());
+								fast_q_a_File2->rdbuf()->pubsetbuf(&inFilebuffer2[0], 2097152);
+								fast_q_a_File2->open(vPairedEndFiles[1].c_str());
+							}
+
+							if (GlobalInputParameters.bGzipOut) {
+								filter<ifstream, ogzstream>(vReadIDsToBeFiltered, fast_q_a_File, fast_q_a_File2, bIsFasta, bIsPairedEnd);
+							}
+							else {
+								filter<ifstream, ofstream>(vReadIDsToBeFiltered, fast_q_a_File, fast_q_a_File2, bIsFasta, bIsPairedEnd);
+							}
+						}
+						vReadIDsToBeFiltered.clear();
 					}
 
 					iNumOfReadsSum = 0;

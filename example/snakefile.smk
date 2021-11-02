@@ -15,7 +15,9 @@ rule all:
 		jsonFromLarge="work/results/128.json",
 		jsonFromProtein="work/results/protein.json",
 		jsonFromTranslation="work/results/translate.json",
-		idMult="work/results/mult.done"
+		idMult="work/results/mult.done",
+		filtPaired="work/results/filteredPaired.done",
+		filt="work/results/filtered.done"
 
 rule generateCF:
 	input:
@@ -224,6 +226,35 @@ rule pairedEnd:
 	threads: config["threads"]
 	shell:
 		"{config[kASAExec]}kASA identify -d {input.index} -n {threads} -m {params.ram} -x {params.callIdx} -1 work/input/example.fastq.gz -2 work/input/example2.fastq.gz -q work/results/pairedEnd.json"
+
+rule filteredPaired:
+	input:
+		dummyLink=rules.identify_u.output.json3,
+		index=rules.update.output.index,
+		freq=rules.reconstructFrequency.output.freqRec
+	output:
+		touch("work/results/filteredPaired.done")
+	params:
+		ram = config["ram"],
+		callIdx="12"
+	threads: config["threads"]
+	shell:
+		"{config[kASAExec]}kASA identify -d {input.index} -n {threads} -m {params.ram} -x {params.callIdx} -1 work/input/example.fastq.gz -2 work/input/example2.fastq.gz -q work/results/filteredPaired.json --filter work/results/clean work/results/contaminated --errorThreshold 0.5"
+
+rule filtered:
+	input:
+		dummyLink=rules.identify_u.output.json3,
+		index=rules.update.output.index,
+		freq=rules.reconstructFrequency.output.freqRec
+	output:
+		touch("work/results/filtered.done")
+	params:
+		ram = config["ram"],
+		callIdx="12"
+	threads: config["threads"]
+	shell:
+		"{config[kASAExec]}kASA identify -d {input.index} -n {threads} -m {params.ram} -x {params.callIdx} -i work/input/example.fastq.gz -q work/results/filtered.json --filter work/results/clean work/results/contaminated --errorThreshold 0.5"
+
 
 rule LargeK:
 	input:

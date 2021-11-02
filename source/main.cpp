@@ -98,7 +98,7 @@ Optional parameters:\n\
 --one: Use only one reading frame instead of three. Speeds the tool up significantly but sacrifices robustness. Default: off.\n\
 -1: First file in a paired-end pair.\n\
 -2: Second file in a paired - end pair.Both `-1` and `-2` must be used and `-i` will be ignored for this call.Paired - end can only be files, no folders.\n\
---coverage: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Default: off.\n\
+--coverage: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Also, --six must be used. Default: off.\n\
 ";
 		}
 		else if (m == "identify_multiple") {
@@ -260,7 +260,7 @@ int main(int argc, char* argv[]) {
 			//throw runtime_error("No Parameters given!");
 		}
 		if (vParameters[1] == "--parameters") {
-			Utilities::readParametersFromJson(Utilities::removeSpaceAndEndline(vParameters[2]));
+			Utilities::readParametersFromYaml(Utilities::removeSpaceAndEndline(vParameters[2]));
 
 			switch (GlobalInputParameters.shrinkStrategy) {
 			case 1:
@@ -553,6 +553,17 @@ int main(int argc, char* argv[]) {
 				}
 				else if (sParameter == "--coverage") {
 					GlobalInputParameters.bCoverage = true;
+				}
+				else if (sParameter == "--filter") { // --filter <out for clean fastq/as> <out for contaminated fastq/as>
+					GlobalInputParameters.bFilter = true;
+					GlobalInputParameters.sFilteredCleanOut = Utilities::removeSpaceAndEndline(vParameters[++i]);
+					GlobalInputParameters.sFilteredContaminantsOut = Utilities::removeSpaceAndEndline(vParameters[++i]);
+				}
+				else if (sParameter == "--errorThreshold") {
+					GlobalInputParameters.fErrorThreshold = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				}
+				else if (sParameter == "--gzip") { 
+					GlobalInputParameters.bGzipOut = true;
 				}
 				else {
 					throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
