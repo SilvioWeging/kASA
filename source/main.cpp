@@ -565,6 +565,9 @@ int main(int argc, char* argv[]) {
 				else if (sParameter == "--gzip") { 
 					GlobalInputParameters.bGzipOut = true;
 				}
+				else if (sParameter == "--igotspace") {
+					GlobalInputParameters.bIGotSpace = true;
+				}
 				else {
 					throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 				}

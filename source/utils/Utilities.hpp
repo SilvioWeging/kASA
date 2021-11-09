@@ -1250,6 +1250,10 @@ namespace Utilities {
 					GlobalInputParameters.iNumOfMask = stoi(parameterPair[1]);
 					continue;
 				}
+				if (parameterPair[0] == "IGotSpace") {
+					GlobalInputParameters.bIGotSpace = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
 				//if (parameterPair[0] == "Mode") {
 				//	GlobalInputParameters.cMode = parameterPair[1];
 				//	continue;

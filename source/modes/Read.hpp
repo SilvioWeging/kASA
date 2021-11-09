@@ -2118,7 +2118,7 @@ Sorry!" << endl;
 						vecOfSizes->push_back(entry.second / sizeof(elemType));
 					}
 				}
-				const uint64_t& iSizeOfFinalIndex = brick.mergeTemporaries(fOutFile);
+				const uint64_t& iSizeOfFinalIndex = (GlobalInputParameters.bIGotSpace) ? brick.mergeTemporariesWithEnoughSpace(fOutFile) : brick.mergeTemporaries(fOutFile);
 
 				debugBarrier
 

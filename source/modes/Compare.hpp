@@ -1985,6 +1985,15 @@ namespace kASA {
 				}
 			}
 
+			// if no contaminants were found, copy the content
+			if (vReadIDsToBeFiltered.empty()) {
+				*fOutClean_1 << inFile1->rdbuf();
+				if (bIsPairedEnd) {
+					*fOutClean_2 << inFile2->rdbuf();
+				}
+				return;
+			}
+
 			// go through input
 			uint64_t iReadID = 0, iFilterVecIdx = 0;
 			bool bCleanOrContaminated = true;
@@ -2233,7 +2242,7 @@ namespace kASA {
 				}
 				m_exceptionLock.unlock();
 				debugBarrier
-				const bool& bReadIDsAreInteresting = fOutFile != "";
+				const bool& bReadIDsAreInteresting = (fOutFile != "" || GlobalInputParameters.bFilter);
 
 				//Utilities::Vector2D<float> vReadIDtoTaxID; // Array of #species times #reads with scores as values
 				Utilities::Non_contiguousArray vReadIDtoTaxID;
@@ -2398,19 +2407,21 @@ namespace kASA {
 					fOut.rdbuf()->pubsetbuf(&outFilebuffer[0], 104857600);
 					//fOut.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 					if (bReadIDsAreInteresting) {
-						fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + outputFormatFileEnding() : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
-						if (fOut) {
-							if (format == OutputFormat::tsv) {
-								fOut << "#Read number\tSpecifier from input file\tMatched taxa\tNames\tScores{relative,k-mer}\tError" << "\n";
-							}
-							else {
-								if (format == OutputFormat::Json) {
-									fOut << "[" << "\n";
+						if (fOutFile != "") {
+							fOut.open((vInputFiles.size() > 1) ? fOutFile + fileName + outputFormatFileEnding() : fOutFile); // in case of multiple input files, specify only beginning of the output and the rest will be appended
+							if (fOut) {
+								if (format == OutputFormat::tsv) {
+									fOut << "#Read number\tSpecifier from input file\tMatched taxa\tNames\tScores{relative,k-mer}\tError" << "\n";
+								}
+								else {
+									if (format == OutputFormat::Json) {
+										fOut << "[" << "\n";
+									}
 								}
 							}
-						}
-						else {
-							throw runtime_error("Readwise output file could not be created!");
+							else {
+								throw runtime_error("Readwise output file could not be created!");
+							}
 						}
 					}
 
@@ -2733,10 +2744,12 @@ namespace kASA {
 					}
 
 					// if json is the output format for readToTaxa, end it with a ]
-					if (bReadIDsAreInteresting && format == OutputFormat::Json) {
+					if (bReadIDsAreInteresting && format == OutputFormat::Json && fOutFile != "") {
 						fOut << "\n" << "]";
 					}
-					fOut.flush(); // empty the buffer to avoid memory leak
+					if (fOutFile != "") {
+						fOut.flush(); // empty the buffer to avoid memory leak
+					}
 					debugBarrier
 					// sum up parallel results
 						for (int32_t iThreadID = 1; iThreadID < iLocalNumOfThreads; ++iThreadID) {

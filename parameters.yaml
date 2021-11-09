@@ -39,6 +39,7 @@ Build:
  AccessionToTaxIDFileOrFolder: ""
  TaxonomyFolder: ""
  TaxIDsAreStrings: false
+ IGotSpace: false
 
 # This specifies the number of frames used for translation. Only one of them can be true.
 Frames:

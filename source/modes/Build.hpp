@@ -477,6 +477,125 @@ namespace kASA {
 		}
 
 		/////////////////////////////////////////////////////////////////////////////////////////
+		// Merge as many external vectors as possible in one call until only one remains
+		inline uint64_t mergeTemporariesWithEnoughSpace(const string& sOutPath) {
+			try {
+				vInternal.reset(); //not needed anymore
+
+				auto remainingFiles = _iCounterOfContainers;
+				int32_t iCurrentIdx = 0;
+				auto comparisonFunction = [](const pair<typename vecType::const_iterator, uint32_t>& it1, const pair<typename vecType::const_iterator, uint32_t>& it2) { return !(*(it1.first) < *(it2.first)); };
+				priority_queue<pair<typename vecType::const_iterator, uint32_t>, vector<pair<typename vecType::const_iterator, uint32_t>>, decltype(comparisonFunction)> vCurrentIterators(comparisonFunction);
+
+				/*auto print_queue = [](priority_queue<pair<typename vecType::const_iterator, uint32_t>, vector<pair<typename vecType::const_iterator, uint32_t>>, decltype(comparisonFunction)> Q) {
+					while (!Q.empty()) {
+						cout << kASA::kMerToAminoacid(Q.top().first->first, 12) << endl;
+						Q.pop();
+					}
+					cout << endl;
+				};*/
+
+				size_t iNumOfVecsThatCanBeOpened = _iSoftSize * sizeof(elemType) / (vecType::block_size * vecType::page_size * 4); // It could be, that the memory needed to open the files is larger than the memory provided
+				//cout << "iNumOfVecsThatCanBeOpened: " << iNumOfVecsThatCanBeOpened << endl;
+				iNumOfVecsThatCanBeOpened = (iNumOfVecsThatCanBeOpened > FOPEN_MAX - 1) ? FOPEN_MAX - 1 : iNumOfVecsThatCanBeOpened;
+
+				auto maxNrOfFiles = remainingFiles;
+				while (remainingFiles != 1) {
+					// first gather as many files as permitted
+					vector<unique_ptr<stxxlFile>> currentFiles(FOPEN_MAX - 1);
+					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
+
+					uint64_t iSumSize = 0;
+					for (int32_t i = 0; i < static_cast<int32_t>(iNumOfVecsThatCanBeOpened) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
+						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDWR));
+						currentVecs[i].reset(new vecType(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
+						vCurrentIterators.push(make_pair(currentVecs[i]->begin(), i));
+						iSumSize += vVectorSizes[iCurrentIdx];
+						remainingFiles--;
+					}
+
+					//print_queue(vCurrentIterators);
+
+					// create merge-file
+					Utilities::checkIfFileCanBeCreated(_sTempPath + to_string(_iCounterOfContainers));
+
+					unique_ptr<stxxlFile> fNCFile(new stxxlFile(_sTempPath + to_string(_iCounterOfContainers), stxxl::file::RDWR));
+					//unique_ptr<vecType> vNC(new vecType(fNCFile.get(), iSumSize));
+					size_t sizeOfAGigabyte = 1024 * 1024 * 1024 / sizeof(elemType);
+					unique_ptr<vecType> vNC(new vecType(fNCFile.get(), 0));
+					vNC->reserve(sizeOfAGigabyte);
+					auto addElement = [&](const uint64_t& iCurrentSize, const elemType& elem) {
+						if (iCurrentSize < vNC->size()) {
+							vNC->push_back(elem);
+						}
+						else {
+							vNC->reserve(vNC->size() + sizeOfAGigabyte);
+							vNC->push_back(elem);
+						}
+					};
+					//typename vecType::bufwriter_type vNCIt(*vNC);
+
+					elemType pSeen;
+					uint64_t iSizeOfNewVec = 0;
+					while (!vCurrentIterators.empty()) {
+						// take smallest value and check if that has been seen before
+						auto it = vCurrentIterators.top();
+
+						if (!(*(it.first) == pSeen)) {
+							// if not: write it to the output
+							pSeen = *(it.first);
+							//vNCIt << pSeen;
+							addElement(iSizeOfNewVec, pSeen);
+							++iSizeOfNewVec;
+						}
+
+						// The end of that vector has been reached: take this iterator (and temporary vector) out of consideration
+						if (it.first == currentVecs[it.second]->cend()) {
+							currentVecs[it.second].reset();
+
+							currentFiles[it.second]->close_remove();
+							currentFiles[it.second].reset();
+
+							vCurrentIterators.pop();
+						}
+						else {
+							it.first++;
+
+							vCurrentIterators.pop();
+							vCurrentIterators.push(it);
+						}
+
+						//print_queue(vCurrentIterators);
+					}
+					//vNCIt.finish();
+					vVectorSizes.push_back(iSizeOfNewVec);
+					vNC->resize(iSizeOfNewVec, true);
+
+					vNC->export_files("_");
+					++_iCounterOfContainers;
+					remainingFiles++;
+					++maxNrOfFiles;
+				}
+
+				// move the last temporary file to the given path
+				remove(sOutPath.c_str());
+				// attempt to move, if that fails, copy it
+				Utilities::moveFile(_sTempPath + to_string(_iCounterOfContainers - 1), sOutPath);
+				remove((_sTempPath + to_string(_iCounterOfContainers - 1)).c_str());
+				ofstream fLibInfo(sOutPath + "_info.txt");
+				fLibInfo << vVectorSizes[_iCounterOfContainers - 1];
+				if (is_same<vecType, contentVecType_128>::value) {
+					fLibInfo << endl << 128;
+				}
+
+				return vVectorSizes[_iCounterOfContainers - 1];
+			}
+			catch (...) {
+				cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw;
+			}
+		}
+
+		/////////////////////////////////////////////////////////////////////////////////////////
 		// BuildAll can be found in Read.hpp
 	};
 }
