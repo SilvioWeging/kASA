@@ -133,7 +133,7 @@ namespace Utilities {
 		getline(sequenceFile, sLine); // In fasta as well as in fastq, the first line is uninteresting
 		getline(sequenceFile, sLine); // This should now contain enough information to figure it out
 		sequenceFile.seekg(0);
-		return sLine;
+		return sLine.substr(0,4);
 	}
 
 	///////////////////////////////////////////////////////

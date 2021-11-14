@@ -655,7 +655,7 @@ namespace kASA {
 							for (int32_t ik = Base::_iNumOfK - 1; ik > -1; --ik) {
 								const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 								const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
-								if (compare(iCurrentkMerShifted_ & 31, vMemoryOfSeenkMers[ik] & 31, Base::_aOfK[ik]) == 1) { //  iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]
+								if (compare(iCurrentkMerShifted_, vMemoryOfSeenkMers[ik], Base::_aOfK[ik]) == 1) { //  iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]
 									addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
 								}
 							}
@@ -681,13 +681,13 @@ namespace kASA {
 
 								//cout << Base::kMerToAminoacid(iCurrentkMerShifted, 25) << " " << Base::kMerToAminoacid(iCurrentLibkMerShifted, 25) << endl;
 
-								const uint8_t iResultFromComparison = compare(iCurrentkMerShifted & 31, iCurrentLibkMerShifted & 31, Base::_aOfK[ikLengthCounter]);
+								const uint8_t iResultFromComparison = compare(iCurrentkMerShifted, iCurrentLibkMerShifted, Base::_aOfK[ikLengthCounter]);
 								if (iResultFromComparison == 0) {
 									if (bInputIterated) {
 										for (int32_t ik = ikLengthCounter; ik > -1; --ik) {
 											const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 											const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
-											if (compare(iCurrentkMerShifted_ & 31, vMemoryOfSeenkMers[ik] & 31, Base::_aOfK[ik]) == 1) { //  iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]
+											if (compare(iCurrentkMerShifted_, vMemoryOfSeenkMers[ik], Base::_aOfK[ik]) == 1) { //  iCurrentkMerShifted_ == vMemoryOfSeenkMers[ik]
 												addToMatchedReadID(vReadIDs[ik], vPositions[ik], get<1>(iCurrentkMer));
 											}
 											else {
@@ -707,7 +707,7 @@ namespace kASA {
 										}
 
 										if (this->_bVisualize) {
-											_matchedkMers.push_back(make_pair(Base::kMerToAminoacid(iCurrentLibkMerShifted, Base::_iMaxK), get<1>(iCurrentLib)));
+											_matchedkMers.push_back(make_pair(Base::kMerToAminoacid(iCurrentLibkMerShifted, Base::_aOfK[ikLengthCounter]), get<1>(iCurrentLib)));
 										}
 
 										// Delayed scoring: First gather everything and then score it instead of scoring everytime you encounter a new read or tax id.
@@ -765,10 +765,10 @@ namespace kASA {
 											if (iCurrentkMerShifted > (iNextLibSuffix >> shift)) {
 												int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 												for (; iUntilK > -1; --iUntilK) {
-													if (compare(vMemoryOfSeenkMers[iUntilK] & 31, (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])) & 31, Base::_aOfK[iUntilK]) == 1) { //  vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))
-														if (this->_bVisualize) {
-															_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
-														}
+													if (compare(vMemoryOfSeenkMers[iUntilK], (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_aOfK[iUntilK]) == 1) { //  vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))
+														//if (this->_bVisualize) {
+															//_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_aOfK[iUntilK]), (seenResultIt + iTempCounter)->second));
+														//}
 														markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
 													}
 													else {
@@ -811,10 +811,10 @@ namespace kASA {
 						const intType& iNextLibSuffix = static_cast<intType>((seenResultIt + iTempCounter)->first);
 						int16_t iUntilK = static_cast<int16_t>(Base::_iNumOfK - 1);
 						for (; iUntilK > -1; --iUntilK) {
-							if (compare(vMemoryOfSeenkMers[iUntilK] & 31, (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])) & 31, Base::_aOfK[iUntilK]) == 1) { //   vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))
-								if (this->_bVisualize) {
-									_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_iMaxK), (seenResultIt + iTempCounter)->second));
-								}
+							if (compare(vMemoryOfSeenkMers[iUntilK], (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_aOfK[iUntilK]) == 1) { //   vMemoryOfSeenkMers[iUntilK] == (iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK]))
+								//if (this->_bVisualize) {
+									//_matchedkMers.push_back(make_pair(Base::kMerToAminoacid((iNextLibSuffix >> 5 * (Base::_iHighestK - Base::_aOfK[iUntilK])), Base::_aOfK[iUntilK]), (seenResultIt + iTempCounter)->second));
+								//}
 								markTaxIDs((seenResultIt + iTempCounter)->second, vMemoryOfTaxIDs[iUntilK], mTaxToIdx, getVec(vLib, iThreadID));
 							}
 							else {
@@ -2673,37 +2673,39 @@ namespace kASA {
 									}
 								}
 								debugBarrier
-								sort(vResultingLinesToPrint.begin(), vResultingLinesToPrint.end(), [&](const tuple<string, size_t, size_t, uint32_t>& a, const tuple<string, size_t, size_t, uint32_t>& b) { return make_tuple(get<1>(a),get<2>(a), get<3>(a)) < make_tuple(get<1>(b),get<2>(b), get<3>(b)); });
+								if (!vResultingLinesToPrint.empty()) {
+									sort(vResultingLinesToPrint.begin(), vResultingLinesToPrint.end(), [&](const tuple<string, size_t, size_t, uint32_t>& a, const tuple<string, size_t, size_t, uint32_t>& b) { return make_tuple(get<1>(a), get<2>(a), get<3>(a)) < make_tuple(get<1>(b), get<2>(b), get<3>(b)); });
 
-								for (const auto& printableLines : vResultingLinesToPrint) {
-									cout << get<0>(printableLines) << endl;
-								}
-
-								sort(vResultingLinesToPrint.begin(), vResultingLinesToPrint.end(), [&](const tuple<string, size_t, size_t, uint32_t>& a, const tuple<string, size_t, size_t, uint32_t>& b) { return get<3>(a) < get<3>(b); });
-
-								uint32_t iSeentaxID = get<3>(vResultingLinesToPrint[0]);
-								uint64_t iScore = 0;
-								for (const auto& elem : vResultingLinesToPrint) {
-									if (iSeentaxID == get<3>(elem)) {
-										iScore += get<2>(elem);
+									for (const auto& printableLines : vResultingLinesToPrint) {
+										cout << get<0>(printableLines) << endl;
 									}
-									else {
-										vResultScores.push_back(make_pair(iSeentaxID, iScore));
-										iScore = get<2>(elem);
-										iSeentaxID = get<3>(elem);
+
+									sort(vResultingLinesToPrint.begin(), vResultingLinesToPrint.end(), [&](const tuple<string, size_t, size_t, uint32_t>& a, const tuple<string, size_t, size_t, uint32_t>& b) { return get<3>(a) < get<3>(b); });
+
+									uint32_t iSeentaxID = get<3>(vResultingLinesToPrint[0]);
+									uint64_t iScore = 0;
+									for (const auto& elem : vResultingLinesToPrint) {
+										if (iSeentaxID == get<3>(elem)) {
+											iScore += get<2>(elem);
+										}
+										else {
+											vResultScores.push_back(make_pair(iSeentaxID, iScore));
+											iScore = get<2>(elem);
+											iSeentaxID = get<3>(elem);
+										}
 									}
-								}
-								vResultScores.push_back(make_pair(iSeentaxID, iScore));
-								sort(vResultScores.begin(), vResultScores.end(), [](const pair<uint32_t, uint64_t>& a, const pair<uint32_t, uint64_t>& b) {return a.second > b.second; });
-								cout << "Scores: " << endl;
-								for (const auto& elem : vResultScores) {
-									cout << elem.first << " " << elem.second << endl;
-								}
-								cout << endl;
+									vResultScores.push_back(make_pair(iSeentaxID, iScore));
+									sort(vResultScores.begin(), vResultScores.end(), [](const pair<uint32_t, uint64_t>& a, const pair<uint32_t, uint64_t>& b) {return a.second > b.second; });
+									cout << "Scores: " << endl;
+									for (const auto& elem : vResultScores) {
+										cout << elem.first << " " << elem.second << endl;
+									}
+									cout << endl;
 
-								vResultScores.clear();
+									vResultScores.clear();
 
-								vResultingLinesToPrint.clear();
+									vResultingLinesToPrint.clear();
+								}
 							}
 						}
 						debugBarrier
