@@ -1,6 +1,6 @@
 # kASA
 
-![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/SilvioWeging/kASA) [![GitHub issues](https://img.shields.io/github/issues/SilvioWeging/kASA.svg)](https://github.com/SilvioWeging/kASA/issues) ![GitHub All Releases](https://img.shields.io/github/downloads/SilvioWeging/kASA/total.svg)
+[![Anaconda](https://anaconda.org/silvioweging/kasa/badges/installer/conda.svg)](https://anaconda.org/SilvioWeging/kasa) ![Platforms](https://anaconda.org/silvioweging/kasa/badges/platforms.svg) ![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/SilvioWeging/kASA) [![GitHub issues](https://img.shields.io/github/issues/SilvioWeging/kASA.svg)](https://github.com/SilvioWeging/kASA/issues) ![GitHub All Releases](https://img.shields.io/github/downloads/SilvioWeging/kASA/total.svg)
 
 This is the official repository of kASA - <u>k</u>-Mer <u>A</u>nalysis of <u>S</u>equences based on <u>A</u>mino acid-like encoding, the published paper can be found [here](https://academic.oup.com/nar/advance-article/doi/10.1093/nar/gkab200/6204649).
 
@@ -10,6 +10,7 @@ The README file is quite large so it might make sense to have a look at the wiki
 - [Things to know](#things-to-know-before-you-start)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
+	* [Conda](#conda)
 	* [Linux](#linux)
 	* [macOS](#macOS)
 	* [Windows](#windows)
@@ -63,6 +64,19 @@ Last but not least: kASA provides an error (starts with "ERROR: ") and an output
 
 ## Setup
 
+### Conda
+
+If you have [miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/products/individual) installed, you can either create a new environment with:
+```
+conda create -n kasa -c conda-forge -c silvioweging kasa
+```
+or install kASA to your current environment:
+```
+conda install -c silvioweging kasa
+```
+On Linux, this [package](https://anaconda.org/conda-forge/libstdcxx-ng) is needed so please install it first if you have not already. 
+On Windows, you have to go to the `bin\` directory manually to start the program.
+
 ### Linux
 
 Install cmake if you haven't already.
@@ -88,6 +102,8 @@ Now for kASA itself, please type the following commands:
 * `make`
 
 ### macOS
+
+kASA is not yet working on the ARM64 architecture of the M1!
 
 If you have Clang with LLVM installed (check with `clang --version`, is usually included in Xcode) do the same as above (Linux).
 
@@ -245,7 +261,7 @@ If you want to optimise precision over sensitivity, you could use `k 12 12` and/
 Another important thing here is the output. Or the output**s** if you want. kASA can give you two files, one contains the per-read information, which taxa were found (identification file, by default in json format) and the other a table of how much of each taxon was found (the profile, a csv file).
 But because too much information isn't always nice, you can specify how much taxa with different score shall be shown for each read (e.g. `-b 5` shows best 5 hits). 
 
-The per read error score ranges from -1 to 1. A 1 means that the best score deviates as far as possible from the optimal score, 0 means a perfect match and -1 means that the reverse complement also fits perfectly. In tsv format, only the error of the best score is printed.
+The per read error score ranges from 0 to 1 where 0 means a perfect match and 1 that almost nothing matched.
 
 Note, that if you input a folder, file names are appended to your string given via `-p` or `-q`. If for example a folder contains two files named `example1.fq` and `example2.fasta` with `-p example/work/results/out_` as a parameter, then kASA will generate two output files named `out_example1.fq.csv` and `out_example2.fasta.csv`.
 
@@ -277,8 +293,9 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `-2`: Second file in a paired-end pair. Both `-1` and `-2` must be used and `-i` will be ignored for this call. Paired-end can only be files, no folders.
 * `--coverage`: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Also, `--six` must be chosen as number of frames if the index was build with six frames. Default: off.
 * `--filter <out for clean fastq/as> <out for contaminated fastq/as>`: Filters out matched reads and puts out two types of files, clean and contaminated fastq/fasta (depending on the input). File endings are generated automatically so you only need to specify the prefix, e.g. /some/path/clean. If one of the outputs is not desired, replace it with _. Supports paired-end input and output. Default: no filtering.
-* `--errorThreshold <float>`: Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match, -1: even the reverse complement matched. Default: 0.5.
+* `--errorThreshold <float>`: Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match. Default: 0.5.
 * `--gzip`: Gzips the filtered outputs. Default: off.
+* `--coherence`: Prints out the coherence score. Please refer to the wiki for more information. Default: off.
 ##### Example call
 ```
 <path to kASA>/kASA identify -c <content file> -d <path and name of index file> -i <input file or folder> -p <path and name of profile output> -q <path and name of read wise analysis> -m <amount of available GB> -t <path to temporary directory> -k <highest k> <lowest k> -n <number of parallel threads>
@@ -488,8 +505,8 @@ This gives you a hint whether you should look at the unique relative frequencies
 - ~~Consideration of paired-end information~~
 - ~~Larger k's than 12~~
 - ~~Profiles normalized to genome length, for now you could hack that with the frequency file~~
+- ~~Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)~~
 - Support of [Recentrifuge](https://github.com/khyox/recentrifuge)
-- Support of [bioconda](https://bioconda.github.io/)/[Snakemake](https://snakemake.readthedocs.io/en/stable/)
 - Small collection of adapter sequences
 - bzip2 support
 - Live streaming of .bcl files

@@ -44,8 +44,8 @@ Build:
 # This specifies the number of frames used for translation. Only one of them can be true.
 Frames:
  One: false
- Three: false
- Six: true
+ Three: true
+ Six: false
 
 IdentificationOutput:
  ProfileOutputfile: ""
@@ -58,13 +58,14 @@ Identify:
  NumberOfTaxaPerRead: 3
  UniqueKmersOnly: false
  ThresholdForScore: 0.0
+ Coherence: false
  PrintCoverage: false
  # Filters out matched reads. Specify the parameter as follows (no whitespace allowed!): /some/path/clean /some/path/contaminated 
  # This way two files will be created depending on the file type (fasta or fastq) and if they should be gziped or not. For example: clean.fastq.gz
  # If one of those output files is not desired, replace it with _
  # Supports paired-end input and output
  Filter: "_ _"
- # Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match, -1: even the reverse complement matched
+ # Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match.
  ErrorThreshold: 0.5
  # Gzips the filtered outputs
  Gzip: false

@@ -11,7 +11,7 @@
 
 #define kASA_VERSION_MAJOR 1
 #define kASA_VERSION_MINOR 4
-#define kASA_VERSION_PATCH 5
+#define kASA_VERSION_PATCH 6
 
 #include <iostream>
 #include <cstdint>
@@ -153,9 +153,72 @@ constexpr uint64_t GIGABYTEASBYTES = 1024ull * 1024ull * 1024ull;
 
 struct InputParameters {
 	string cMode = "", sDBPathOut = "", sTempPath = "", sInput = "", contentFileIn = "", contentFile1 = "", contentFile2 = "", contentFileAfterUpdate = "", firstOldIndex = "", secondOldIndex = "", readToTaxaFile = "", tableFile = "", indexFile = "", delnodesFile = "", codonTable = "", sTaxonomyPath = "", sAccToTaxFiles = "", sTaxLevel = "", sStxxlMode = "", sCodonID = "1", sPairedEnd1 = "", sPairedEnd2 = "", sFilteredCleanOut = "_", sFilteredContaminantsOut = "_";
-	bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false, bCoverage = false, bFilter = false, bGzipOut = false, bIGotSpace = false;
+	bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false, bCoverage = false, bFilter = false, bGzipOut = false, bIGotSpace = false, bPostProcess = false;
 	int32_t iNumOfThreads = 1, iHighestK = 12, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3, iNumOfMask = 0;
 	int64_t iMemorySizeAvail = 0;
 	float fPercentageOfThrowAway = 0.f, threshold = 0.f, fErrorThreshold = 0.5f;
 	uint8_t iTrieDepth = 6, outputFormat = 1, shrinkStrategy = 1;//, iPrefixCheckMode = 0;
 } GlobalInputParameters;
+
+
+
+template<typename intType>
+class InputType {
+	vector<tuple<uint64_t, intType, uint32_t, uint32_t, uint32_t, uint8_t>> vInputPreprocess;
+	vector<tuple<uint64_t, intType, uint32_t, uint32_t>> vInputStandard;
+	const bool _bPostProcess = false;
+
+public:
+	typedef tuple<uint64_t, intType, uint32_t, uint32_t, uint32_t, uint8_t> ppTuple;
+	typedef tuple<uint64_t, intType, uint32_t, uint32_t> staTuple;
+
+	InputType() : _bPostProcess(false) {}
+	InputType(const bool& bPostProcess) : _bPostProcess(bPostProcess) {}
+
+	inline void setRangeStart(const size_t& idx, const uint64_t& rangeStart) { if (_bPostProcess) get<0>(vInputPreprocess.at(idx)) = rangeStart;  else get<0>(vInputStandard.at(idx)) = rangeStart; }
+	inline void setkMer(const size_t& idx, const intType& kmer) { if (_bPostProcess) get<1>(vInputPreprocess.at(idx)) = kmer;  else get<1>(vInputStandard.at(idx)) = kmer; }
+	inline void setRangeEnd(const size_t& idx, const uint32_t& rangeEnd) { if (_bPostProcess) get<2>(vInputPreprocess.at(idx)) = rangeEnd;  else get<2>(vInputStandard.at(idx)) = rangeEnd; }
+	inline void setReadID(const size_t& idx, const uint32_t& rid) { if (_bPostProcess) get<3>(vInputPreprocess.at(idx)) = rid;  else get<3>(vInputStandard.at(idx)) = rid; }
+	inline void setPosition(const size_t& idx, const uint32_t& pos) { get<4>(vInputPreprocess.at(idx)) = pos; }
+	inline void setFrame(const size_t& idx, const uint8_t& frame) { get<5>(vInputPreprocess.at(idx)) |= (frame << 5); }
+	inline void setMatchLength(const size_t& idx, const uint8_t& kMerLength) { get<5>(vInputPreprocess.at(idx)) = kMerLength | (get<5>(vInputPreprocess.at(idx)) & 224) ; } // 224 = 111 000 so the frame is carried over but the existing value for k is overwritten
+
+	inline uint64_t getRangeStart(const size_t& idx) const { return (_bPostProcess) ? get<0>(vInputPreprocess.at(idx)) : get<0>(vInputStandard.at(idx)); }
+	inline intType getkMer(const size_t& idx) const { return (_bPostProcess) ? get<1>(vInputPreprocess.at(idx)) : get<1>(vInputStandard.at(idx)); }
+	inline uint32_t getRangeEnd(const size_t& idx) const { return (_bPostProcess) ? get<2>(vInputPreprocess.at(idx)) : get<2>(vInputStandard.at(idx)); }
+	inline uint32_t getReadID(const size_t& idx) const { return (_bPostProcess) ? get<3>(vInputPreprocess.at(idx)) : get<3>(vInputStandard.at(idx)); }
+	inline uint32_t getPosition(const size_t& idx) const { return get<4>(vInputPreprocess.at(idx)); }
+	inline uint8_t getFrame(const size_t& idx) const { return get<5>(vInputPreprocess.at(idx)) >> 5; }
+	inline uint8_t getLength(const size_t& idx) const { return get<5>(vInputPreprocess.at(idx)) & 31; }
+
+	inline void reserve(const size_t& size) {
+		if (_bPostProcess) vInputPreprocess.reserve(size);  else vInputStandard.reserve(size);
+	}
+	inline void resize(const size_t& size) {
+		if (_bPostProcess) vInputPreprocess.resize(size);  else vInputStandard.resize(size);
+	}
+	inline void shrink_to_fit() {
+		if (_bPostProcess) vInputPreprocess.shrink_to_fit();  else vInputStandard.shrink_to_fit();
+	}
+	inline void clear() {
+		if (_bPostProcess) vInputPreprocess.clear();  else vInputStandard.clear();
+	}
+	inline size_t size() const {
+		return (_bPostProcess) ? vInputPreprocess.size() : vInputStandard.size();
+	}
+	inline vector<tuple<uint64_t, intType, uint32_t, uint32_t, uint32_t, uint8_t>>* getPPVec() {
+		return &vInputPreprocess;
+	}
+	inline vector<tuple<uint64_t, intType, uint32_t, uint32_t>>* getStaVec() {
+		return &vInputStandard;
+	}
+	inline vector<tuple<uint64_t, intType, uint32_t, uint32_t, uint32_t, uint8_t>>* getPPVec() const {
+		return &vInputPreprocess;
+	}
+	inline vector<tuple<uint64_t, intType, uint32_t, uint32_t>>* getStaVec() const {
+		return &vInputStandard;
+	}
+	inline size_t sizeOf() {
+		return (_bPostProcess) ? sizeof(tuple<uint64_t, intType, uint32_t, uint32_t, uint32_t, uint8_t>) : sizeof(tuple<uint64_t, intType, uint32_t, uint32_t>);
+	}
+};

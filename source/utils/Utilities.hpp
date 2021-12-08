@@ -75,10 +75,16 @@ namespace Utilities {
 
 	///////////////////////////////////////////////////////
 	inline string lstrip(const string& sIn) {
+		if (sIn.empty()) {
+			return "";
+		}
 		string sOut = sIn;
 		auto it = sOut.begin();
 		while (*it == ' ' || *it == '\n' || *it == '\r' || *it == '\t') {
 			it = sOut.erase(it);
+			if (sOut.empty()) {
+				break;
+			}
 		}
 		return sOut;
 	}
@@ -977,6 +983,14 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	template<typename T>
+	inline void checkOverFlow(const T& val, const string& file, const int32_t& line) {
+		if (val == numeric_limits<T>::max()) {
+			cerr << "WARNING: Integer overflow in " << file << " at " << line << endl;
+		}
+	}
+
+	///////////////////////////////////////////////////////
 	template<typename T1, typename T2>
 	inline void mapSetValue(unordered_map<T1, T2>& map, const T1& search, const T2& element) {
 		try {
@@ -1252,6 +1266,10 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "IGotSpace") {
 					GlobalInputParameters.bIGotSpace = (parameterPair[1] == "true") ? true : false;
+					continue;
+				}
+				if (parameterPair[0] == "Coherence") {
+					GlobalInputParameters.bPostProcess = (parameterPair[1] == "true") ? true : false;
 					continue;
 				}
 				//if (parameterPair[0] == "Mode") {

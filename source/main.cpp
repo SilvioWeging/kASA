@@ -568,6 +568,9 @@ int main(int argc, char* argv[]) {
 				else if (sParameter == "--igotspace") {
 					GlobalInputParameters.bIGotSpace = true;
 				}
+				else if (sParameter == "--coherence") {
+					GlobalInputParameters.bPostProcess = true;
+				}
 				else {
 					throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 				}

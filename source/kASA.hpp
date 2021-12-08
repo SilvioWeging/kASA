@@ -59,6 +59,7 @@ namespace kASA {
 		bool _bSixFrames = false;
 		bool _bProtein = false;
 		bool _bSpaced = false;
+		int8_t _iNumOfFrames = 3;
 		
 		// Functions
 
@@ -291,6 +292,8 @@ namespace kASA {
 			_iMinK = (cParams.iLowerK < _iLowestK) ? _iLowestK : _iMinK;
 			_iNumOfK = _iMaxK - _iMinK + 1;
 
+			_iNumOfFrames = (cParams.bOnlyOneFrame) ? 1 : ((cParams.bThreeFrames) ? 3 : ((cParams.bSixFrames) ? 6 : 3));
+
 			_sMaxKBlank = string(_iHighestK, ' ');
 
 			_aOfK.reset(new int32_t[_iNumOfK]);
@@ -321,6 +324,7 @@ namespace kASA {
 			_bSixFrames = obj._bSixFrames;
 			_bProtein = obj._bProtein;
 			_bSpaced = obj._bSpaced;
+			_iNumOfFrames = obj._iNumOfFrames;
 		}
 
 
