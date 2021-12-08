@@ -984,7 +984,7 @@ namespace kASA {
 						});
 				}
 #else					
-#if __has_include(<execution>)
+#if __has_include(<execution>) && !defined(__llvm__)
 
 
 			std::sort(std::execution::par_unseq, vInputVec.getStaVec()->begin(), vInputVec.getStaVec()->end(), [](const typename InputType<intType>::staTuple& p1, const typename InputType<intType>::staTuple& p2) {
@@ -1172,7 +1172,7 @@ namespace kASA {
 						});
 				}
 #else					
-#if __has_include(<execution>)
+#if __has_include(<execution>) && !defined(__llvm__)
 
 
 				std::sort(std::execution::par_unseq, vInputVec.getPPVec()->begin(), vInputVec.getPPVec()->end(), [](const typename InputType<intType>::ppTuple& p1, const typename InputType<intType>::ppTuple& p2) {
@@ -2390,7 +2390,7 @@ namespace kASA {
 # if __GNUC__ && !defined(__llvm__) && defined(_OPENMP)
 			Utilities::parallelQuicksort(vIn.getPPVec()->begin(), vIn.getPPVec()->end(), sortfun, iLocalNumOfThreads);
 #else
-#if __has_include(<execution>)
+#if __has_include(<execution>) && !defined(__llvm__)
 			std::sort(std::execution::par_unseq, vIn.getPPVec()->begin(), vIn.getPPVec()->end(), sortfun);
 #else
 			Utilities::parallelQuicksort(vIn.getPPVec()->begin(), vIn.getPPVec()->end(), sortfun, iLocalNumOfThreads);
