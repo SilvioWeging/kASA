@@ -67,6 +67,8 @@ Identify:
  Filter: "_ _"
  # Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match.
  ErrorThreshold: 0.5
+ # Everything above or equal to this threshold gets filtered out if the error threshold should not suffice
+ CoherenceThreshold: 11.0
  # Gzips the filtered outputs
  Gzip: false
 

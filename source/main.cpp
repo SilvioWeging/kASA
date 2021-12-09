@@ -571,6 +571,9 @@ int main(int argc, char* argv[]) {
 				else if (sParameter == "--coherence") {
 					GlobalInputParameters.bPostProcess = true;
 				}
+				else if (sParameter == "--coherenceThreshold") {
+					GlobalInputParameters.fCoherenceThreshold = stof(Utilities::removeSpaceAndEndline(vParameters[++i]));
+				}
 				else {
 					throw runtime_error("Some unknown parameter has been inserted, please check your command line.");
 				}

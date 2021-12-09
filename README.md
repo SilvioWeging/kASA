@@ -294,6 +294,7 @@ The first line of the profile is always "not identified" followed by zeroes for 
 * `--coverage`: Appends total counts and coverage percentage to the profile. If for example a file contained a whole genome of a taxon, the count should be equal to the number of k-mers in the index and the coverage be 100%. Therefore: the higher the coverage, the more likely it is for that taxon to truly be inside the sequenced data. Input must be processed in one go and not in chunks so please provide enough RAM. Also, `--six` must be chosen as number of frames if the index was build with six frames. Default: off.
 * `--filter <out for clean fastq/as> <out for contaminated fastq/as>`: Filters out matched reads and puts out two types of files, clean and contaminated fastq/fasta (depending on the input). File endings are generated automatically so you only need to specify the prefix, e.g. /some/path/clean. If one of the outputs is not desired, replace it with _. Supports paired-end input and output. Default: no filtering.
 * `--errorThreshold <float>`: Everything below this error threshold gets filtered out. Error means 1: no match, 0: perfect match. Default: 0.5.
+* `--coherenceThreshold <float>`: Should the error threshold fail, everything with a coherence above or equal to this value is still filtered out. Default: 11.0.
 * `--gzip`: Gzips the filtered outputs. Default: off.
 * `--coherence`: Prints out the coherence score. Please refer to the wiki for more information. Default: off.
 ##### Example call

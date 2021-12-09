@@ -1414,6 +1414,13 @@ namespace kASA {
 							if ((bestScore - double(maxValue)) / bestScore < GlobalInputParameters.fErrorThreshold) {
 								vReadIDsToBeFiltered.push_back(iRealReadIDStart + readIdx);
 							}
+							else {
+								if (GlobalInputParameters.bPostProcess) {
+									if (vCoherence[readIdx] >= GlobalInputParameters.fCoherenceThreshold) {
+										vReadIDsToBeFiltered.push_back(iRealReadIDStart + readIdx);
+									}
+								}
+							}
 						}
 
 						string sOut = "", sOut2 = "", sOut3 = "", sOut4 = "";
@@ -1795,6 +1802,13 @@ namespace kASA {
 						if ((bestScore - double(maxValue)) / bestScore < GlobalInputParameters.fErrorThreshold) {
 							vReadIDsToBeFiltered.push_back(iReadNum);
 						}
+						else {
+							if (GlobalInputParameters.bPostProcess) {
+								if (vCoherence >= GlobalInputParameters.fCoherenceThreshold) {
+									vReadIDsToBeFiltered.push_back(iReadNum);
+								}
+							}
+						}
 					}
 
 					debugBarrier
@@ -2067,7 +2081,7 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Calculate relative score and filter out the ones crossing the threshold
-		inline void scoringFuncWithFilterNoOutput(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, vector<uint64_t>& vReadIDsToBeFiltered) {
+		inline void scoringFuncWithFilterNoOutput(const Utilities::Non_contiguousArray& vReadIDtoGenID, const uint64_t& iStart, const uint64_t& iEnd, const uint64_t& iRealReadIDStart, list<pair<string, readIDType>>& vReadNameAndLength, const uint64_t& iNumberOfSpecies, vector<uint64_t>& vReadIDsToBeFiltered, const vector<float>& vCoherence) {
 			debugBarrier
 			for (uint64_t readIdx = iStart; readIdx < iEnd; ++readIdx) {
 				auto currentReadLengthAndName = vReadNameAndLength.front();
@@ -2081,6 +2095,14 @@ namespace kASA {
 							vReadIDsToBeFiltered.push_back(iRealReadIDStart + readIdx);
 							break; // it suffices, that one species was hit "good enough"
 						}
+						else {
+							if (GlobalInputParameters.bPostProcess) {
+								if (vCoherence[readIdx] >= GlobalInputParameters.fCoherenceThreshold) {
+									vReadIDsToBeFiltered.push_back(iRealReadIDStart + readIdx);
+									break;
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2089,7 +2111,7 @@ namespace kASA {
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Calculate error and filter out the ones below the threshold
-		inline void scoringFuncWithFilterNoOutputOne(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, vector<uint64_t>& vReadIDsToBeFiltered) {
+		inline void scoringFuncWithFilterNoOutputOne(vector<tuple<readIDType, float, double>>&& vTempResultVec, const uint64_t& iReadNum, const pair<string, uint32_t>& vReadNameAndLength, vector<uint64_t>& vReadIDsToBeFiltered, const float& vCoherence) {
 			debugBarrier
 			float bestScore = calculateBestScore(vReadNameAndLength.second);
 			
@@ -2098,6 +2120,13 @@ namespace kASA {
 				if ((bestScore - double(get<1>(*it))) / bestScore < GlobalInputParameters.fErrorThreshold) {
 					vReadIDsToBeFiltered.push_back(iReadNum);
 					break;
+				}
+				else {
+					if (GlobalInputParameters.bPostProcess) {
+						if (vCoherence >= GlobalInputParameters.fCoherenceThreshold) {
+							vReadIDsToBeFiltered.push_back(iReadNum);
+						}
+					}
 				}
 			}
 			debugBarrier
@@ -2150,7 +2179,8 @@ namespace kASA {
 				}
 				else {
 					if (GlobalInputParameters.bFilter) {
-						scoringFuncWithFilterNoOutputOne(move(vSavedScores), (iReadIDStart++) + iNumOfReadsSum, vReadNameAndLength.front(), vReadIDsToBeFiltered);
+						scoringFuncWithFilterNoOutputOne(move(vSavedScores), iReadIDStart + iNumOfReadsSum, vReadNameAndLength.front(), vReadIDsToBeFiltered, vCoherence[iReadIDStart]);
+						iReadIDStart++;
 					}
 					else {
 						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw runtime_error("Cannot write to identification output!");
@@ -2192,7 +2222,7 @@ namespace kASA {
 				}
 				else {
 					if (GlobalInputParameters.bFilter) {
-						scoringFuncWithFilterNoOutput(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, vReadIDsToBeFiltered);
+						scoringFuncWithFilterNoOutput(vReadIDtoTaxID, iReadIDStart, iNumOfReads - 1, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, vReadIDsToBeFiltered, vCoherence);
 					}
 					else {
 						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw runtime_error("Cannot write to identification output!");
@@ -2210,7 +2240,7 @@ namespace kASA {
 				}
 				else {
 					if (GlobalInputParameters.bFilter) {
-						scoringFuncWithFilterNoOutput(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, vReadIDsToBeFiltered);
+						scoringFuncWithFilterNoOutput(vReadIDtoTaxID, iReadIDStart, iNumOfReads, iNumOfReadsSum, vReadNameAndLength, iNumberOfSpecies, vReadIDsToBeFiltered, vCoherence);
 					}
 					else {
 						cerr << "ERROR: in: " << __PRETTY_FUNCTION__ << endl; throw runtime_error("Cannot write to identification output!");

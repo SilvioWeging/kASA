@@ -156,7 +156,7 @@ struct InputParameters {
 	bool bSpaced = false, bVerbose = false, bTranslated = false, bRAM = false, bUnique = false, bUnfunny = false, bSixFrames = false, bThreeFrames = false, bTaxIdsAsStrings = false, bCustomMemorySet = false, bVisualize = false, bHighKSetByUser = false, bOnlyOneFrame = false, bContinue = false, bCoverage = false, bFilter = false, bGzipOut = false, bIGotSpace = false, bPostProcess = false;
 	int32_t iNumOfThreads = 1, iHighestK = 12, iHigherK = 12, iLowerK = 7, iNumOfCall = 0, iNumOfBeasts = 3, iNumOfMask = 0;
 	int64_t iMemorySizeAvail = 0;
-	float fPercentageOfThrowAway = 0.f, threshold = 0.f, fErrorThreshold = 0.5f;
+	float fPercentageOfThrowAway = 0.f, threshold = 0.f, fErrorThreshold = 0.5f, fCoherenceThreshold = 11.0;
 	uint8_t iTrieDepth = 6, outputFormat = 1, shrinkStrategy = 1;//, iPrefixCheckMode = 0;
 } GlobalInputParameters;
 

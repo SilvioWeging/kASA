@@ -1272,6 +1272,10 @@ namespace Utilities {
 					GlobalInputParameters.bPostProcess = (parameterPair[1] == "true") ? true : false;
 					continue;
 				}
+				if (parameterPair[0] == "CoherenceThreshold") {
+					GlobalInputParameters.fCoherenceThreshold = stof(parameterPair[1]);
+					continue;
+				}
 				//if (parameterPair[0] == "Mode") {
 				//	GlobalInputParameters.cMode = parameterPair[1];
 				//	continue;
