@@ -52,14 +52,23 @@ namespace kASA {
 			}
 			taxIDs[iCounter]++;
 
-			double percentage = 0.0;
-			for (uint32_t i = 1; i < iNumOfTaxIDs; ++i) {
-				if (percentage >= 0.99) {
-					return i - 1;
-				}
-				percentage += static_cast<double>(taxIDs[i]) / iUniquekMerCounter;
+			if (_bVerbose) {
+				cout << "Number of unique k-mers: " << iUniquekMerCounter << endl;
+				cout << "Histogram\nFrequency Counts Percentage" << endl;
 			}
-			return 4; // Some magic number
+
+			double percentage = 0.0;
+			uint32_t iIdxOf99 = 0;
+			for (uint32_t i = 1; i < iNumOfTaxIDs + 1; ++i) {
+				if (_bVerbose && taxIDs[i] != 0) {
+					cout << i << " " << taxIDs[i] << " " << 100.0*static_cast<double>(taxIDs[i]) * i / vLib->size() << endl;
+				}
+				percentage += static_cast<double>(taxIDs[i]) * i / vLib->size();
+				if (percentage >= 0.99 && iIdxOf99 == 0) {
+					iIdxOf99 = i;
+				}
+			}
+			return iIdxOf99;
 		}
 
 	private:

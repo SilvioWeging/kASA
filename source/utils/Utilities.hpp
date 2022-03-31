@@ -1021,6 +1021,37 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	inline int8_t getStartAndStopCodon(const string& sInputDNA) {
+		vector<int32_t> posStart(sInputDNA.length() / 3, -1), posStop(sInputDNA.length() / 3 ,-1);
+		uint32_t j_start = 0, j_stop = 0;
+		bool bStart = false;
+		for (int32_t i = 0; i < static_cast<int32_t>(sInputDNA.length()) - 2; ++i) {
+			if ((sInputDNA[i] == 'A' && sInputDNA[i + 1] == 'T' && sInputDNA[i + 2] == 'G') && bStart == false) {
+				posStart[j_start] = i;
+				j_start++;
+				bStart = true;
+			}
+			if (((sInputDNA[i] == 'T' && sInputDNA[i + 1] == 'A' && sInputDNA[i + 2] == 'G') 
+				|| (sInputDNA[i] == 'T' && sInputDNA[i + 1] == 'A' && sInputDNA[i + 2] == 'A') 
+				|| (sInputDNA[i] == 'T' && sInputDNA[i + 1] == 'G' && sInputDNA[i + 2] == 'A')) 
+				&& bStart == true && posStart[j_start - 1] % 3 == i % 3 && (i - posStart[j_start - 1]) > 3 && (i - posStart[j_start - 1]) % 3 == 0) {
+				posStop[j_stop] = i;
+				j_stop++;
+				bStart = false;
+			}
+		}
+
+		for (uint32_t i = 0; i < j_stop; ++i) {
+			if (posStart[i] < posStop[i] && posStart[i] % 3 == posStop[i] % 3 && (posStop[i] - posStart[i]) > 3 && (posStop[i] - posStart[i]) % 3 == 0) {
+				cout << posStart[i] << " " << posStop[i] << " " << posStart[i] % 3 << " " << (posStop[i] - posStart[i]) << endl; // most likely frame
+			}
+		}
+
+		return -1;
+	}
+
+
+	///////////////////////////////////////////////////////
 	// Shitty conversion function because using real json is too much of a hassle in C++
 	// Maybe, someday, I'll use https://github.com/nlohmann/json
 	inline void readParametersFromYaml(const string& sYamlFile) {

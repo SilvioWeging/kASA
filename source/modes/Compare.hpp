@@ -2295,7 +2295,7 @@ namespace kASA {
 			}
 
 			// if no contaminants were found, copy the content
-			if (vReadIDsToBeFiltered.empty()) {
+			if (vReadIDsToBeFiltered.empty() && GlobalInputParameters.sFilteredCleanOut != "_") {
 				*fOutClean_1 << inFile1->rdbuf();
 				if (bIsPairedEnd) {
 					*fOutClean_2 << inFile2->rdbuf();
@@ -2332,15 +2332,19 @@ namespace kASA {
 
 					// write to respective output
 					if (bCleanOrContaminated) {
-						(*fOutClean_1) << sDummyString_1 << endl;
-						if (bIsPairedEnd) {
-							(*fOutClean_2) << sDummyString_2 << endl;
+						if (GlobalInputParameters.sFilteredCleanOut != "_") {
+							(*fOutClean_1) << sDummyString_1 << endl;
+							if (bIsPairedEnd) {
+								(*fOutClean_2) << sDummyString_2 << endl;
+							}
 						}
 					}
 					else {
-						(*fOutContaminated_1) << sDummyString_1 << endl;
-						if (bIsPairedEnd) {
-							(*fOutContaminated_2) << sDummyString_2 << endl;
+						if (GlobalInputParameters.sFilteredContaminantsOut != "_") {
+							(*fOutContaminated_1) << sDummyString_1 << endl;
+							if (bIsPairedEnd) {
+								(*fOutContaminated_2) << sDummyString_2 << endl;
+							}
 						}
 					}
 				}
@@ -2378,24 +2382,28 @@ namespace kASA {
 
 					// write to respective output
 					if (bCleanOrContaminated) {
-						for (int i = 0; i < 4; ++i) {
-							(*fOutClean_1) << fastqContent[i] << endl;
-						}
-
-						if (bIsPairedEnd) {
+						if (GlobalInputParameters.sFilteredCleanOut != "_") {
 							for (int i = 0; i < 4; ++i) {
-								(*fOutClean_2) << fastqContent2[i] << endl;
+								(*fOutClean_1) << fastqContent[i] << endl;
+							}
+
+							if (bIsPairedEnd) {
+								for (int i = 0; i < 4; ++i) {
+									(*fOutClean_2) << fastqContent2[i] << endl;
+								}
 							}
 						}
 					}
 					else {
-						for (int i = 0; i < 4; ++i) {
-							(*fOutContaminated_1) << fastqContent[i] << endl;
-						}
-
-						if (bIsPairedEnd) {
+						if (GlobalInputParameters.sFilteredContaminantsOut != "_") {
 							for (int i = 0; i < 4; ++i) {
-								(*fOutContaminated_2) << fastqContent2[i] << endl;
+								(*fOutContaminated_1) << fastqContent[i] << endl;
+							}
+
+							if (bIsPairedEnd) {
+								for (int i = 0; i < 4; ++i) {
+									(*fOutContaminated_2) << fastqContent2[i] << endl;
+								}
 							}
 						}
 					}
