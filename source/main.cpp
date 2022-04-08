@@ -399,7 +399,7 @@ int main(int argc, char* argv[]) {
 					GlobalInputParameters.iNumOfCall = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
 				}
 				else if (sParameter == "-n" || sParameter == "--threads") {
-					GlobalInputParameters.iNumOfThreads = abs(stoi(Utilities::removeSpaceAndEndline(vParameters[++i])));
+					GlobalInputParameters.iNumOfThreads = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));
 					if (GlobalInputParameters.iNumOfThreads == -1) {
 						GlobalInputParameters.iNumOfThreads = thread::hardware_concurrency();
 					}
