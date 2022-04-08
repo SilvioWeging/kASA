@@ -400,6 +400,9 @@ int main(int argc, char* argv[]) {
 				}
 				else if (sParameter == "-n" || sParameter == "--threads") {
 					GlobalInputParameters.iNumOfThreads = abs(stoi(Utilities::removeSpaceAndEndline(vParameters[++i])));
+					if (GlobalInputParameters.iNumOfThreads == -1) {
+						GlobalInputParameters.iNumOfThreads = thread::hardware_concurrency();
+					}
 				}
 				else if (sParameter == "-k") {
 					GlobalInputParameters.iHigherK = stoi(Utilities::removeSpaceAndEndline(vParameters[++i]));

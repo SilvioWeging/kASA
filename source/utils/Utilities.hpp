@@ -1102,6 +1102,9 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "NumberOfThreads") {
 					GlobalInputParameters.iNumOfThreads = stoi(parameterPair[1]);
+					if (GlobalInputParameters.iNumOfThreads == -1) {
+						GlobalInputParameters.iNumOfThreads = thread::hardware_concurrency();
+					}
 					continue;
 				}
 				if (parameterPair[0] == "AvailableRAMinGB") {

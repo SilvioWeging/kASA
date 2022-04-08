@@ -1855,6 +1855,9 @@ namespace kASA {
 						if (sOut3.back() == ';') {
 							sOut3.pop_back();
 						}
+						if (sOut4.back() == ';') {
+							sOut4.pop_back();
+						}
 						if (sOut2.length()) {
 							outStreamer += sOut;
 							outStreamer += "\t";
