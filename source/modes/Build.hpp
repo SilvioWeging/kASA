@@ -384,12 +384,12 @@ namespace kASA {
 					vector<unique_ptr<stxxlFile>> currentFiles(FOPEN_MAX - 1);
 					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
 
-					uint64_t iSumSize = 0;
+					//uint64_t iSumSize = 0;
 					for (int32_t i = 0; i < static_cast<int32_t>(iNumOfVecsThatCanBeOpened) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
 						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDWR));
 						currentVecs[i].reset(new vecType(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
 						vCurrentIterators.push(make_pair(currentVecs[i]->cend() - 1, i));
-						iSumSize += vVectorSizes[iCurrentIdx];
+						//iSumSize += vVectorSizes[iCurrentIdx];
 						remainingFiles--;
 					}
 
@@ -505,12 +505,12 @@ namespace kASA {
 					vector<unique_ptr<stxxlFile>> currentFiles(FOPEN_MAX - 1);
 					vector<unique_ptr<vecType>> currentVecs(FOPEN_MAX - 1);
 
-					uint64_t iSumSize = 0;
+					//uint64_t iSumSize = 0;
 					for (int32_t i = 0; i < static_cast<int32_t>(iNumOfVecsThatCanBeOpened) && iCurrentIdx < maxNrOfFiles; ++iCurrentIdx, ++i) {
 						currentFiles[i].reset(new stxxlFile(_sTempPath + to_string(iCurrentIdx), stxxl::file::RDWR));
 						currentVecs[i].reset(new vecType(currentFiles[i].get(), vVectorSizes[iCurrentIdx]));
 						vCurrentIterators.push(make_pair(currentVecs[i]->begin(), i));
-						iSumSize += vVectorSizes[iCurrentIdx];
+						//iSumSize += vVectorSizes[iCurrentIdx];
 						remainingFiles--;
 					}
 

@@ -494,6 +494,164 @@ namespace kASA {
 			return compareTwoKmers(inKmer, idxKmer, 0);
 		}
 
+		inline void scoreMatchNonAVX(Utilities::Non_contiguousArray& vReadIDtoGenID, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<uint64_t[]>& vCountTotal, function<void(unique_ptr<uint64_t[]>&, const uint64_t&)>& countTotal, const Utilities::sBitArray& taxIDs, const uint64_t& numOfEntries, const uint64_t& iPartialTempIndex, const vector<uint64_t>& vReadIDs, const uint64_t& numOfHits, const double& counts, const float& score) {
+			for (auto it = taxIDs.begin(); it != taxIDs.end(); ++it) {
+				const auto& tempIndex = iPartialTempIndex + (*it);
+
+				vCount[tempIndex] += counts;
+				
+				countTotal(vCountTotal, tempIndex);
+
+				if (numOfEntries == 1) {
+					vCountUnique[tempIndex] += numOfHits;
+				}
+
+				for (auto readIDIt = vReadIDs.cbegin(); readIDIt != vReadIDs.cbegin() + numOfHits; readIDIt++) {
+					vReadIDtoGenID[*readIDIt][*it] += score;
+				}
+			}
+		}
+
+		inline void scoreMatchAVX(Utilities::Non_contiguousArray& vReadIDtoGenID, float* tmpStore, array<pair<uint64_t, uint64_t>,8>& aOfIndices, double* tmpStore2, std::array<uint64_t,4>& aOfTempIdx, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountTotal, function<void(unique_ptr<uint64_t[]>&, const uint64_t&)>& countTotal, const Utilities::sBitArray& taxIDs, const uint64_t& iPartialTempIndex, const vector<uint64_t>& vReadIDs, const uint64_t& numOfHits, const double& counts, const float& score) {
+			__m256 avx_score = _mm256_broadcast_ss(&score);
+			__m256d avx_counts = _mm256_broadcast_sd(&counts);
+			uint32_t iBlockCount = 0, iIdxCount = 0;
+			for (auto it = taxIDs.begin(); it != taxIDs.end(); ++it) {
+				const auto& tempIndex = iPartialTempIndex + (*it);
+				aOfTempIdx[iIdxCount] = tempIndex;
+				tmpStore2[iIdxCount] = vCount[tempIndex];
+				iIdxCount++;
+
+				if (iIdxCount == 4) {
+					//vCount[tempIndex] += counts;
+					//__m256d avx_taxIDs = _mm256_setr_pd(vCount[aOfTempIdx[0]], vCount[aOfTempIdx[1]], vCount[aOfTempIdx[2]], vCount[aOfTempIdx[3]]);
+					__m256d avx_taxIDs = _mm256_load_pd(tmpStore2);
+					__m256d avx_result = _mm256_add_pd(avx_taxIDs, avx_counts);
+					_mm256_store_pd(tmpStore2, avx_result);
+
+					for (uint32_t iResCount = 0; iResCount < 4; iResCount++) {
+						vCount[aOfTempIdx[iResCount]] = tmpStore2[iResCount];
+					}
+					iIdxCount = 0;
+				}
+
+				countTotal(vCountTotal, tempIndex);
+
+				for (auto readIDIt = vReadIDs.cbegin(); iBlockCount < 8 && readIDIt != vReadIDs.cbegin() + numOfHits; iBlockCount++, readIDIt++) {
+					aOfIndices[iBlockCount].first = *readIDIt;
+					aOfIndices[iBlockCount].second = *it;
+					tmpStore[iBlockCount] = vReadIDtoGenID[*readIDIt][*it];
+				}
+				if (iBlockCount == 8) {
+					//__m256 avx_readIDs = _mm256_setr_ps(vReadIDtoGenID[aOfIndices[0].first][aOfIndices[0].second], vReadIDtoGenID[aOfIndices[1].first][aOfIndices[1].second], vReadIDtoGenID[aOfIndices[2].first][aOfIndices[2].second], vReadIDtoGenID[aOfIndices[3].first][aOfIndices[3].second], vReadIDtoGenID[aOfIndices[4].first][aOfIndices[4].second], vReadIDtoGenID[aOfIndices[5].first][aOfIndices[5].second], vReadIDtoGenID[aOfIndices[6].first][aOfIndices[6].second], vReadIDtoGenID[aOfIndices[7].first][aOfIndices[7].second]);
+					__m256 avx_readIDs = _mm256_load_ps(tmpStore);
+					__m256 avx_result = _mm256_add_ps(avx_readIDs, avx_score);
+					_mm256_store_ps(tmpStore, avx_result);
+
+					for (uint32_t iResCount = 0; iResCount < 8; iResCount++) {
+						vReadIDtoGenID[aOfIndices[iResCount].first][aOfIndices[iResCount].second] = tmpStore[iResCount];
+					}
+
+					iBlockCount = 0;
+				}
+			}
+
+			if (iIdxCount > 0) {
+				__m256d avx_taxIDs = _mm256_load_pd(tmpStore2);
+				__m256d avx_result = _mm256_add_pd(avx_taxIDs, avx_counts);
+				_mm256_store_pd(tmpStore2, avx_result);
+
+				for (uint32_t iResCount = 0; iResCount < iIdxCount; iResCount++) {
+					vCount[aOfTempIdx[iResCount]] = tmpStore2[iResCount];
+				}
+			}
+
+			if (iBlockCount > 0) {
+				__m256 avx_readIDs = _mm256_load_ps(tmpStore);
+				__m256 avx_result = _mm256_add_ps(avx_readIDs, avx_score);
+				_mm256_store_ps(tmpStore, avx_result);
+
+				for (uint32_t iResCount = 0; iResCount < iBlockCount; iResCount++) {
+					vReadIDtoGenID[aOfIndices[iResCount].first][aOfIndices[iResCount].second] = tmpStore[iResCount];
+				}
+			}
+		}
+
+		inline void scoreMatchNonAVX_countsOnly(unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<uint64_t[]>& vCountTotal, function<void(unique_ptr<uint64_t[]>&, const uint64_t&)>& countTotal, const Utilities::sBitArray& taxIDs, const uint64_t& numOfEntries, const uint64_t& numOfHits, const uint64_t& iPartialTempIndex, const double& counts) {
+			for (auto it = taxIDs.begin(); it != taxIDs.end(); ++it) {
+				const auto& tempIndex = iPartialTempIndex + (*it);
+
+				vCount[tempIndex] += counts;
+				
+				countTotal(vCountTotal,tempIndex);
+				
+				if (numOfEntries == 1) {
+					vCountUnique[tempIndex] += numOfHits;
+				}
+			}
+		}
+
+		inline void scoreMatchAVX_countsOnly(double* tmpStore2, array<uint64_t, 4>& aOfTempIdx, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountTotal, function<void(unique_ptr<uint64_t[]>&, const uint64_t&)>& countTotal, const Utilities::sBitArray& taxIDs, const uint64_t& iPartialTempIndex, const double& counts) {
+			__m256d avx_counts = _mm256_broadcast_sd(&counts);
+			uint32_t iIdxCount = 0;
+			for (auto it = taxIDs.begin(); it != taxIDs.end(); ++it) {
+				const auto& tempIndex = iPartialTempIndex + (*it);
+				aOfTempIdx[iIdxCount] = tempIndex;
+				iIdxCount++;
+
+				if (iIdxCount == 4) {
+					//vCount[tempIndex] += counts;
+					__m256d avx_taxIDs = _mm256_setr_pd(vCount[aOfTempIdx[0]], vCount[aOfTempIdx[1]], vCount[aOfTempIdx[2]], vCount[aOfTempIdx[3]]);
+					__m256d avx_result = _mm256_add_pd(avx_taxIDs, avx_counts);
+					_mm256_store_pd(tmpStore2, avx_result);
+
+					for (uint32_t iResCount = 0; iResCount < 4; iResCount++) {
+						vCount[aOfTempIdx[iResCount]] = tmpStore2[iResCount];
+					}
+					iIdxCount = 0;
+				}
+
+				countTotal(vCountTotal, tempIndex);
+			}
+
+			if (iIdxCount > 0) {
+				__m256d avx_taxIDs = _mm256_setr_pd(vCount[aOfTempIdx[0]], vCount[aOfTempIdx[1]], vCount[aOfTempIdx[2]], vCount[aOfTempIdx[3]]);
+				__m256d avx_result = _mm256_add_pd(avx_taxIDs, avx_counts);
+				_mm256_store_pd(tmpStore2, avx_result);
+
+				for (uint32_t iResCount = 0; iResCount < iIdxCount; iResCount++) {
+					vCount[aOfTempIdx[iResCount]] = tmpStore2[iResCount];
+				}
+			}
+		}
+
+
+		inline void scoreMatchForReadIDsAndTaxIDs(Utilities::Non_contiguousArray& vReadIDtoGenID, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<uint64_t[]>& vCountTotal, function<void(unique_ptr<uint64_t[]>&, const uint64_t&)>& countTotal, float* tmpStore, array<pair<uint64_t,uint64_t>,8>& aOfIndices, double* tmpStore2, array<uint64_t, 4>& aOfTempIdx, const Utilities::sBitArray& taxIDs, const uint64_t& numOfEntries, const uint64_t& iPartialTempIndex, const vector<uint64_t>& vReadIDs, const uint64_t& numOfHits, const double& counts, const float& score) {
+			if (vReadIDtoGenID.size()) {
+#if defined(__AVX__) || defined(_INCLUDED_IMM)
+				if (numOfEntries > 3) {
+					scoreMatchAVX(vReadIDtoGenID, tmpStore, aOfIndices, tmpStore2, aOfTempIdx, vCount, vCountTotal, countTotal, taxIDs, iPartialTempIndex, vReadIDs, numOfHits, counts, score);
+				}
+				else {
+					scoreMatchNonAVX(vReadIDtoGenID, vCount, vCountUnique, vCountTotal, countTotal, taxIDs, numOfEntries, iPartialTempIndex, vReadIDs, numOfHits, counts, score);
+				}
+#else
+				scoreMatchNonAVX(vReadIDtoGenID, vCount, vCountUnique, vCountTotal, countTotal, taxIDs, numOfEntries, iPartialTempIndex, vReadIDs, numOfHits, counts, score);
+#endif // __AVX__
+			}
+			else {
+#if defined(__AVX__) || defined(_INCLUDED_IMM)
+				if (numOfEntries > 3) {
+					scoreMatchAVX_countsOnly(tmpStore2, aOfTempIdx, vCount, vCountTotal, countTotal, taxIDs, iPartialTempIndex, counts);
+				}
+				else {
+					scoreMatchNonAVX_countsOnly(vCount, vCountUnique, vCountTotal, countTotal, taxIDs, numOfEntries, numOfHits, iPartialTempIndex, counts);
+				}
+#else
+				scoreMatchNonAVX_countsOnly(vCount, vCountUnique, vCountTotal, countTotal, taxIDs, numOfEntries, numOfHits, iPartialTempIndex, counts);
+#endif // __AVX__
+			}
+		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Compare as many as #Number-of-processors vectors with an index lying on a HDD/SSD and note all similarities for any k. 
@@ -510,9 +668,15 @@ namespace kASA {
 				function<void(vector<uint64_t>&, uint64_t&, const uint64_t&)> addToMatchedReadID = [](vector<uint64_t>&, uint64_t& position, const uint64_t&) {
 					position++;
 				};
+				function<void(unique_ptr<uint64_t[]>&, const uint64_t&)> countTotal = [](unique_ptr<uint64_t[]>& vCountTotal, const uint64_t& idx) { vCountTotal[idx] += 1; };
+				if (!this->bCoverage) {
+					countTotal = [](unique_ptr<uint64_t[]>&, const uint64_t&) {};
+				}
 
-				function<void(const uint64_t&, const float&, const uint64_t&, const std::vector<uint64_t>&)> linkReadIDToTaxID = [](const uint64_t&, const float&, const uint64_t&, const vector<uint64_t>&) {};
-
+				alignas(32) float tmpStore[8] = { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
+				alignas(64) double tmpStore2[4] = { 0.f, 0.f, 0.f, 0.f};
+				array<pair<uint64_t, uint64_t>,8> aOfIndices = { make_pair(0ull,0ull), make_pair(0ull,0ull), make_pair(0ull,0ull), make_pair(0ull,0ull), make_pair(0ull,0ull), make_pair(0ull,0ull), make_pair(0ull,0ull), make_pair(0ull,0ull) };
+				array<uint64_t, 4> aOfTempIdx = {0ull, 0ull, 0ull, 0ull};
 				/////////////////////////////////////// Spaced try
 				function<uint8_t(const uint64_t&, const uint64_t&, const int32_t&)> compare;
 				if (Base::_bSpaced) {
@@ -522,6 +686,15 @@ namespace kASA {
 					compare = bind(&Compare::compareTwoKmers, this, placeholders::_1, placeholders::_2, 0);
 				}
 				///////////////////////////////////////
+
+				/////// Statistics
+//#define STATISTICS
+#ifdef STATISTICS
+				int64_t iterationVar = 0;
+				vector<double> statsVec_numOfHits(3, 0.0); // lowest, highest, average for numOfHits ...
+				vector<double> statsVec_numOfEntries(3, 0.0); // ... for numOfEntries ...
+				vector<double> statsVec_numOfBoth(3, 0.0); // ... and for both together
+#endif
 
 				// In case read IDs are relevant
 				if (vReadIDtoGenID.size()) {
@@ -535,11 +708,6 @@ namespace kASA {
 						position++;
 					};
 
-					linkReadIDToTaxID = [&vReadIDtoGenID](const uint64_t& taxID, const float& score, const uint64_t& numOfHits, const vector<uint64_t>& vReadIDs) { // TODO This takes time because its n*m with n = #tax ids and m = #read ids
-						for (auto readIDIt = vReadIDs.cbegin(); readIDIt != vReadIDs.cbegin() + numOfHits; readIDIt++) {
-							vReadIDtoGenID[*readIDIt][taxID] += score;
-						}
-					};
 				}
 				debugBarrier
 				unique_ptr<vector<uint64_t>[]> vReadIDs(new vector<uint64_t>[Base::_iNumOfK]);
@@ -730,30 +898,31 @@ namespace kASA {
 										else {
 											debugBarrier
 												// For this k, the kmer is different. Save the gathered information.
-												const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+											const auto& numOfEntries = vMemoryOfTaxIDs[ikLengthCounter].numOfEntries();
+											const auto& numOfHits = vPositions[ikLengthCounter];
 											const uint64_t& iPartialTempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID)+iSpecIDRange * uint64_t(ikLengthCounter);
 											const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLengthCounter];
 											const auto& score = weight * (1.f / numOfEntries);
+											const auto& counts = double(numOfHits) / numOfEntries;
+											
 
-											const auto& numOfHits = vPositions[ikLengthCounter];
+#ifdef STATISTICS
+											statsVec_numOfHits[0] = min(statsVec_numOfHits[0], static_cast<double>(numOfHits));
+											statsVec_numOfHits[1] = max(statsVec_numOfHits[1], static_cast<double>(numOfHits));
+											statsVec_numOfHits[2] = statsVec_numOfHits[2] + (numOfHits - statsVec_numOfHits[2]) / (iterationVar + 1);
 
-											//dAverageLoopCount += numOfEntries * numOfHits;
-											//iNumOfLoops++;
+											statsVec_numOfEntries[0] = min(statsVec_numOfEntries[0], static_cast<double>(numOfEntries));
+											statsVec_numOfEntries[1] = max(statsVec_numOfEntries[1], static_cast<double>(numOfEntries));
+											statsVec_numOfEntries[2] = statsVec_numOfEntries[2] + (numOfEntries - statsVec_numOfEntries[2]) / (iterationVar + 1);
 
-											for (auto it = vMemoryOfTaxIDs[ikLengthCounter].begin(); it != vMemoryOfTaxIDs[ikLengthCounter].end(); ++it) {
-												const auto& tempIndex = iPartialTempIndex + (*it);
+											statsVec_numOfBoth[0] = min(statsVec_numOfBoth[0], static_cast<double>(numOfHits * numOfEntries));
+											statsVec_numOfBoth[1] = max(statsVec_numOfBoth[1], static_cast<double>(numOfHits * numOfEntries));
+											statsVec_numOfBoth[2] = statsVec_numOfBoth[2] + (numOfHits * numOfEntries - statsVec_numOfBoth[2]) / (iterationVar + 1);
 
-												vCount[tempIndex] += double(numOfHits) / numOfEntries;
-												if (this->bCoverage) {
-													vCountTotal[tempIndex] += 1;
-												}
+											iterationVar++;
+#endif
 
-												if (numOfEntries == 1) {
-													vCountUnique[tempIndex] += numOfHits;
-												}
-
-												linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLengthCounter]);
-											}
+											scoreMatchForReadIDsAndTaxIDs(vReadIDtoGenID, vCount, vCountUnique, vCountTotal, countTotal, tmpStore, aOfIndices, tmpStore2, aOfTempIdx, vMemoryOfTaxIDs[ikLengthCounter], numOfEntries, iPartialTempIndex, vReadIDs[ikLengthCounter], numOfHits, counts, score);
 
 											vPositions[ikLengthCounter] = 0;
 											addToMatchedReadID(vReadIDs[ikLengthCounter], vPositions[ikLengthCounter], get<1>(iCurrentkMer));
@@ -848,23 +1017,8 @@ namespace kASA {
 						const uint64_t& iPartialTempIndex = uint64_t(iSpecIDRange) * Base::_iNumOfK * (iThreadID) + uint64_t(iSpecIDRange) * ikLC;
 						const auto& weight = arrWeightingFactors[ikDifferenceTop + ikLC];
 						const auto& score = weight * (1.f / numOfEntries);
-
-						for (auto it = vMemoryOfTaxIDs[ikLC].begin(); it != vMemoryOfTaxIDs[ikLC].end(); ++it) {
-							const auto& tempIndex = iPartialTempIndex + (*it);
-							
-							vCount[tempIndex] += double(numOfHits) / numOfEntries;
-
-							if (this->bCoverage) {
-								vCountTotal[tempIndex] += 1;
-							}
-
-							if (numOfEntries == 1) {
-								vCountUnique[tempIndex] += numOfHits;
-							}
-
-							linkReadIDToTaxID(*it, score, numOfHits, vReadIDs[ikLC]);
-							
-						}
+						const auto& counts = double(numOfHits) / numOfEntries;
+						scoreMatchForReadIDsAndTaxIDs(vReadIDtoGenID, vCount, vCountUnique, vCountTotal, countTotal, tmpStore, aOfIndices, tmpStore2, aOfTempIdx, vMemoryOfTaxIDs[ikLC], numOfEntries, iPartialTempIndex, vReadIDs[ikLC], numOfHits, counts, score);
 					}
 					debugBarrier
 				}
@@ -872,6 +1026,17 @@ namespace kASA {
 					//m_exceptionLock.lock();
 					//cout << "Loops: " << dAverageLoopCount / iNumOfLoops  << " " << dAverageLoopCount << " " << iNumOfLoops << " " << vInEnd - vInStart << endl;
 					//m_exceptionLock.unlock();
+
+#ifdef STATISTICS
+					m_exceptionLock.lock();
+					cout << "STATISTICS:" << endl;
+					cout << "NumOfHits:\n Min: " << statsVec_numOfHits[0] << "\n Max: " << statsVec_numOfHits[1] << "\n Avg: " << statsVec_numOfHits[2] << endl;
+					cout << "NumOfEntries:\n Min: " << statsVec_numOfEntries[0] << "\n Max: " << statsVec_numOfEntries[1] << "\n Avg: " << statsVec_numOfEntries[2] << endl;
+					cout << "NumOfBoth:\n Min: " << statsVec_numOfBoth[0] << "\n Max: " << statsVec_numOfBoth[1] << "\n Avg: " << statsVec_numOfBoth[2] << endl;
+					cout << "Iterations: " << iterationVar << endl;
+					m_exceptionLock.unlock();
+#endif // STATISTICS
+
 			}
 			catch (...) {
 				if (someThingWentWrong == nullptr) {

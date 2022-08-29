@@ -152,11 +152,6 @@ namespace kASA {
 		inline void deleteViaEntropy(const unique_ptr<const vecType>& vLib, unique_ptr<vecType>& vOut, const unordered_map<uint32_t, uint32_t>& mContent, unique_ptr<uint64_t[]>&freqArray) {
 			try {
 				int64_t iCount = 1;
-				uint64_t iHigher6LettersBitmask = 31;
-				for (uint8_t i = 1; i < 6; ++i) {
-					iHigher6LettersBitmask |= 31ULL << (5 * i);
-				}
-				iHigher6LettersBitmask <<= 30;
 
 				auto outIt = vOut->begin();
 

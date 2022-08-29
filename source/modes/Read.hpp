@@ -84,7 +84,7 @@ namespace kASA {
 					}
 				}
 
-				int32_t ikMerCounter = 0;
+				//int32_t ikMerCounter = 0;
 
 				// Frameshifting, so that only one amino acid has to be computed
 				// Compute initial frames
@@ -125,7 +125,7 @@ namespace kASA {
 					iPositionForOut++;
 				}
 
-				ikMerCounter += iNumFrames;
+				//ikMerCounter += iNumFrames;
 
 				if (iMaxRange > 3) {
 
@@ -168,7 +168,7 @@ namespace kASA {
 
 							iPositionForOut++;
 						}
-						ikMerCounter += 3;
+						//ikMerCounter += 3;
 					}
 
 					// compute frames of said tail

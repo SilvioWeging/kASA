@@ -41,7 +41,7 @@
 
 #include "utils/packedPairs.hpp"
 
-//#include <immintrin.h> // AVX
+#include <immintrin.h> // AVX
 
 //#include <omp.h>
 #if _HAS_CXX17

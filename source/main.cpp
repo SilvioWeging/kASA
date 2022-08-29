@@ -370,13 +370,13 @@ int main(int argc, char* argv[]) {
 				else if (sParameter == "--firstIndex") {
 					GlobalInputParameters.firstOldIndex = Utilities::removeSpaceAndEndline(vParameters[++i]);
 					if (!ifstream(GlobalInputParameters.firstOldIndex)) {
-						throw runtime_error("Index file not found");
+						throw runtime_error("First Index file not found");
 					}
 				}
 				else if (sParameter == "--secondIndex") {
 					GlobalInputParameters.secondOldIndex = Utilities::removeSpaceAndEndline(vParameters[++i]);
 					if (!ifstream(GlobalInputParameters.secondOldIndex)) {
-						throw runtime_error("Index file not found");
+						throw runtime_error("Second Index file not found");
 					}
 				}
 				else if (sParameter == "-a" || sParameter == "--alphabet") {
@@ -1290,7 +1290,7 @@ int main(int argc, char* argv[]) {
 			}
 				
 			unique_ptr<WorkerQueue> Q(new WorkerQueue(iUsedThreads));
-			int32_t iLocalThreadIdxStart = 0;
+			//int32_t iLocalThreadIdxStart = 0;
 			for (size_t iFileIdx = 0; iFileIdx < files.size(); ++iFileIdx) {
 				string fileName = "", rttFile = "", csvFile = "";
 
@@ -1318,7 +1318,7 @@ int main(int argc, char* argv[]) {
 				else {
 					Q->pushTask([&, files, rttFile, csvFile, iFileIdx, vThreadsPerFile](const int32_t& iLocalThreads) {	kASAObj128->CompareWithLib_partialSort(files[iFileIdx].first, rttFile, csvFile, iLocalMemoryAvail, GlobalInputParameters.bRAM, GlobalInputParameters.bUnique, GlobalInputParameters.threshold, iLocalThreads); }, vThreadsPerFile[iFileIdx]);
 				}
-				iLocalThreadIdxStart += vThreadsPerFile[iFileIdx];
+				//iLocalThreadIdxStart += vThreadsPerFile[iFileIdx];
 			}
 			debugBarrier
 

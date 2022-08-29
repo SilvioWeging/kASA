@@ -553,6 +553,8 @@ namespace Utilities {
 		vector<unique_ptr<float[]>> _vPointers;
 
 	public:
+		size_t iRows = 0, iCols = 0;
+
 		// we must assume, that cols stays constant
 		inline void generate(const size_t& rows, const size_t& cols) {
 			if (_vPointers.size()) {
@@ -570,6 +572,8 @@ namespace Utilities {
 					memset(_vPointers[i].get(), 0, sizeof(float) * cols);
 				}
 			}
+			this->iRows = rows;
+			this->iCols = cols;
 		}
 
 		inline size_t size() {
@@ -967,6 +971,17 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	inline void showReadIDtoGenIDVec(const Utilities::Non_contiguousArray& vec) {
+		for (uint64_t i = 0; i < vec.iRows; ++i) {
+			for (uint64_t j = 0; j < vec.iCols; ++j) {
+				cout << vec[i][j] << " ";
+			}
+			cout << endl;
+		}
+		cout << endl;
+	}
+
+	///////////////////////////////////////////////////////
 	template<typename T1, typename T2>
 	inline uint64_t calculateSizeInByteOfUnorderedMap(const unordered_map<T1,T2>& map) {
 		uint64_t iSizeInBytes = 0;
@@ -1083,10 +1098,32 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "Index") {
 					GlobalInputParameters.indexFile = parameterPair[1];
+					if (GlobalInputParameters.cMode != "build" && GlobalInputParameters.indexFile != "") {
+						if (!ifstream(GlobalInputParameters.indexFile)) {
+							throw runtime_error("Index file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_info.txt")) {
+							throw runtime_error("Info file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_f.txt") && GlobalInputParameters.cMode == "identify") {
+							throw runtime_error("Frequency file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_trie") && GlobalInputParameters.cMode == "identify") {
+							throw runtime_error("Trie file not found");
+						}
+						if (!ifstream(GlobalInputParameters.indexFile + "_trie.txt") && GlobalInputParameters.cMode == "identify") {
+							throw runtime_error("Trie info file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "ContentFile") {
 					GlobalInputParameters.contentFileIn = parameterPair[1];
+					if (GlobalInputParameters.contentFileIn != "") {
+						if (!ifstream(GlobalInputParameters.contentFileIn) && GlobalInputParameters.cMode != "build" && GlobalInputParameters.cMode != "generateCF" && GlobalInputParameters.cMode != "merge") {
+							throw runtime_error("Content file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "kHigh") {
@@ -1134,14 +1171,29 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "InputFileOrFolder") {
 					GlobalInputParameters.sInput = parameterPair[1];
+					if (GlobalInputParameters.sInput != "") {
+						if (!ifstream(GlobalInputParameters.sInput) && GlobalInputParameters.sInput.back() != '/' && GlobalInputParameters.sInput.back() != '\\') {
+							throw runtime_error("Input file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "PairedEnd-First") {
 					GlobalInputParameters.sPairedEnd1 = parameterPair[1];
+					if (GlobalInputParameters.sPairedEnd1 != "") {
+						if (!ifstream(GlobalInputParameters.sPairedEnd1)) {
+							throw runtime_error("First paired-end file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "PairedEnd-Second") {
 					GlobalInputParameters.sPairedEnd2 = parameterPair[1];
+					if (GlobalInputParameters.sPairedEnd2 != "") {
+						if (!ifstream(GlobalInputParameters.sPairedEnd2)) {
+							throw runtime_error("Second paired-end file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "AlreadyTranslated") {
@@ -1248,6 +1300,11 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "FileWithDeletedTaxa") {
 					GlobalInputParameters.delnodesFile = parameterPair[1];
+					if (GlobalInputParameters.delnodesFile != "") {
+						if (!ifstream(GlobalInputParameters.delnodesFile)) {
+							throw runtime_error("Deleted nodes file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "ShrinkingStrategy") {
@@ -1260,10 +1317,20 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "ContentFile-First") {
 					GlobalInputParameters.contentFile1 = parameterPair[1];
+					if (GlobalInputParameters.contentFile1 != "") {
+						if (!ifstream(GlobalInputParameters.contentFile1)) {
+							throw runtime_error("Content file 1 not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "ContentFile-Second") {
 					GlobalInputParameters.contentFile2 = parameterPair[1];
+					if (GlobalInputParameters.contentFile2 != "") {
+						if (!ifstream(GlobalInputParameters.contentFile2)) {
+							throw runtime_error("Content file 2 not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "ContentFile-Out") {
@@ -1272,10 +1339,20 @@ namespace Utilities {
 				}
 				if (parameterPair[0] == "FirstOldIndex") {
 					GlobalInputParameters.firstOldIndex = parameterPair[1];
+					if (GlobalInputParameters.firstOldIndex != "") {
+						if (!ifstream(GlobalInputParameters.firstOldIndex)) {
+							throw runtime_error("First Index file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "SecondOldIndex") {
 					GlobalInputParameters.secondOldIndex = parameterPair[1];
+					if (GlobalInputParameters.secondOldIndex != "") {
+						if (!ifstream(GlobalInputParameters.secondOldIndex)) {
+							throw runtime_error("Second Index file not found");
+						}
+					}
 					continue;
 				}
 				if (parameterPair[0] == "NewIndex") {
