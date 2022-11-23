@@ -465,6 +465,19 @@ namespace kASA {
 		}
 
 		const vector<string> vMasks{ "1111111011111111111111111", "1111111011011111111111111", "1111111011010111111111111", "1111111011010101111111111", "1111111011010100111111111", "1111111011010100101111111", "1111111011010100101011111", "1111111011010100101011011", "1111111011010100101011001"  }; // 13, 14, 15, 16, 17, 19, 21, 24, 25
+		const intType binarySpacedMask = 0;
+
+		inline void createBinarySpacedMask() {
+			if (Base::_bSpaced) {
+				int32_t shiftVal = 0;
+				for (const auto& elem : this->vMasks[Base::_iWhichMask]) {
+					if (elem == '0') {
+						this->binarySpacedMask |= 31 << (shiftVal*5);
+					}
+					shiftVal++;
+				}
+			}
+		}
 
 		inline uint8_t compareTwoKmers(const intType& inKmer, const intType& idxKmer, const int32_t&) {
 			if (inKmer < idxKmer) {
@@ -484,14 +497,20 @@ namespace kASA {
 
 		inline uint8_t compareTwoKmersSpaced(const intType& inKmer, const intType& idxKmer, const int32_t& k) {
 			
-			if (vMasks[Base::_iWhichMask][k] == '0') {
-				//if (inKmer != idxKmer) {
-					//cout << k << " " << Base::kMerToAminoacid(inKmer, 25) << " " << Base::kMerToAminoacid(idxKmer, 25) << endl;
-				//}
-
-				return 1;
+			if (k == -1) {
+				intType inTemp = inKmer | this->binarySpacedMask, idxTemp = idxKmer | this->binarySpacedMask;
+				return compareTwoKmers(inTemp, idxTemp, 0);
 			}
-			return compareTwoKmers(inKmer, idxKmer, 0);
+			else {
+				if (vMasks[Base::_iWhichMask][k-1] == '0') {
+					//if (inKmer != idxKmer) {
+						//cout << k << " " << Base::kMerToAminoacid(inKmer, 25) << " " << Base::kMerToAminoacid(idxKmer, 25) << endl;
+					//}
+
+					return 1;
+				}
+				return compareTwoKmers(inKmer, idxKmer, 0);
+			}
 		}
 
 		inline void scoreMatchNonAVX(Utilities::Non_contiguousArray& vReadIDtoGenID, unique_ptr<double[]>& vCount, unique_ptr<uint64_t[]>& vCountUnique, unique_ptr<uint64_t[]>& vCountTotal, function<void(unique_ptr<uint64_t[]>&, const uint64_t&)>& countTotal, const Utilities::sBitArray& taxIDs, const uint64_t& numOfEntries, const uint64_t& iPartialTempIndex, const vector<uint64_t>& vReadIDs, const uint64_t& numOfHits, const double& counts, const float& score) {
@@ -819,7 +838,7 @@ namespace kASA {
 						}
 
 						// Count duplicates that matched too
-						if ((get<0>(iSeenInput) == get<0>(iCurrentkMer)) || (seenResultIt == rangeEndIt + 1)) {
+						if ((compare(get<0>(iSeenInput),get<0>(iCurrentkMer), -1) == 1) || (seenResultIt == rangeEndIt + 1)) {
 							for (int32_t ik = Base::_iNumOfK - 1; ik > -1; --ik) {
 								const int32_t& shift_ = 5 * (Base::_iHighestK - Base::_aOfK[ik]);
 								const auto& iCurrentkMerShifted_ = get<0>(iCurrentkMer) >> shift_;
@@ -885,7 +904,7 @@ namespace kASA {
 										}
 
 										// Delayed scoring: First gather everything and then score it instead of scoring everytime you encounter a new read or tax id.
-										if (iCurrentkMerShifted == vMemoryOfSeenkMers[ikLengthCounter]) {
+										if (compare(iCurrentkMerShifted, vMemoryOfSeenkMers[ikLengthCounter], Base::_aOfK[ikLengthCounter]) == 1) {
 											// We've seen that already, just add it. 
 											markTaxIDs(get<1>(iCurrentLib), vMemoryOfTaxIDs[ikLengthCounter], mTaxToIdx, getVec(vLib, iThreadID));
 											if (bInputIterated) {

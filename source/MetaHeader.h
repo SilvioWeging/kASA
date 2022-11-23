@@ -11,7 +11,7 @@
 
 #define kASA_VERSION_MAJOR 1
 #define kASA_VERSION_MINOR 4
-#define kASA_VERSION_PATCH 7
+#define kASA_VERSION_PATCH 8
 
 #include <iostream>
 #include <cstdint>

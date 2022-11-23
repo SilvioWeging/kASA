@@ -65,8 +65,4 @@ endif()
 
 add_executable(kASA source/main.cpp zlib/gzstream.cpp)
 
-if(APPLE)
-	target_link_libraries(kASA ${STXXL_LIBRARIES} ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlibBuild/libz.1.2.11.dylib)
-else()
-	target_link_libraries(kASA ${STXXL_LIBRARIES} ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlibBuild/libz.so.1.2.11)
-endif(APPLE)
+target_link_libraries(kASA ${STXXL_LIBRARIES} ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlibBuild/libz.a)

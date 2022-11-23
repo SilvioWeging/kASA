@@ -76,7 +76,8 @@ namespace kASA {
 							iIdxForAccession = 0;
 							iIdxForTaxID = 1;
 						}
-						acc2TaxGZ.seekg(0);
+						acc2TaxGZ.close();
+						acc2TaxGZ.open(file.first.c_str());
 					}
 					else {
 						acc2Tax.open(file.first);
@@ -338,9 +339,15 @@ namespace kASA {
 
 					if (file.second) {
 						fastaFileGZ.open(file.first.c_str());
+						if (_bVerbose) {
+							cout << "OUT: Current file: " << file.first.c_str() << endl;
+						}
 					}
 					else {
 						fastaFile.open(file.first);
+						if (_bVerbose) {
+							cout << "OUT: Current file: " << file.first << endl;
+						}
 					}
 
 					debugBarrier
