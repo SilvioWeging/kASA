@@ -66,19 +66,19 @@ namespace kASA {
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Converts a string of dna to a string of aminoacids by triplets;
 		// sDNA is a reference to the dna string, length is the input length, pointer position is the starting position in the dna string
-		inline void dnaToAminoacid(const string& sDna, const int32_t& iLength, const int32_t& iPointerPosition, string* outString) {
+		inline void dnaToAminoacid(const string& sDna, const uint64_t& iLength, const uint64_t& iPointerPosition, string* outString) {
 			// map A,C,T,G,X,Z to 0,1,2,3,4,5 by & with 1110 = 14 and then shift to the position in 000 000 000, this gives the position in the array where the respective amino acid is written
 			// small letters are also correctly converted
-			const uint32_t& iDnaSize = iLength / 3;
+			const uint64_t& iDnaSize = iLength / 3;
 
-			for (uint32_t i = 0, j = 0; i < iDnaSize; ++i, j += 3) {
+			for (uint64_t i = 0, j = 0; i < iDnaSize; ++i, j += 3) {
 				const int32_t& iIndex = ((sDna[iPointerPosition + j] & 14) << 5) | ((sDna[iPointerPosition + j + 1] & 14) << 2) | ((sDna[iPointerPosition + j + 2] & 14) >> 1);
 				(*outString)[i] = _sAminoAcids_bs[iIndex];
 			}
 
 		}
 
-		inline void dnaToAminoacid(const string& sDna, const int32_t& iPointerPosition, int8_t& outString) {
+		inline void dnaToAminoacid(const string& sDna, const uint64_t& iPointerPosition, int8_t& outString) {
 			// map A,C,T,G,X,Z to 0,1,2,3,4,5 by & with 1110 = 14 and then shift to the position in 000 000 000, this gives the position in the array where the respective amino acid is written
 			// small letters are also correctly converted
 

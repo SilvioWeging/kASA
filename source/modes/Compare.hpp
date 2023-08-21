@@ -2361,7 +2361,12 @@ namespace kASA {
 				debugBarrier
 
 				if (fOut.good()) {
-					scoringFunc(move(vSavedScores), iReadIDStart + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, fThreshold, vReadIDsToBeFiltered, vCoherence[iReadIDStart], move(fOut));
+					if (GlobalInputParameters.bPostProcess) {
+						scoringFunc(move(vSavedScores), iReadIDStart + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, fThreshold, vReadIDsToBeFiltered, vCoherence[iReadIDStart], move(fOut));
+					}
+					else {
+						scoringFunc(move(vSavedScores), iReadIDStart + iNumOfReadsSum, vReadNameAndLength.front(), mFrequencies, mIdxToTax, mOrganisms, fThreshold, vReadIDsToBeFiltered, 0.0f, move(fOut));
+					}
 					iReadIDStart++;
 				}
 				else {
@@ -2943,6 +2948,10 @@ namespace kASA {
 					vector<char> inFilebuffer(2097152);
 					vector<char> inFilebuffer2(2097152);
 
+					const string& nameOfCurrentFile = Utilities::getFileNameWithoutPath(inFile.first);
+					string sTemporaryFileForInfo = Base::_sTemporaryPath + nameOfCurrentFile + "_fileInfo.txt";
+					string sTemporaryFileForInfo2 = Base::_sTemporaryPath + nameOfCurrentFile + "_fileInfo2.txt";
+
 					if (isGzipped) {
 						if (Base::_bVerbose) {
 							cout << "OUT: File is gzipped, no progress output can be shown." << endl;
@@ -2952,7 +2961,7 @@ namespace kASA {
 							fast_q_a_File_gz2.reset(new igzstream());
 							fast_q_a_File_gz2->rdbuf()->pubsetbuf(&inFilebuffer2[0], 2097152);
 							fast_q_a_File_gz2->open(vPairedEndFiles[1].c_str());
-							fileReaderObject_gz2.setFile(fast_q_a_File_gz2.get());
+							fileReaderObject_gz2.setFile(fast_q_a_File_gz2.get(), vPairedEndFiles[1]);
 							fast_q_a_File_gz2->exceptions(std::ios_base::badbit);
 						}
 
@@ -2984,7 +2993,7 @@ namespace kASA {
 								throw runtime_error("Input does not start with @ or >.");
 							}
 						}
-						fileReaderObject_gz.setFile(fast_q_a_File_gz.get());
+						fileReaderObject_gz.setFile(fast_q_a_File_gz.get(), inFile.first);
 						fast_q_a_File_gz->exceptions(std::ios_base::badbit);
 					}
 					else {
@@ -2993,7 +3002,13 @@ namespace kASA {
 							fast_q_a_File2.reset(new ifstream());
 							fast_q_a_File2->rdbuf()->pubsetbuf(&inFilebuffer2[0], 2097152);
 							fast_q_a_File2->open(vPairedEndFiles[1].c_str());
-							fileReaderObject2.setFile(fast_q_a_File2.get());
+							fileReaderObject2.setFile(fast_q_a_File2.get(), vPairedEndFiles[1]);
+							iFileLength = Utilities::getSizeOfFile(inFile.first);
+							iFileLength += Utilities::getSizeOfFile(vPairedEndFiles[1]);
+							overallFileSize = iFileLength;
+						}
+						else {
+							iFileLength = Utilities::getSizeOfFile(inFile.first);
 						}
 
 						fast_q_a_File.reset(new ifstream());
@@ -3022,9 +3037,7 @@ namespace kASA {
 							}
 						}
 
-						fileReaderObject.setFile(fast_q_a_File.get());
-
-						iFileLength = Utilities::getSizeOfFile(inFile.first);
+						fileReaderObject.setFile(fast_q_a_File.get(), inFile.first);
 
 					}
 					debugBarrier
@@ -3091,13 +3104,23 @@ namespace kASA {
 						
 
 						//iSoftMaxMemoryUsage = 19199040;
+						if (bIsPairedEnd) {
+							if (isGzipped) {
+								iNumberOfkMersInInput += Base::readFastqa_pairedEnd(fileReaderObject_gz, fileReaderObject_gz2, sTemporaryFileForInfo, sTemporaryFileForInfo2, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, index.iNumOfSpecies, iFileLength, iFileLength, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
 
-						if (isGzipped) {
-							iNumberOfkMersInInput += Base::readFastqa_partialSort(fileReaderObject_gz, fileReaderObject_gz2, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, index.iNumOfSpecies, iFileLength, iFileLength, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
-
+							}
+							else {
+								iNumberOfkMersInInput += Base::readFastqa_pairedEnd(fileReaderObject, fileReaderObject2, sTemporaryFileForInfo, sTemporaryFileForInfo2, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, index.iNumOfSpecies, iFileLength, overallFileSize, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+							}
 						}
 						else {
-							iNumberOfkMersInInput += Base::readFastqa_partialSort(fileReaderObject, fileReaderObject2, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, index.iNumOfSpecies, iFileLength, overallFileSize, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+							if (isGzipped) {
+								iNumberOfkMersInInput += Base::readFastqa_singleEnd(fileReaderObject_gz, sTemporaryFileForInfo, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, index.iNumOfSpecies, iFileLength, iFileLength, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+
+							}
+							else {
+								iNumberOfkMersInInput += Base::readFastqa_singleEnd(fileReaderObject, sTemporaryFileForInfo, vInputVec, vReadNameAndLength, iSoftMaxMemoryAvailable, index.iNumOfSpecies, iFileLength, overallFileSize, bReadIDsAreInteresting, bIsFasta, transferBetweenRuns, workerThreadPool);
+							}
 						}
 	
 						// reduce available memory
@@ -3372,11 +3395,22 @@ namespace kASA {
 						vReadNameAndLength.clear();
 						vInputVec.clear();
 
+						// check if another run is necessary
 						if (isGzipped) {
-							bIsGood = fast_q_a_File_gz->good();
+							if (bIsPairedEnd) {
+								bIsGood = fast_q_a_File_gz->good() || fast_q_a_File_gz2->good();
+							}
+							else {
+								bIsGood = fast_q_a_File_gz->good();
+							}
 						}
 						else {
-							bIsGood = fast_q_a_File->good();
+							if (bIsPairedEnd) {
+								bIsGood = fast_q_a_File->good() || fast_q_a_File2->good();
+							}
+							else {
+								bIsGood = fast_q_a_File->good();
+							}
 						}
 						charsReadOverall = transferBetweenRuns->iNumOfAllCharsRead;
 
@@ -3633,7 +3667,7 @@ namespace kASA {
 						for (const auto& entry : vOut) {
 							allSumOfIdentified += get<0>(get<1>(entry)[Base::_iNumOfK - 1]);
 						}
-							}
+					}
 					debugBarrier
 
 #ifdef TIME
@@ -3656,6 +3690,11 @@ namespace kASA {
 						cout << "OUT: Time compare: " << iTimeCompare << " ns" << endl;
 					}
 
+					// remove temporary info files:
+					remove(sTemporaryFileForInfo.c_str());
+					if (bIsPairedEnd) {
+						remove(sTemporaryFileForInfo2.c_str());
+					}
 
 					// filtering
 					if (GlobalInputParameters.bFilter) {

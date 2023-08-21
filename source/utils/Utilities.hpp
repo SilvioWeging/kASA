@@ -143,6 +143,14 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	inline string getFileNameWithoutPath(const string& pathWithFile) {
+		string baseFileName = pathWithFile.substr(pathWithFile.find_last_of("/\\") + 1);
+		std::string::size_type const p(baseFileName.find_last_of('.'));
+		std::string fileName = baseFileName.substr(0, p);
+		return fileName;
+	}
+
+	///////////////////////////////////////////////////////
 	inline pair<vector<pair<string,int8_t>>, size_t> gatherFilesFromPath(const string& sPath) {
 		try {
 			vector<pair<string, int8_t>> files; // 0: not zipped; 1: gzipped; 2: bzip2'ed
@@ -425,6 +433,18 @@ namespace Utilities {
 	}
 
 	///////////////////////////////////////////////////////
+	inline vector<uint64_t> splitToUInt64s(const string& s, char delim) {
+		vector<uint64_t> elems;
+		stringstream ss;
+		ss.str(s);
+		string item;
+		while (getline(ss, item, delim)) {
+			elems.push_back(stoul(item));
+		}
+		return elems;
+	}
+
+	///////////////////////////////////////////////////////
 	template<typename T>
 	class FileReader {
 	private:
@@ -434,6 +454,8 @@ namespace Utilities {
 		const string _newlineCharacters = string("\n");
 		size_t _currendPosition = 0, _maxCharsRead = 0;
 		T* _file = nullptr;
+		string _fileName = "";
+		uint64_t _iNumberOfAccesses = 0;
 
 		inline bool readFromFile() {
 			if (_currendPosition >= _maxCharsRead) {
@@ -470,8 +492,9 @@ namespace Utilities {
 			return _file != nullptr;
 		}
 
-		inline void setFile(T* input) {
+		inline void setFile(T* input, const string& fileName = "") {
 			_file = input;
+			_fileName = fileName;
 			memset(_bufferArrayForInput, ' ', _bufferSize);
 		}
 
@@ -490,6 +513,7 @@ namespace Utilities {
 
 		inline void getChunk(pair<std::string, bool>& outPair, uint64_t& iNumOfChars) {
 			iNumOfChars = 0;
+			_iNumberOfAccesses++;
 			if (readFromFile()) {
 				auto newlineCharPos = find_first_of(_startOfBuffer + _currendPosition, _startOfBuffer + _bufferSize, _newlineCharacters.cbegin(), _newlineCharacters.cend());
 				if (newlineCharPos != _startOfBuffer + _bufferSize) {
@@ -505,6 +529,23 @@ namespace Utilities {
 					outPair.second = false;
 				}
 			}
+		}
+
+		inline uint64_t getiNumberOfAccesses() {
+			return _iNumberOfAccesses;
+		}
+
+		inline void resetAndCleanBuffer() {
+			_currendPosition = 0;
+			_maxCharsRead = 0;
+			_iNumberOfAccesses = 0;
+			memset(_bufferArrayForInput, ' ', _bufferSize);
+			_startOfBuffer = &_bufferArrayForInput[0];
+			_file->close();
+			if (_fileName == "") {
+				cerr << "Filename not set correctly for reset. Problem for Silvio, just write him." << endl;
+			}
+			_file->open(_fileName.c_str());
 		}
 	};
 
@@ -698,15 +739,16 @@ namespace Utilities {
 
 	///////////////////////////////////////////////////////
 	// Write strings to file, which are large enough
+	template<typename streamType>
 	class BufferedWriter {
 	private:
-		ofstream* _file = nullptr;
+		streamType* _file = nullptr;
 		size_t _iMaxBufferSize = 0;
 		string _sStringToBeWritten = string("");
 	
 	public:
 
-		BufferedWriter(ofstream& ofstr, const size_t& bufferSize) {
+		BufferedWriter(streamType& ofstr, const size_t& bufferSize) {
 			_file = &ofstr;
 			_iMaxBufferSize = bufferSize;
 			_sStringToBeWritten.reserve(bufferSize + bufferSize/1024);
