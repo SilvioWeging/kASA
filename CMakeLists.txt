@@ -1,5 +1,8 @@
-project(kASA)
+# source: https://stackoverflow.com/a/29904501
+find_program(CMAKE_C_COMPILER NAMES $ENV{CC} gcc PATHS ENV PATH NO_DEFAULT_PATH)
+find_program(CMAKE_CXX_COMPILER NAMES $ENV{CXX} g++ PATHS ENV PATH NO_DEFAULT_PATH)
 
+project(kASA C CXX)
 
 cmake_minimum_required(VERSION 2.8)
 
